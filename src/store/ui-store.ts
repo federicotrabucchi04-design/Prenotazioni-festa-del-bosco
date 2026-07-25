@@ -10,6 +10,7 @@ interface UiState {
   search: string;
   editing: Reservation | null;
   modalOpen: boolean;
+  assigning: Reservation | null;
   recentlyArrivedIds: Set<string>;
   setView: (view: AppView) => void;
   setSelectedZone: (zone: Zone) => void;
@@ -17,6 +18,8 @@ interface UiState {
   openCreateModal: () => void;
   openEditModal: (reservation: Reservation) => void;
   closeModal: () => void;
+  openAssignTable: (reservation: Reservation) => void;
+  closeAssignTable: () => void;
   markRecentlyArrived: (id: string) => void;
 }
 
@@ -26,6 +29,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   search: "",
   editing: null,
   modalOpen: false,
+  assigning: null,
   recentlyArrivedIds: new Set(),
   setView: (view) => set({ view }),
   setSelectedZone: (zone) => set({ selectedZone: zone }),
@@ -34,6 +38,11 @@ export const useUiStore = create<UiState>((set, get) => ({
   openEditModal: (reservation) =>
     set({ modalOpen: true, editing: reservation }),
   closeModal: () => set({ modalOpen: false, editing: null }),
+  openAssignTable: (reservation) => {
+    const zone = reservation.zone || get().selectedZone;
+    set({ assigning: reservation, selectedZone: zone || get().selectedZone });
+  },
+  closeAssignTable: () => set({ assigning: null }),
   markRecentlyArrived: (id) => {
     const next = new Set(get().recentlyArrivedIds);
     next.add(id);
@@ -45,3 +54,7 @@ export const useUiStore = create<UiState>((set, get) => ({
     }, 2500);
   },
 }));
+
+export function isTableAssigned(reservation: Pick<Reservation, "tableNumber">) {
+  return Number(reservation.tableNumber) > 0;
+}

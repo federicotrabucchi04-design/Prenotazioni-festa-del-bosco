@@ -1,10 +1,10 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Check, Pencil, Phone, Trash2, Users } from "lucide-react";
+import { Check, MapPinned, Pencil, Phone, Trash2, Users } from "lucide-react";
 import type { Reservation } from "@/lib/types";
 import { canEditReservations, useAuthStore } from "@/store/auth-store";
-import { useUiStore } from "@/store/ui-store";
+import { isTableAssigned, useUiStore } from "@/store/ui-store";
 import { deleteReservation, setArrived } from "@/lib/reservations";
 import { haptic } from "@/lib/haptic";
 import toast from "react-hot-toast";
@@ -14,10 +14,11 @@ export function ReservationCard({ reservation }: { reservation: Reservation }) {
   const role = useAuthStore((s) => s.role);
   const isAdmin = canEditReservations(role);
   const openEditModal = useUiStore((s) => s.openEditModal);
+  const openAssignTable = useUiStore((s) => s.openAssignTable);
   const markRecentlyArrived = useUiStore((s) => s.markRecentlyArrived);
+  const assigned = isTableAssigned(reservation);
   const [busy, setBusy] = useState(false);
   const [offset, setOffset] = useState(0);
-  const startX = useRef(0);
   const dragging = useRef(false);
 
   async function toggleArrived() {
@@ -93,7 +94,11 @@ export function ReservationCard({ reservation }: { reservation: Reservation }) {
               {reservation.name}
             </h3>
             <p className="mt-0.5 text-sm text-[var(--forest-muted)]">
-              {reservation.zone} · Tavolo {reservation.tableNumber}
+              {assigned
+                ? `${reservation.zone} · Tavolo ${reservation.tableNumber}`
+                : reservation.zone
+                  ? `${reservation.zone} · Tavolo da assegnare`
+                  : "Tavolo da assegnare"}
             </p>
           </div>
           <button
@@ -136,6 +141,17 @@ export function ReservationCard({ reservation }: { reservation: Reservation }) {
           </p>
         ) : null}
 
+        {!assigned ? (
+          <button
+            type="button"
+            onClick={() => openAssignTable(reservation)}
+            className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[var(--forest)] text-sm font-semibold text-white transition active:scale-[0.98]"
+          >
+            <MapPinned className="h-4 w-4" />
+            Assegna tavolo
+          </button>
+        ) : null}
+
         {isAdmin ? (
           <div className="mt-3 flex gap-2">
             <button
@@ -146,6 +162,16 @@ export function ReservationCard({ reservation }: { reservation: Reservation }) {
               <Pencil className="h-4 w-4" />
               Modifica
             </button>
+            {assigned ? (
+              <button
+                type="button"
+                onClick={() => openAssignTable(reservation)}
+                className="flex h-11 items-center justify-center gap-2 rounded-xl bg-[var(--forest)]/8 px-3 text-sm font-semibold text-[var(--forest)] transition active:scale-[0.98]"
+                title="Cambia tavolo"
+              >
+                <MapPinned className="h-4 w-4" />
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => void onDelete()}

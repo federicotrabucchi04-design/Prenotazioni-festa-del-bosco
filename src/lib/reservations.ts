@@ -82,6 +82,9 @@ function normalizeRecord(
 
 function sortReservations(items: Reservation[]) {
   return [...items].sort((a, b) => {
+    const aUnassigned = !a.tableNumber;
+    const bUnassigned = !b.tableNumber;
+    if (aUnassigned !== bUnassigned) return aUnassigned ? -1 : 1;
     if (a.arrived !== b.arrived) return a.arrived ? 1 : -1;
     return a.name.localeCompare(b.name, "it");
   });
@@ -167,21 +170,28 @@ export class CapacityExceededError extends Error {
 export async function upsertReservation(input: ReservationInput) {
   const payload = toPayload(input);
   if (!payload.name) throw new Error("Il nome è obbligatorio");
-  if (!payload.zone) throw new Error("La zona è obbligatoria");
-  if (!payload.tableNumber) throw new Error("Il numero tavolo è obbligatorio");
+  // Zona consigliata anche senza tavolo (preferenza area); se manca usa stringa vuota
+  if (!payload.zone) payload.zone = "";
 
-  const all = await loadAllReservations();
-  const check = checkTableCapacity({
-    layout: cachedLayout,
-    reservations: all,
-    zone: payload.zone,
-    tableNumber: payload.tableNumber,
-    incomingPeople: payload.total,
-    excludeReservationId: input.id,
-  });
+  // Tavolo opzionale: 0 = da assegnare dopo
+  if (payload.tableNumber > 0) {
+    if (!payload.zone) throw new Error("La zona è obbligatoria per assegnare un tavolo");
 
-  if (!check.ok && !input.allowOverCapacity) {
-    throw new CapacityExceededError(check);
+    const all = await loadAllReservations();
+    const check = checkTableCapacity({
+      layout: cachedLayout,
+      reservations: all,
+      zone: payload.zone,
+      tableNumber: payload.tableNumber,
+      incomingPeople: payload.total,
+      excludeReservationId: input.id,
+    });
+
+    if (!check.ok && !input.allowOverCapacity) {
+      throw new CapacityExceededError(check);
+    }
+  } else {
+    payload.tableNumber = 0;
   }
 
   if (getDataMode() === "demo") {

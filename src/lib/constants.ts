@@ -69,6 +69,18 @@ export const SEED_RESERVATIONS: Omit<Reservation, "id">[] = [
     arrived: false,
     date: EVENT_DATE,
   },
+  {
+    name: "Ospite senza tavolo",
+    phone: "3330000000",
+    adults: 2,
+    children: 1,
+    total: 3,
+    notes: "Esempio: usa Assegna tavolo",
+    zone: "Tenda 1",
+    tableNumber: 0,
+    arrived: false,
+    date: EVENT_DATE,
+  },
 ];
 
 export function calcTotal(adults: number, children: number) {

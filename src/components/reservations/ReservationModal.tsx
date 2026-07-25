@@ -24,7 +24,6 @@ export function ReservationModal() {
   const { items } = useReservations();
 
   const firstZone = layout.zones[0]?.name ?? "Tenda 1";
-  const firstTable = layout.zones[0]?.tables[0]?.number ?? 1;
 
   const [form, setForm] = useState({
     name: "",
@@ -33,7 +32,7 @@ export function ReservationModal() {
     children: 0,
     notes: "",
     zone: firstZone as Zone,
-    tableNumber: firstTable,
+    tableNumber: 0,
     arrived: false,
     date: EVENT_DATE,
   });
@@ -64,7 +63,7 @@ export function ReservationModal() {
         children: 0,
         notes: "",
         zone: zone?.name ?? firstZone,
-        tableNumber: zone?.tables[0]?.number ?? 1,
+        tableNumber: 0,
         arrived: false,
         date: EVENT_DATE,
       });
@@ -82,17 +81,21 @@ export function ReservationModal() {
     [form.adults, form.children],
   );
 
+  const hasTable = Number(form.tableNumber) > 0;
+
   const liveCheck = useMemo(
     () =>
-      checkTableCapacity({
-        layout,
-        reservations: items,
-        zone: form.zone,
-        tableNumber: Number(form.tableNumber),
-        incomingPeople: total,
-        excludeReservationId: editing?.id || undefined,
-      }),
-    [layout, items, form.zone, form.tableNumber, total, editing?.id],
+      hasTable
+        ? checkTableCapacity({
+            layout,
+            reservations: items,
+            zone: form.zone,
+            tableNumber: Number(form.tableNumber),
+            incomingPeople: total,
+            excludeReservationId: editing?.id || undefined,
+          })
+        : null,
+    [hasTable, layout, items, form.zone, form.tableNumber, total, editing?.id],
   );
 
   async function save(allowOverCapacity = false) {
@@ -219,16 +222,17 @@ export function ReservationModal() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Zona *">
+                  <Field label="Zona (opzionale)">
                     <select
                       value={form.zone}
                       onChange={(e) => {
                         const zone = e.target.value;
-                        const tables = getZoneByName(layout, zone)?.tables ?? [];
                         setForm({
                           ...form,
                           zone,
-                          tableNumber: tables[0]?.number ?? 1,
+                          // Mantieni "da assegnare" se già senza tavolo
+                          tableNumber:
+                            form.tableNumber === 0 ? 0 : form.tableNumber,
                         });
                       }}
                       className="field-input"
@@ -240,7 +244,7 @@ export function ReservationModal() {
                       ))}
                     </select>
                   </Field>
-                  <Field label="Tavolo *">
+                  <Field label="Tavolo">
                     <select
                       value={form.tableNumber}
                       onChange={(e) =>
@@ -250,40 +254,43 @@ export function ReservationModal() {
                         })
                       }
                       className="field-input"
-                      required
                     >
-                      {zoneTables.length === 0 ? (
-                        <option value="">Nessun tavolo in zona</option>
-                      ) : (
-                        zoneTables
-                          .slice()
-                          .sort((a, b) => a.number - b.number)
-                          .map((t) => (
-                            <option key={t.id} value={t.number}>
-                              Tavolo {t.number} (max {t.capacity})
-                            </option>
-                          ))
-                      )}
+                      <option value={0}>Da assegnare sulla mappa</option>
+                      {zoneTables
+                        .slice()
+                        .sort((a, b) => a.number - b.number)
+                        .map((t) => (
+                          <option key={t.id} value={t.number}>
+                            Tavolo {t.number} (max {t.capacity})
+                          </option>
+                        ))}
                     </select>
                   </Field>
                 </div>
 
-                <div
-                  className={`rounded-2xl px-3 py-2 text-xs ${
-                    liveCheck.ok
-                      ? "bg-emerald-50 text-emerald-900"
-                      : "bg-amber-50 text-amber-950"
-                  }`}
-                >
-                  Occupazione tavolo: {liveCheck.proposedTotal}/
-                  {liveCheck.softLimit} (capacità {liveCheck.capacity} + 2)
-                  {liveCheck.guests.length
-                    ? ` · già: ${liveCheck.guests.join(", ")}`
-                    : ""}
-                  {!liveCheck.ok
-                    ? " · oltre il limite: chiederà conferma"
-                    : ""}
-                </div>
+                {liveCheck ? (
+                  <div
+                    className={`rounded-2xl px-3 py-2 text-xs ${
+                      liveCheck.ok
+                        ? "bg-emerald-50 text-emerald-900"
+                        : "bg-amber-50 text-amber-950"
+                    }`}
+                  >
+                    Occupazione tavolo: {liveCheck.proposedTotal}/
+                    {liveCheck.softLimit} (capacità {liveCheck.capacity} + 2)
+                    {liveCheck.guests.length
+                      ? ` · già: ${liveCheck.guests.join(", ")}`
+                      : ""}
+                    {!liveCheck.ok
+                      ? " · oltre il limite: chiederà conferma"
+                      : ""}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl bg-[var(--forest)]/5 px-3 py-2 text-xs text-[var(--forest-muted)]">
+                    Puoi salvare senza tavolo e usare il bottone{" "}
+                    <strong>Assegna tavolo</strong> sulla card (apre la mappa).
+                  </div>
+                )}
 
                 <Field label="Note">
                   <textarea
@@ -316,7 +323,7 @@ export function ReservationModal() {
 
                 <button
                   type="submit"
-                  disabled={saving || zoneTables.length === 0}
+                  disabled={saving}
                   className="flex h-14 w-full items-center justify-center rounded-2xl bg-[var(--forest)] text-base font-semibold text-white transition active:scale-[0.98] disabled:opacity-60"
                 >
                   {saving ? "Salvataggio…" : "Salva prenotazione"}

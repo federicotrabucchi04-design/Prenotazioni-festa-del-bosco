@@ -7,6 +7,7 @@ import { BottomNav } from "@/components/BottomNav";
 import { LoginScreen } from "@/components/LoginScreen";
 import { ReservationList } from "@/components/reservations/ReservationList";
 import { ReservationModal } from "@/components/reservations/ReservationModal";
+import { AssignTablePicker } from "@/components/reservations/AssignTablePicker";
 import { TablesMap } from "@/components/map/TablesMap";
 import { ZoneEditor } from "@/components/zones/ZoneEditor";
 import { useAuthStore, canEditReservations } from "@/store/auth-store";
@@ -75,6 +76,7 @@ export function App() {
 
       <BottomNav />
       <ReservationModal />
+      <AssignTablePicker />
     </div>
   );
 }

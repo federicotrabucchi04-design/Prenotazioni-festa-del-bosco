@@ -55,6 +55,7 @@ export interface Reservation {
   total: number;
   notes: string;
   zone: Zone;
+  /** 0 = tavolo non ancora assegnato */
   tableNumber: number;
   arrived: boolean;
   date: string;
