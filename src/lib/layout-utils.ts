@@ -40,6 +40,7 @@ export function createDefaultLayout(): VenueLayout {
       id: createId(),
       name,
       tables: defaultTablesForZone(12, 8),
+      marks: [],
     })),
   };
 }

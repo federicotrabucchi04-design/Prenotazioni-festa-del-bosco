@@ -14,10 +14,31 @@ export interface TableSpot {
   capacity: number;
 }
 
+/** Riferimenti grafici (non interattivi come i tavoli) */
+export type MapMarkKind = "line" | "rect" | "text";
+
+export interface MapMark {
+  id: string;
+  kind: MapMarkKind;
+  /** Linea: punto A; Rettangolo: angolo alto-sx; Testo: ancoraggio */
+  x: number;
+  y: number;
+  /** Linea: punto B */
+  x2?: number;
+  y2?: number;
+  /** Rettangolo: larghezza/altezza in % */
+  w?: number;
+  h?: number;
+  /** Testo etichetta */
+  text?: string;
+}
+
 export interface ZoneLayout {
   id: string;
   name: Zone;
   tables: TableSpot[];
+  /** Linee, rettangoli e scritte di riferimento */
+  marks: MapMark[];
 }
 
 export interface VenueLayout {

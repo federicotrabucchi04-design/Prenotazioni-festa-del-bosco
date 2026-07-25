@@ -9,6 +9,7 @@ import { canEditReservations, useAuthStore } from "@/store/auth-store";
 import { useUiStore } from "@/store/ui-store";
 import type { Reservation } from "@/lib/types";
 import { getZoneByName } from "@/lib/layout-utils";
+import { ZoneMarksLayer } from "@/components/map/ZoneMarksLayer";
 import toast from "react-hot-toast";
 
 export function TablesMap() {
@@ -22,6 +23,7 @@ export function TablesMap() {
   const isAdmin = canEditReservations(role);
 
   const zone = getZoneByName(layout, selectedZone) ?? layout.zones[0] ?? null;
+  const marks = zone?.marks ?? [];
 
   const byTable = useMemo(() => {
     const map = new Map<number, Reservation[]>();
@@ -37,6 +39,7 @@ export function TablesMap() {
 
   const occupiedTables = byTable.size;
   const loading = loadingReservations || loadingLayout;
+  const hasContent = Boolean(zone && (zone.tables.length > 0 || marks.length > 0));
 
   return (
     <div className="mx-auto max-w-lg px-4 pb-28 pt-4">
@@ -79,7 +82,7 @@ export function TablesMap() {
 
       {loading || !zone ? (
         <div className="aspect-[4/5] animate-pulse rounded-3xl bg-white/70" />
-      ) : zone.tables.length === 0 ? (
+      ) : !hasContent ? (
         <div className="flex flex-col items-center rounded-3xl border border-dashed border-[var(--forest)]/20 bg-white/50 px-6 py-16 text-center">
           <Trees className="mb-3 h-10 w-10 text-[var(--forest)]/50" />
           <p className="font-semibold text-[var(--forest-ink)]">
@@ -87,12 +90,14 @@ export function TablesMap() {
           </p>
           <p className="mt-1 text-sm text-[var(--forest-muted)]">
             {isAdmin
-              ? "Apri il tab Zone e aggiungi i tavoli sulla griglia."
+              ? "Apri il tab Zone: aggiungi tavoli e riferimenti (linee, rettangoli, scritte)."
               : "Chiedi all’admin di configurare i tavoli."}
           </p>
         </div>
       ) : (
         <div className="relative aspect-[4/5] w-full overflow-hidden rounded-3xl border border-[var(--forest)]/10 bg-[linear-gradient(rgba(45,90,39,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(45,90,39,0.05)_1px,transparent_1px)] bg-size-[24px_24px] bg-white">
+          <ZoneMarksLayer marks={marks} />
+
           {zone.tables.map((table) => {
             const guests = byTable.get(table.number) ?? [];
             const people = guests.reduce((s, r) => s + r.total, 0);
@@ -119,8 +124,7 @@ export function TablesMap() {
                       .map((g) => `${g.name} (${g.total})`)
                       .join(", ");
                     if (isAdmin) {
-                      const pick = guests[0]!;
-                      openEditModal(pick);
+                      openEditModal(guests[0]!);
                       toast(`Più prenotazioni: ${summary}`, { duration: 3500 });
                     } else {
                       toast(summary, { duration: 3500 });
@@ -147,7 +151,7 @@ export function TablesMap() {
                   }
                 }}
                 style={{ left: `${table.x}%`, top: `${table.y}%` }}
-                className={`absolute flex min-h-14 min-w-14 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-2xl border px-1.5 py-1 text-center shadow-sm transition active:scale-95 ${
+                className={`absolute z-10 flex min-h-14 min-w-14 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-2xl border px-1.5 py-1 text-center shadow-sm transition active:scale-95 ${
                   occupiedTable
                     ? arrivedAny
                       ? "border-emerald-300 bg-emerald-600 text-white"
@@ -187,6 +191,10 @@ export function TablesMap() {
         <Legend swatch="bg-red-600" label="Occupato" />
         <Legend swatch="bg-emerald-600" label="Arrivato" />
         <Legend swatch="bg-amber-600" label="Oltre limite soft" />
+        <span className="inline-flex items-center gap-2">
+          <span className="h-0.5 w-4 border-t-2 border-dashed border-[var(--forest)]" />
+          Riferimenti
+        </span>
       </div>
     </div>
   );

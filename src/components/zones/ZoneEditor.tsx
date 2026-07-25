@@ -7,6 +7,11 @@ import {
   Trash2,
   Pencil,
   Grid3X3,
+  CircleDot,
+  Minus,
+  Square,
+  Type,
+  MousePointer2,
 } from "lucide-react";
 import { useVenueLayout } from "@/hooks/use-venue-layout";
 import { saveLayout } from "@/lib/layout";
@@ -16,9 +21,17 @@ import {
   nextTableNumber,
 } from "@/lib/layout-utils";
 import { createId } from "@/lib/constants";
-import type { TableSpot, VenueLayout, ZoneLayout } from "@/lib/types";
+import type {
+  MapMark,
+  TableSpot,
+  VenueLayout,
+  ZoneLayout,
+} from "@/lib/types";
 import { useUiStore } from "@/store/ui-store";
+import { ZoneMarksLayer } from "@/components/map/ZoneMarksLayer";
 import toast from "react-hot-toast";
+
+type EditorTool = "select" | "table" | "line" | "rect" | "text";
 
 export function ZoneEditor() {
   const { layout: remoteLayout, loading } = useVenueLayout();
@@ -27,8 +40,12 @@ export function ZoneEditor() {
   const selectedZoneName = useUiStore((s) => s.selectedZone);
   const setSelectedZone = useUiStore((s) => s.setSelectedZone);
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
+  const [selectedMarkId, setSelectedMarkId] = useState<string | null>(null);
+  const [tool, setTool] = useState<EditorTool>("table");
   const [saving, setSaving] = useState(false);
   const dragId = useRef<string | null>(null);
+  const drawStart = useRef<{ x: number; y: number } | null>(null);
+  const [draftShape, setDraftShape] = useState<MapMark | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
 
   const zoneIndex = Math.max(
@@ -38,28 +55,46 @@ export function ZoneEditor() {
   const zone: ZoneLayout =
     layout.zones[zoneIndex] ?? layout.zones[0] ?? createDefaultLayout().zones[0]!;
 
+  const marks = zone.marks ?? [];
+
   const selectedTable = useMemo(
     () => zone.tables.find((t) => t.id === selectedTableId) ?? null,
     [zone.tables, selectedTableId],
   );
 
+  const selectedMark = useMemo(
+    () => marks.find((m) => m.id === selectedMarkId) ?? null,
+    [marks, selectedMarkId],
+  );
+
+  function pointerPercent(e: React.PointerEvent<HTMLElement>) {
+    const board = boardRef.current;
+    if (!board) return { x: 0, y: 0 };
+    const rect = board.getBoundingClientRect();
+    return {
+      x: ((e.clientX - rect.left) / rect.width) * 100,
+      y: ((e.clientY - rect.top) / rect.height) * 100,
+    };
+  }
+
   function updateZone(mutator: (z: ZoneLayout) => ZoneLayout) {
     setDraft((prev) => {
       const base = prev ?? remoteLayout;
       const zones = base.zones.map((z) =>
-        z.id === zone.id ? mutator(z) : z,
+        z.id === zone.id ? mutator({ ...z, marks: z.marks ?? [] }) : z,
       );
       return { ...base, zones, updatedAt: Date.now() };
     });
   }
 
   function addTableAt(x: number, y: number) {
+    const id = createId();
     updateZone((z) => ({
       ...z,
       tables: [
         ...z.tables,
         {
-          id: createId(),
+          id,
           number: nextTableNumber(z),
           x: clampPercent(x),
           y: clampPercent(y),
@@ -67,15 +102,146 @@ export function ZoneEditor() {
         },
       ],
     }));
+    setSelectedTableId(id);
+    setSelectedMarkId(null);
   }
 
   function onBoardPointerDown(e: React.PointerEvent<HTMLDivElement>) {
-    if ((e.target as HTMLElement).dataset.tableId) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
-    addTableAt(x, y);
-    toast.success("Tavolo aggiunto — trascinalo per posizionarlo");
+    const target = e.target as HTMLElement;
+    if (target.dataset.tableId) return;
+    if (target.closest("[data-mark-ui]")) return;
+
+    const { x, y } = pointerPercent(e);
+
+    if (tool === "table") {
+      addTableAt(x, y);
+      toast.success("Tavolo aggiunto");
+      return;
+    }
+
+    if (tool === "text") {
+      const label = window.prompt("Testo di riferimento", "Ingresso");
+      if (!label?.trim()) return;
+      const id = createId();
+      updateZone((z) => ({
+        ...z,
+        marks: [
+          ...(z.marks ?? []),
+          { id, kind: "text", x, y, text: label.trim() },
+        ],
+      }));
+      setSelectedMarkId(id);
+      setSelectedTableId(null);
+      toast.success("Scritta aggiunta");
+      return;
+    }
+
+    if (tool === "line" || tool === "rect") {
+      drawStart.current = { x, y };
+      setSelectedTableId(null);
+      setSelectedMarkId(null);
+      setDraftShape({
+        id: "draft",
+        kind: tool,
+        x,
+        y,
+        x2: x,
+        y2: y,
+        w: 0,
+        h: 0,
+      });
+      e.currentTarget.setPointerCapture(e.pointerId);
+      return;
+    }
+
+    // select: click empty deselects
+    setSelectedTableId(null);
+    setSelectedMarkId(null);
+  }
+
+  function onBoardPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!drawStart.current || !draftShape) return;
+    const { x, y } = pointerPercent(e);
+    const start = drawStart.current;
+
+    if (draftShape.kind === "line") {
+      setDraftShape({ ...draftShape, x2: x, y2: y });
+      return;
+    }
+
+    if (draftShape.kind === "rect") {
+      const left = Math.min(start.x, x);
+      const top = Math.min(start.y, y);
+      setDraftShape({
+        ...draftShape,
+        x: left,
+        y: top,
+        w: Math.abs(x - start.x),
+        h: Math.abs(y - start.y),
+      });
+    }
+  }
+
+  function onBoardPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    if (!drawStart.current || !draftShape) return;
+
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
+
+    const start = drawStart.current;
+    drawStart.current = null;
+
+    if (draftShape.kind === "line") {
+      const x2 = draftShape.x2 ?? start.x;
+      const y2 = draftShape.y2 ?? start.y;
+      const dist = Math.hypot(x2 - start.x, y2 - start.y);
+      setDraftShape(null);
+      if (dist < 2) {
+        toast.error("Linea troppo corta");
+        return;
+      }
+      const id = createId();
+      updateZone((z) => ({
+        ...z,
+        marks: [
+          ...(z.marks ?? []),
+          { id, kind: "line", x: start.x, y: start.y, x2, y2 },
+        ],
+      }));
+      setSelectedMarkId(id);
+      toast.success("Linea aggiunta");
+      return;
+    }
+
+    if (draftShape.kind === "rect") {
+      const w = draftShape.w ?? 0;
+      const h = draftShape.h ?? 0;
+      setDraftShape(null);
+      if (w < 2 || h < 2) {
+        toast.error("Rettangolo troppo piccolo");
+        return;
+      }
+      const id = createId();
+      updateZone((z) => ({
+        ...z,
+        marks: [
+          ...(z.marks ?? []),
+          {
+            id,
+            kind: "rect",
+            x: draftShape.x,
+            y: draftShape.y,
+            w,
+            h,
+          },
+        ],
+      }));
+      setSelectedMarkId(id);
+      toast.success("Rettangolo aggiunto");
+    }
   }
 
   function onTablePointerDown(
@@ -84,19 +250,21 @@ export function ZoneEditor() {
   ) {
     e.stopPropagation();
     setSelectedTableId(table.id);
+    setSelectedMarkId(null);
+    if (tool !== "select" && tool !== "table") return;
     dragId.current = table.id;
     e.currentTarget.setPointerCapture(e.pointerId);
   }
 
   function onTablePointerMove(e: React.PointerEvent<HTMLButtonElement>) {
     if (!dragId.current || !boardRef.current) return;
-    const rect = boardRef.current.getBoundingClientRect();
-    const x = clampPercent(((e.clientX - rect.left) / rect.width) * 100);
-    const y = clampPercent(((e.clientY - rect.top) / rect.height) * 100);
+    const { x, y } = pointerPercent(e);
     const id = dragId.current;
     updateZone((z) => ({
       ...z,
-      tables: z.tables.map((t) => (t.id === id ? { ...t, x, y } : t)),
+      tables: z.tables.map((t) =>
+        t.id === id ? { ...t, x: clampPercent(x), y: clampPercent(y) } : t,
+      ),
     }));
   }
 
@@ -129,6 +297,7 @@ export function ZoneEditor() {
       id: createId(),
       name: name.trim(),
       tables: [],
+      marks: [],
     };
     setDraft({
       ...layout,
@@ -157,13 +326,14 @@ export function ZoneEditor() {
       toast.error("Serve almeno una zona");
       return;
     }
-    if (!window.confirm(`Eliminare la zona "${zone.name}" e i suoi tavoli?`)) {
+    if (!window.confirm(`Eliminare la zona "${zone.name}" e i suoi contenuti?`)) {
       return;
     }
     const zones = layout.zones.filter((z) => z.id !== zone.id);
     setDraft({ ...layout, zones, updatedAt: Date.now() });
     setSelectedZone(zones[0]!.name);
     setSelectedTableId(null);
+    setSelectedMarkId(null);
   }
 
   function deleteSelectedTable() {
@@ -175,6 +345,37 @@ export function ZoneEditor() {
     setSelectedTableId(null);
   }
 
+  function deleteSelectedMark() {
+    if (!selectedMark) return;
+    updateZone((z) => ({
+      ...z,
+      marks: (z.marks ?? []).filter((m) => m.id !== selectedMark.id),
+    }));
+    setSelectedMarkId(null);
+  }
+
+  function updateSelectedMark(patch: Partial<MapMark>) {
+    if (!selectedMark) return;
+    updateZone((z) => ({
+      ...z,
+      marks: (z.marks ?? []).map((m) =>
+        m.id === selectedMark.id ? { ...m, ...patch } : m,
+      ),
+    }));
+  }
+
+  const tools: {
+    id: EditorTool;
+    label: string;
+    icon: typeof CircleDot;
+  }[] = [
+    { id: "select", label: "Seleziona", icon: MousePointer2 },
+    { id: "table", label: "Tavolo", icon: CircleDot },
+    { id: "line", label: "Linea", icon: Minus },
+    { id: "rect", label: "Rettangolo", icon: Square },
+    { id: "text", label: "Scritta", icon: Type },
+  ];
+
   if (loading && !draft) {
     return (
       <div className="mx-auto max-w-lg px-4 py-10 text-sm text-[var(--forest-muted)]">
@@ -183,16 +384,18 @@ export function ZoneEditor() {
     );
   }
 
+  const visibleMarks = draftShape ? [...marks, draftShape] : marks;
+
   return (
     <div className="mx-auto max-w-lg px-4 pb-28 pt-4">
       <div className="mb-3 rounded-2xl border border-white/70 bg-white/80 p-3 text-sm text-[var(--forest-muted)]">
         <p className="flex items-center gap-2 font-semibold text-[var(--forest-ink)]">
           <Grid3X3 className="h-4 w-4 text-[var(--forest)]" />
-          Editor zone e tavoli
+          Editor zone, tavoli e riferimenti
         </p>
         <p className="mt-1">
-          Tocca la griglia per aggiungere un tavolo. Trascina i punti per
-          posizionarli. Imposta la capacità di ciascuno.
+          I <strong>tavoli</strong> sono oggetti operativi. Linee, rettangoli e
+          scritte sono solo punti di riferimento sulla mappa.
         </p>
       </div>
 
@@ -204,6 +407,7 @@ export function ZoneEditor() {
             onClick={() => {
               setSelectedZone(z.name);
               setSelectedTableId(null);
+              setSelectedMarkId(null);
             }}
             className={`shrink-0 rounded-full px-4 py-2.5 text-sm font-semibold ${
               z.name === zone.name
@@ -243,11 +447,45 @@ export function ZoneEditor() {
         </button>
       </div>
 
+      <div className="mb-3 grid grid-cols-5 gap-1.5">
+        {tools.map(({ id, label, icon: Icon }) => {
+          const active = tool === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setTool(id)}
+              className={`flex flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[10px] font-semibold ${
+                active
+                  ? "bg-[var(--forest)] text-white"
+                  : "bg-white text-[var(--forest-muted)]"
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
       <div
         ref={boardRef}
         onPointerDown={onBoardPointerDown}
+        onPointerMove={onBoardPointerMove}
+        onPointerUp={onBoardPointerUp}
+        onPointerCancel={onBoardPointerUp}
         className="relative aspect-[4/5] w-full touch-none overflow-hidden rounded-3xl border border-[var(--forest)]/15 bg-[linear-gradient(rgba(45,90,39,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(45,90,39,0.06)_1px,transparent_1px)] bg-size-[24px_24px] bg-white shadow-inner"
       >
+        <ZoneMarksLayer
+          marks={visibleMarks}
+          selectedId={selectedMarkId}
+          interactive={tool === "select"}
+          onSelect={(id) => {
+            setSelectedMarkId(id);
+            setSelectedTableId(null);
+          }}
+        />
+
         {zone.tables.map((table) => {
           const active = table.id === selectedTableId;
           return (
@@ -260,9 +498,9 @@ export function ZoneEditor() {
               onPointerUp={onTablePointerUp}
               onPointerCancel={onTablePointerUp}
               style={{ left: `${table.x}%`, top: `${table.y}%` }}
-              className={`absolute flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-full border-2 text-[11px] font-bold shadow-md transition ${
+              className={`absolute z-10 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-full border-2 text-[11px] font-bold shadow-md transition ${
                 active
-                  ? "z-10 border-amber-400 bg-amber-500 text-white scale-110"
+                  ? "border-amber-400 bg-amber-500 text-white scale-110"
                   : "border-white bg-[var(--forest)] text-white"
               }`}
             >
@@ -273,9 +511,10 @@ export function ZoneEditor() {
             </button>
           );
         })}
-        {zone.tables.length === 0 ? (
+
+        {zone.tables.length === 0 && marks.length === 0 ? (
           <p className="pointer-events-none absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-[var(--forest-muted)]">
-            Tocca qui per posizionare il primo tavolo
+            Scegli uno strumento sopra, poi tocca o trascina sulla griglia
           </p>
         ) : null}
       </div>
@@ -325,11 +564,6 @@ export function ZoneEditor() {
               />
             </label>
           </div>
-          <p className="text-xs text-[var(--forest-muted)]">
-            Assegnazioni multiple ammesse fino a{" "}
-            <strong>{selectedTable.capacity + 2}</strong> persone (capacità + 2),
-            oltre serve conferma.
-          </p>
           <button
             type="button"
             onClick={deleteSelectedTable}
@@ -337,6 +571,45 @@ export function ZoneEditor() {
           >
             <Trash2 className="h-4 w-4" />
             Elimina tavolo
+          </button>
+        </div>
+      ) : null}
+
+      {selectedMark ? (
+        <div
+          data-mark-ui
+          className="mt-3 space-y-3 rounded-2xl border border-white bg-white/90 p-4"
+        >
+          <p className="text-sm font-semibold text-[var(--forest-ink)]">
+            Riferimento:{" "}
+            {selectedMark.kind === "line"
+              ? "Linea"
+              : selectedMark.kind === "rect"
+                ? "Rettangolo"
+                : "Scritta"}
+          </p>
+          {selectedMark.kind === "text" ? (
+            <label className="block text-sm">
+              <span className="mb-1 block text-[var(--forest-muted)]">Testo</span>
+              <input
+                value={selectedMark.text ?? ""}
+                onChange={(e) => updateSelectedMark({ text: e.target.value })}
+                className="field-input"
+              />
+            </label>
+          ) : (
+            <p className="text-xs text-[var(--forest-muted)]">
+              Questo elemento è solo un riferimento visivo: non si assegna alle
+              prenotazioni.
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={deleteSelectedMark}
+            className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-red-50 text-sm font-semibold text-red-700"
+          >
+            <Trash2 className="h-4 w-4" />
+            Elimina riferimento
           </button>
         </div>
       ) : null}

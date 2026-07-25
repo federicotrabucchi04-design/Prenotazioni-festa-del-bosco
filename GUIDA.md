@@ -158,14 +158,16 @@ Qui configuri il piazzale **prima dell’evento** (da PC o telefono).
 
 1. Apri tab **Zone**.
 2. Seleziona una zona (o creane una nuova).
-3. Sulla **griglia**:
-   - tocca uno spazio vuoto → aggiungi un tavolo (punto)
-   - trascina il punto → sposta il tavolo
-   - tocca un tavolo → modifica **numero** e **capacità massima**
-   - elimina tavolo se sbagliato
-4. Salva.
+3. Scegli lo strumento:
+   - **Tavolo** → tocca per aggiungere un tavolo (oggetto operativo)
+   - **Linea** → tieni premuto e trascina (solo riferimento)
+   - **Rettangolo** → trascina un’area (solo riferimento)
+   - **Scritta** → tocca e digita (es. “Ingresso”, “Bar”)
+   - **Seleziona** → tocca un riferimento per modificarlo/eliminarlo
+4. Trascina i tavoli per posizionarli; imposta numero e capacità.
+5. Salva.
 
-La mappa e l’assegnazione prenotazioni usano **questo layout**.
+La mappa mostra tavoli + riferimenti. I riferimenti **non** si assegnano alle prenotazioni.
 
 ---
 

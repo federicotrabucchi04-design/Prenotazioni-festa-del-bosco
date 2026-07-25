@@ -1,6 +1,6 @@
 import { createDefaultLayout, LAYOUT_STORAGE_KEY } from "@/lib/layout-utils";
 import { getFirebaseDb, isFirebaseConfigured } from "@/lib/firebase";
-import type { VenueLayout, ZoneLayout, TableSpot } from "@/lib/types";
+import type { VenueLayout, ZoneLayout, TableSpot, MapMark } from "@/lib/types";
 import { onValue, ref, set } from "firebase/database";
 
 type Listener = (layout: VenueLayout) => void;
@@ -9,6 +9,22 @@ const listeners = new Set<Listener>();
 
 function notify(layout: VenueLayout) {
   listeners.forEach((l) => l(layout));
+}
+
+function normalizeMark(m: Partial<MapMark>, mi: number): MapMark | null {
+  const kind = m.kind;
+  if (kind !== "line" && kind !== "rect" && kind !== "text") return null;
+  return {
+    id: String(m.id || `mark_${mi}`),
+    kind,
+    x: Number(m.x ?? 10),
+    y: Number(m.y ?? 10),
+    x2: m.x2 != null ? Number(m.x2) : undefined,
+    y2: m.y2 != null ? Number(m.y2) : undefined,
+    w: m.w != null ? Number(m.w) : undefined,
+    h: m.h != null ? Number(m.h) : undefined,
+    text: m.text != null ? String(m.text) : undefined,
+  };
 }
 
 function normalizeLayout(raw: Partial<VenueLayout> | null): VenueLayout {
@@ -27,6 +43,11 @@ function normalizeLayout(raw: Partial<VenueLayout> | null): VenueLayout {
           y: Number(t.y ?? 20),
           capacity: Math.max(1, Number(t.capacity ?? 8)),
         }))
+      : [],
+    marks: Array.isArray(z.marks)
+      ? z.marks
+          .map((m: Partial<MapMark>, mi: number) => normalizeMark(m, mi))
+          .filter((m): m is MapMark => Boolean(m))
       : [],
   }));
 
