@@ -1,0 +1,12 @@
+{
+  "rules": {
+    "reservations": {
+      ".read": true,
+      ".write": true
+    },
+    "venueLayout": {
+      ".read": true,
+      ".write": true
+    }
+  }
+}
