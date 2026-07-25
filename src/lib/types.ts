@@ -70,6 +70,27 @@ export type ReservationInput = Omit<Reservation, "id" | "total" | "updatedAt"> &
 
 export type AppView = "list" | "map" | "zones";
 
+export type EveningStatus = "active" | "archived";
+
+export interface Evening {
+  id: string;
+  label: string;
+  status: EveningStatus;
+  createdAt: number;
+}
+
+/** Riepilogo leggero dopo archivio — senza dettagli prenotazioni */
+export interface ArchiveSummary {
+  eveningId: string;
+  eveningLabel: string;
+  archivedAt: number;
+  /** Somma delle persone prenotate (campo total) */
+  totalPeopleBooked: number;
+  reservationCount: number;
+  /** Somma persone di prenotazioni segnate come arrivate */
+  arrivedPeopleCount: number;
+}
+
 export interface CapacityCheck {
   ok: boolean;
   capacity: number;

@@ -183,14 +183,28 @@ La mappa mostra tavoli + riferimenti. I riferimenti **non** si assegnano alle pr
 
 ---
 
+## B6. Serate (solo Admin)
+
+L’app gestisce **più serate** (date). Lo staff lavora sempre sulla **serata attiva**.
+
+1. Admin → icona calendario in alto a destra.
+2. Vedi la **serata attiva** e lo **storico archivi**.
+3. Per passare a una nuova sera: inserisci il nome (es. `9 Agosto`) → **Archivia e crea nuova** → conferma.
+4. All’archivio le prenotazioni dettagliate vengono **eliminate**. Resta solo un riepilogo: **numero di persone prenotate** (più conteggio prenotazioni / arrivate).
+
+I dati Firebase usano i nodi `evenings`, `activeEveningId`, `eveningReservations/{id}`, `archives/{id}`. Un eventuale vecchio nodo flat `reservations` viene migrato automaticamente alla prima serata.
+
+---
+
 ## Checklist sera evento
 
 1. [ ] Link Vercel funzionante  
 2. [ ] Firebase collegato (niente badge Demo)  
 3. [ ] Zone e tavoli già impostati dall’admin  
-4. [ ] Prenotazioni caricate  
-5. [ ] Staff con PIN `STAFF2026` sui telefoni  
-6. [ ] Admin di riserva con `BOSCOADMIN`
+4. [ ] Serata attiva corretta (o nuova serata creata dopo archivio)  
+5. [ ] Prenotazioni caricate  
+6. [ ] Staff con PIN `STAFF2026` sui telefoni  
+7. [ ] Admin di riserva con `BOSCOADMIN`
 
 ---
 
@@ -202,6 +216,7 @@ La mappa mostra tavoli + riferimenti. I riferimenti **non** si assegnano alle pr
 | Dati non si aggiornano tra telefoni | Firebase non collegato / regole DB / URL database sbagliato |
 | Deploy Vercel fallisce | Variabili env, build log su Vercel |
 | Non vedo tab Zone | Sei entrato come Staff: serve Admin |
+| Non vedo gestione serate | Solo Admin: icona calendario in header |
 
 ---
 
@@ -212,4 +227,5 @@ La mappa mostra tavoli + riferimenti. I riferimenti **non** si assegnano alle pr
 3. Importa il repo su **Vercel** e ottieni il link.  
 4. Entra come **Admin**, apri **Zone**, disegna i tavoli.  
 5. Carica le prenotazioni e assegna i tavoli.  
-6. Dai il link + PIN Staff allo staff.
+6. Dai il link + PIN Staff allo staff.  
+7. A fine serata (Admin): archivia e crea la serata successiva.

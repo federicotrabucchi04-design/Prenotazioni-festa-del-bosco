@@ -18,7 +18,9 @@ export const PINS = {
 } as const;
 
 export const AUTH_STORAGE_KEY = "fdb-auth-role";
+/** @deprecated migrato in DEMO_EVENINGS_STORAGE_KEY */
 export const DEMO_STORAGE_KEY = "fdb-demo-reservations";
+export const DEMO_EVENINGS_STORAGE_KEY = "fdb-demo-evenings";
 
 export const SEED_RESERVATIONS: Omit<Reservation, "id">[] = [
   {

@@ -1,22 +1,26 @@
 import type { Reservation, ReservationInput } from "@/lib/types";
-import {
-  DEMO_STORAGE_KEY,
-  SEED_RESERVATIONS,
-  calcTotal,
-  createId,
-  EVENT_DATE,
-} from "@/lib/constants";
+import { EVENT_DATE, calcTotal, createId } from "@/lib/constants";
 import { getFirebaseDb, isFirebaseConfigured } from "@/lib/firebase";
 import { checkTableCapacity } from "@/lib/layout-utils";
 import { subscribeLayout } from "@/lib/layout";
 import type { VenueLayout } from "@/lib/types";
 import { createDefaultLayout } from "@/lib/layout-utils";
+import {
+  ensureEveningsReady,
+  getActiveEveningId,
+  readDemoStore,
+  writeDemoStore,
+  resetDemoEvenings,
+} from "@/lib/evenings";
 import { get, onValue, push, ref, remove, set, update } from "firebase/database";
 
 type Listener = (items: Reservation[]) => void;
 
 const listeners = new Set<Listener>();
 let cachedLayout: VenueLayout = createDefaultLayout();
+let cachedActiveEveningId: string | null = null;
+let firebaseUnsubReservations: (() => void) | null = null;
+let firebaseUnsubActive: (() => void) | null = null;
 
 // Keep a live layout cache for capacity checks
 if (typeof window !== "undefined") {
@@ -31,30 +35,6 @@ export function getCachedLayout() {
 
 function notify(items: Reservation[]) {
   listeners.forEach((l) => l(items));
-}
-
-function readDemo(): Reservation[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(DEMO_STORAGE_KEY);
-    if (!raw) {
-      const seeded = SEED_RESERVATIONS.map((r) => ({
-        ...r,
-        id: createId(),
-        updatedAt: Date.now(),
-      }));
-      localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(seeded));
-      return seeded;
-    }
-    return JSON.parse(raw) as Reservation[];
-  } catch {
-    return [];
-  }
-}
-
-function writeDemo(items: Reservation[]) {
-  localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(items));
-  notify(items);
 }
 
 function normalizeRecord(
@@ -94,23 +74,36 @@ export function getDataMode(): "firebase" | "demo" {
   return isFirebaseConfigured() ? "firebase" : "demo";
 }
 
-export function subscribeReservations(listener: Listener): () => void {
-  if (getDataMode() === "demo") {
-    listeners.add(listener);
-    listener(sortReservations(readDemo()));
-    return () => listeners.delete(listener);
-  }
+function readDemoReservations(): Reservation[] {
+  const store = readDemoStore();
+  const id = store.activeEveningId;
+  return store.reservations[id] ?? [];
+}
 
+function writeDemoReservations(items: Reservation[]) {
+  const store = readDemoStore();
+  const id = store.activeEveningId;
+  writeDemoStore({
+    ...store,
+    reservations: {
+      ...store.reservations,
+      [id]: items,
+    },
+  });
+  notify(sortReservations(items));
+}
+
+function attachFirebaseReservations(eveningId: string) {
   const db = getFirebaseDb();
   if (!db) {
-    listeners.add(listener);
-    listener([]);
-    return () => listeners.delete(listener);
+    notify([]);
+    return;
   }
-
-  const reservationsRef = ref(db, "reservations");
-  return onValue(
-    reservationsRef,
+  firebaseUnsubReservations?.();
+  cachedActiveEveningId = eveningId;
+  const path = `eveningReservations/${eveningId}`;
+  firebaseUnsubReservations = onValue(
+    ref(db, path),
     (snapshot) => {
       const val = snapshot.val() as Record<string, Partial<Reservation>> | null;
       const items: Reservation[] = [];
@@ -120,17 +113,67 @@ export function subscribeReservations(listener: Listener): () => void {
           if (normalized) items.push(normalized);
         }
       }
-      listener(sortReservations(items));
+      notify(sortReservations(items));
     },
-    () => listener([]),
+    () => notify([]),
   );
 }
 
+export function subscribeReservations(listener: Listener): () => void {
+  listeners.add(listener);
+
+  if (getDataMode() === "demo") {
+    listener(sortReservations(readDemoReservations()));
+    return () => listeners.delete(listener);
+  }
+
+  const db = getFirebaseDb();
+  if (!db) {
+    listener([]);
+    return () => listeners.delete(listener);
+  }
+
+  // Prima sottoscrizione: avvia migrazione + ascolto activeEveningId
+  if (!firebaseUnsubActive) {
+    void ensureEveningsReady().then(() => {
+      if (!getFirebaseDb()) return;
+      firebaseUnsubActive = onValue(ref(db, "activeEveningId"), (snap) => {
+        const id = snap.exists() ? String(snap.val()) : null;
+        if (!id) {
+          cachedActiveEveningId = null;
+          notify([]);
+          return;
+        }
+        if (id !== cachedActiveEveningId) {
+          attachFirebaseReservations(id);
+        }
+      });
+    });
+  } else if (cachedActiveEveningId) {
+    // Nuovo listener: rileggi subito lo stato corrente
+    void loadAllReservations().then((items) => listener(sortReservations(items)));
+  }
+
+  return () => {
+    listeners.delete(listener);
+    if (listeners.size === 0) {
+      firebaseUnsubReservations?.();
+      firebaseUnsubReservations = null;
+      firebaseUnsubActive?.();
+      firebaseUnsubActive = null;
+      cachedActiveEveningId = null;
+    }
+  };
+}
+
 async function loadAllReservations(): Promise<Reservation[]> {
-  if (getDataMode() === "demo") return readDemo();
+  await ensureEveningsReady();
+  if (getDataMode() === "demo") return readDemoReservations();
   const db = getFirebaseDb();
   if (!db) return [];
-  const snap = await get(ref(db, "reservations"));
+  const eveningId = cachedActiveEveningId ?? (await getActiveEveningId());
+  if (!eveningId) return [];
+  const snap = await get(ref(db, `eveningReservations/${eveningId}`));
   if (!snap.exists()) return [];
   const rows = snap.val() as Record<string, Partial<Reservation>>;
   return Object.entries(rows)
@@ -170,10 +213,8 @@ export class CapacityExceededError extends Error {
 export async function upsertReservation(input: ReservationInput) {
   const payload = toPayload(input);
   if (!payload.name) throw new Error("Il nome è obbligatorio");
-  // Zona consigliata anche senza tavolo (preferenza area); se manca usa stringa vuota
   if (!payload.zone) payload.zone = "";
 
-  // Tavolo opzionale: 0 = da assegnare dopo
   if (payload.tableNumber > 0) {
     if (!payload.zone) throw new Error("La zona è obbligatoria per assegnare un tavolo");
 
@@ -195,7 +236,7 @@ export async function upsertReservation(input: ReservationInput) {
   }
 
   if (getDataMode() === "demo") {
-    const items = readDemo();
+    const items = readDemoReservations();
     if (input.id) {
       const idx = items.findIndex((r) => r.id === input.id);
       if (idx === -1) throw new Error("Prenotazione non trovata");
@@ -203,49 +244,64 @@ export async function upsertReservation(input: ReservationInput) {
     } else {
       items.push({ ...payload, id: createId() });
     }
-    writeDemo(items);
+    writeDemoReservations(items);
     return;
   }
 
   const db = getFirebaseDb();
   if (!db) throw new Error("Firebase non configurato");
+  await ensureEveningsReady();
+  const eveningId = cachedActiveEveningId ?? (await getActiveEveningId());
+  if (!eveningId) throw new Error("Nessuna serata attiva");
 
   if (input.id) {
-    await update(ref(db, `reservations/${input.id}`), payload);
+    await update(ref(db, `eveningReservations/${eveningId}/${input.id}`), payload);
   } else {
-    const newRef = push(ref(db, "reservations"));
+    const newRef = push(ref(db, `eveningReservations/${eveningId}`));
     await set(newRef, payload);
   }
 }
 
 export async function deleteReservation(id: string) {
   if (getDataMode() === "demo") {
-    writeDemo(readDemo().filter((r) => r.id !== id));
+    writeDemoReservations(readDemoReservations().filter((r) => r.id !== id));
     return;
   }
   const db = getFirebaseDb();
   if (!db) throw new Error("Firebase non configurato");
-  await remove(ref(db, `reservations/${id}`));
+  await ensureEveningsReady();
+  const eveningId = cachedActiveEveningId ?? (await getActiveEveningId());
+  if (!eveningId) throw new Error("Nessuna serata attiva");
+  await remove(ref(db, `eveningReservations/${eveningId}/${id}`));
 }
 
 export async function setArrived(id: string, arrived: boolean) {
   if (getDataMode() === "demo") {
-    const items = readDemo().map((r) =>
+    const items = readDemoReservations().map((r) =>
       r.id === id ? { ...r, arrived, updatedAt: Date.now() } : r,
     );
-    writeDemo(items);
+    writeDemoReservations(items);
     return;
   }
   const db = getFirebaseDb();
   if (!db) throw new Error("Firebase non configurato");
-  await update(ref(db, `reservations/${id}`), {
+  await ensureEveningsReady();
+  const eveningId = cachedActiveEveningId ?? (await getActiveEveningId());
+  if (!eveningId) throw new Error("Nessuna serata attiva");
+  await update(ref(db, `eveningReservations/${eveningId}/${id}`), {
     arrived,
     updatedAt: Date.now(),
   });
 }
 
 export function resetDemoData() {
-  if (typeof window === "undefined") return;
-  localStorage.removeItem(DEMO_STORAGE_KEY);
-  notify(sortReservations(readDemo()));
+  resetDemoEvenings();
+  notify(sortReservations(readDemoReservations()));
+}
+
+/** Notifica i listener demo dopo cambio serata (archivio). */
+export function refreshReservationListeners() {
+  if (getDataMode() === "demo") {
+    notify(sortReservations(readDemoReservations()));
+  }
 }

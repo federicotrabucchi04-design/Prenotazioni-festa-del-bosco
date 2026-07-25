@@ -12,6 +12,7 @@ import { TablesMap } from "@/components/map/TablesMap";
 import { ZoneEditor } from "@/components/zones/ZoneEditor";
 import { useAuthStore, canEditReservations } from "@/store/auth-store";
 import { useUiStore } from "@/store/ui-store";
+import { useEvenings } from "@/hooks/use-evenings";
 import { EVENT_DATE } from "@/lib/constants";
 
 export function App() {
@@ -21,6 +22,7 @@ export function App() {
   const view = useUiStore((s) => s.view);
   const setView = useUiStore((s) => s.setView);
   const isAdmin = canEditReservations(role);
+  const { active: activeEvening } = useEvenings();
 
   useEffect(() => {
     const finish = () => setHydrated(true);
@@ -54,7 +56,10 @@ export function App() {
 
   return (
     <div className="min-h-dvh bg-[var(--forest-bg)] text-[var(--forest-ink)]">
-      <AppHeader title={title} subtitle={`Sera del ${EVENT_DATE}`} />
+      <AppHeader
+        title={title}
+        subtitle={`Sera del ${activeEvening?.label ?? EVENT_DATE}`}
+      />
 
       <AnimatePresence mode="wait">
         <motion.div

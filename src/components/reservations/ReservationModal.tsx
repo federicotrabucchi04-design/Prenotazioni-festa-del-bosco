@@ -12,6 +12,7 @@ import {
 import { useUiStore } from "@/store/ui-store";
 import { useVenueLayout } from "@/hooks/use-venue-layout";
 import { useReservations } from "@/hooks/use-reservations";
+import { useEvenings } from "@/hooks/use-evenings";
 import { checkTableCapacity, getZoneByName } from "@/lib/layout-utils";
 import { CapacityOverrideDialog } from "@/components/CapacityOverrideDialog";
 import toast from "react-hot-toast";
@@ -22,6 +23,8 @@ export function ReservationModal() {
   const closeModal = useUiStore((s) => s.closeModal);
   const { layout } = useVenueLayout();
   const { items } = useReservations();
+  const { active: activeEvening } = useEvenings();
+  const eveningLabel = activeEvening?.label ?? EVENT_DATE;
 
   const firstZone = layout.zones[0]?.name ?? "Tenda 1";
 
@@ -52,7 +55,7 @@ export function ReservationModal() {
         zone: editing.zone,
         tableNumber: editing.tableNumber,
         arrived: editing.arrived,
-        date: editing.date || EVENT_DATE,
+        date: editing.date || eveningLabel,
       });
     } else {
       const zone = layout.zones[0];
@@ -65,12 +68,12 @@ export function ReservationModal() {
         zone: zone?.name ?? firstZone,
         tableNumber: 0,
         arrived: false,
-        date: EVENT_DATE,
+        date: eveningLabel,
       });
     }
     setOverrideOpen(false);
     setPendingCheck(null);
-  }, [open, editing, layout, firstZone]);
+  }, [open, editing, layout, firstZone, eveningLabel]);
 
   const zoneTables = useMemo(() => {
     return getZoneByName(layout, form.zone)?.tables ?? [];
