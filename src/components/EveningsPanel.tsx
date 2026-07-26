@@ -2,11 +2,16 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Archive, CalendarDays, X } from "lucide-react";
+import { Archive, CalendarDays, Check, Plus, X } from "lucide-react";
 import toast from "react-hot-toast";
-import { archiveAndCreateEvening } from "@/lib/evenings";
+import {
+  archiveEvening,
+  createEvening,
+  setActiveEvening,
+} from "@/lib/evenings";
 import { refreshReservationListeners } from "@/lib/reservations";
 import { useEvenings } from "@/hooks/use-evenings";
+import { canEditReservations, useAuthStore } from "@/store/auth-store";
 import { EVENT_DATE } from "@/lib/constants";
 
 function formatArchivedAt(ts: number) {
@@ -30,34 +35,63 @@ export function EveningsPanel({
   open: boolean;
   onClose: () => void;
 }) {
-  const { active, archives, loading } = useEvenings();
-  const [label, setLabel] = useState("");
-  const [confirming, setConfirming] = useState(false);
+  const { active, evenings, archives, loading } = useEvenings();
+  const role = useAuthStore((s) => s.role);
+  const isAdmin = canEditReservations(role);
+  const openEvenings = evenings.filter((e) => e.status === "active");
+
+  const [newLabel, setNewLabel] = useState("");
+  const [archiveConfirmId, setArchiveConfirmId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  async function handleArchiveAndCreate() {
-    const nextLabel = label.trim();
+  async function handleCreate() {
+    const nextLabel = newLabel.trim();
     if (!nextLabel) {
       toast.error("Inserisci il nome della nuova serata");
       return;
     }
-    if (!confirming) {
-      setConfirming(true);
-      return;
-    }
-
     setBusy(true);
     try {
-      const { archive, evening } = await archiveAndCreateEvening(nextLabel);
+      const evening = await createEvening(nextLabel, { switchTo: true });
+      refreshReservationListeners();
+      toast.success(`Serata «${evening.label}» creata e selezionata`);
+      setNewLabel("");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Creazione non riuscita");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleSelect(id: string) {
+    if (id === active?.id) return;
+    setBusy(true);
+    try {
+      await setActiveEvening(id);
+      refreshReservationListeners();
+      toast.success("Serata selezionata");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Selezione non riuscita");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleArchive(id: string) {
+    if (archiveConfirmId !== id) {
+      setArchiveConfirmId(id);
+      return;
+    }
+    setBusy(true);
+    try {
+      const archive = await archiveEvening(id);
       refreshReservationListeners();
       toast.success(
-        `Serata «${archive.eveningLabel}» archiviata (${archive.totalPeopleBooked} persone). Attiva: «${evening.label}».`,
+        `«${archive.eveningLabel}» archiviata · ${archive.totalPeopleBooked} persone`,
       );
-      setLabel("");
-      setConfirming(false);
-      onClose();
+      setArchiveConfirmId(null);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Operazione non riuscita");
+      toast.error(err instanceof Error ? err.message : "Archivio non riuscito");
     } finally {
       setBusy(false);
     }
@@ -78,7 +112,7 @@ export function EveningsPanel({
             aria-label="Chiudi"
             onClick={() => {
               if (busy) return;
-              setConfirming(false);
+              setArchiveConfirmId(null);
               onClose();
             }}
           />
@@ -108,7 +142,7 @@ export function EveningsPanel({
                 type="button"
                 onClick={() => {
                   if (busy) return;
-                  setConfirming(false);
+                  setArchiveConfirmId(null);
                   onClose();
                 }}
                 className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--forest)]/8 text-[var(--forest)]"
@@ -122,7 +156,7 @@ export function EveningsPanel({
               <div className="mb-1 flex items-center gap-2 text-[var(--forest)]">
                 <CalendarDays className="h-4 w-4" />
                 <span className="text-xs font-bold uppercase tracking-wide">
-                  Serata attiva
+                  Stai gestendo
                 </span>
               </div>
               {loading ? (
@@ -132,64 +166,106 @@ export function EveningsPanel({
                   {active?.label ?? EVENT_DATE}
                 </p>
               )}
+              <p className="mt-1 text-xs text-[var(--forest-muted)]">
+                Puoi avere più serate aperte insieme e passare da una all’altra.
+              </p>
             </section>
 
             <section className="mb-6">
               <h3 className="mb-2 text-sm font-semibold text-[var(--forest-ink)]">
-                Archivia e crea nuova
+                Serate aperte
               </h3>
-              <p className="mb-3 text-sm text-[var(--forest-muted)]">
-                Le prenotazioni della serata attuale vengono eliminate. Resta solo
-                il numero di persone che avevano prenotato (e un riepilogo
-                minimale).
-              </p>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-[var(--forest-muted)]">
-                Nome nuova serata
-              </label>
-              <input
-                type="text"
-                value={label}
-                onChange={(e) => {
-                  setLabel(e.target.value);
-                  setConfirming(false);
-                }}
-                placeholder="es. 9 Agosto"
-                className="mb-3 w-full rounded-2xl border border-[var(--forest)]/15 bg-white px-4 py-3 text-[var(--forest-ink)] outline-none ring-[var(--forest)]/30 focus:ring-2"
-                disabled={busy}
-              />
+              {openEvenings.length === 0 ? (
+                <p className="mb-3 text-sm text-[var(--forest-muted)]">
+                  Nessuna serata aperta.
+                </p>
+              ) : (
+                <ul className="mb-3 space-y-2">
+                  {openEvenings.map((e) => {
+                    const selected = e.id === active?.id;
+                    return (
+                      <li
+                        key={e.id}
+                        className={`rounded-2xl border px-3 py-3 ${
+                          selected
+                            ? "border-[var(--forest)] bg-[var(--forest)]/8"
+                            : "border-[var(--forest)]/10 bg-[var(--forest-bg)]"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void handleSelect(e.id)}
+                            className="min-w-0 flex-1 text-left"
+                          >
+                            <p className="font-semibold text-[var(--forest-ink)]">
+                              {e.label}
+                            </p>
+                            <p className="text-xs text-[var(--forest-muted)]">
+                              {selected ? "Selezionata ora" : "Tocca per selezionare"}
+                            </p>
+                          </button>
+                          {selected ? (
+                            <Check className="h-5 w-5 shrink-0 text-[var(--forest)]" />
+                          ) : null}
+                          {isAdmin ? (
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => void handleArchive(e.id)}
+                              className="flex h-10 items-center gap-1 rounded-xl bg-amber-50 px-2.5 text-xs font-semibold text-amber-900"
+                              title="Archivia"
+                            >
+                              <Archive className="h-3.5 w-3.5" />
+                              Archivia
+                            </button>
+                          ) : null}
+                        </div>
+                        {archiveConfirmId === e.id ? (
+                          <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-950">
+                            Confermi archivio di «{e.label}»? Restano solo i
+                            totali persone; le prenotazioni dettagliate vengono
+                            eliminate. Tocca di nuovo Archivia per confermare.
+                          </div>
+                        ) : null}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
 
-              {confirming ? (
-                <div className="mb-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
-                  Confermi? Archivi «{active?.label ?? "serata attuale"}» e
-                  crei «{label.trim()}». I dettagli delle prenotazioni non
-                  verranno conservati.
-                </div>
-              ) : null}
-
-              <button
-                type="button"
-                disabled={busy || !label.trim()}
-                onClick={() => void handleArchiveAndCreate()}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--forest)] px-4 py-3.5 text-sm font-semibold text-white transition enabled:active:scale-[0.98] disabled:opacity-50"
-              >
-                <Archive className="h-4 w-4" />
-                {busy
-                  ? "Operazione in corso…"
-                  : confirming
-                    ? "Conferma archivio"
-                    : "Archivia e crea nuova"}
-              </button>
-              {confirming ? (
+            {isAdmin ? (
+              <section className="mb-6">
+                <h3 className="mb-2 text-sm font-semibold text-[var(--forest-ink)]">
+                  Crea nuova serata
+                </h3>
+                <p className="mb-3 text-sm text-[var(--forest-muted)]">
+                  Non archivia le altre: restano tutte gestibili in parallelo.
+                </p>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-[var(--forest-muted)]">
+                  Nome serata
+                </label>
+                <input
+                  type="text"
+                  value={newLabel}
+                  onChange={(e) => setNewLabel(e.target.value)}
+                  placeholder="es. 9 Agosto"
+                  className="mb-3 w-full rounded-2xl border border-[var(--forest)]/15 bg-white px-4 py-3 text-[var(--forest-ink)] outline-none ring-[var(--forest)]/30 focus:ring-2"
+                  disabled={busy}
+                />
                 <button
                   type="button"
-                  disabled={busy}
-                  onClick={() => setConfirming(false)}
-                  className="mt-2 w-full rounded-2xl px-4 py-2.5 text-sm font-medium text-[var(--forest-muted)]"
+                  disabled={busy || !newLabel.trim()}
+                  onClick={() => void handleCreate()}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--forest)] px-4 py-3.5 text-sm font-semibold text-white transition enabled:active:scale-[0.98] disabled:opacity-50"
                 >
-                  Annulla conferma
+                  <Plus className="h-4 w-4" />
+                  {busy ? "Creazione…" : "Crea serata"}
                 </button>
-              ) : null}
-            </section>
+              </section>
+            ) : null}
 
             <section>
               <h3 className="mb-2 text-sm font-semibold text-[var(--forest-ink)]">

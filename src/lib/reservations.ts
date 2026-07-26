@@ -299,9 +299,14 @@ export function resetDemoData() {
   notify(sortReservations(readDemoReservations()));
 }
 
-/** Notifica i listener demo dopo cambio serata (archivio). */
+/** Dopo cambio serata: aggiorna lista prenotazioni (demo + force re-read). */
 export function refreshReservationListeners() {
   if (getDataMode() === "demo") {
     notify(sortReservations(readDemoReservations()));
+    return;
+  }
+  // Firebase: se activeEveningId è già in cache, riattacca il listener
+  if (cachedActiveEveningId) {
+    attachFirebaseReservations(cachedActiveEveningId);
   }
 }

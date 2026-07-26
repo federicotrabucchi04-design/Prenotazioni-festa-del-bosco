@@ -1,10 +1,26 @@
 {
   "rules": {
-    "reservations": {
+    "venueLayout": {
       ".read": true,
       ".write": true
     },
-    "venueLayout": {
+    "evenings": {
+      ".read": true,
+      ".write": true
+    },
+    "activeEveningId": {
+      ".read": true,
+      ".write": true
+    },
+    "eveningReservations": {
+      ".read": true,
+      ".write": true
+    },
+    "archives": {
+      ".read": true,
+      ".write": true
+    },
+    "reservations": {
       ".read": true,
       ".write": true
     }

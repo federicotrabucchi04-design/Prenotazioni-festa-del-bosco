@@ -332,26 +332,20 @@ export function subscribeEvenings(listener: EveningsListener): () => void {
 }
 
 /**
- * Archivia la serata attiva (solo riepilogo numerico) e ne crea una nuova.
- * Le prenotazioni dettagliate vengono eliminate.
+ * Crea una nuova serata senza archiviare le altre (restano gestibili in parallelo).
  */
-export async function archiveAndCreateEvening(newLabel: string): Promise<{
-  archive: ArchiveSummary;
-  evening: Evening;
-}> {
+export async function createEvening(
+  newLabel: string,
+  options?: { switchTo?: boolean },
+): Promise<Evening> {
   const label = newLabel.trim();
   if (!label) throw new Error("Inserisci un nome per la nuova serata");
+  const switchTo = options?.switchTo !== false;
 
   await ensureEveningsReady();
 
   if (getDataMode() === "demo") {
     const store = readDemoStore();
-    const current = store.evenings[store.activeEveningId];
-    if (!current) throw new Error("Nessuna serata attiva");
-
-    const currentReservations = store.reservations[current.id] ?? [];
-    const archive = buildArchiveSummary(current, currentReservations);
-
     const newId = createId();
     const evening: Evening = {
       id: newId,
@@ -359,44 +353,115 @@ export async function archiveAndCreateEvening(newLabel: string): Promise<{
       status: "active",
       createdAt: Date.now(),
     };
-
-    const next: DemoStore = {
-      activeEveningId: newId,
-      evenings: {
-        ...store.evenings,
-        [current.id]: { ...current, status: "archived" },
-        [newId]: evening,
-      },
-      reservations: {
-        ...store.reservations,
-        [current.id]: [],
-        [newId]: [],
-      },
-      archives: {
-        ...store.archives,
-        [current.id]: archive,
-      },
-    };
-    // Rimuovi dettagli prenotazioni della serata archiviata
-    delete next.reservations[current.id];
-    writeDemoStore(next);
-    return { archive, evening };
+    writeDemoStore({
+      ...store,
+      activeEveningId: switchTo ? newId : store.activeEveningId,
+      evenings: { ...store.evenings, [newId]: evening },
+      reservations: { ...store.reservations, [newId]: [] },
+    });
+    return evening;
   }
 
   const db = getFirebaseDb();
   if (!db) throw new Error("Firebase non configurato");
 
-  const activeId = await getActiveEveningId();
-  if (!activeId) throw new Error("Nessuna serata attiva");
+  const newId = createId();
+  const evening: Evening = {
+    id: newId,
+    label,
+    status: "active",
+    createdAt: Date.now(),
+  };
+  await set(ref(db, `evenings/${newId}`), {
+    label: evening.label,
+    status: evening.status,
+    createdAt: evening.createdAt,
+  });
+  if (switchTo) {
+    await set(ref(db, "activeEveningId"), newId);
+  }
+  return evening;
+}
 
-  const eveningSnap = await get(ref(db, `evenings/${activeId}`));
+/** Seleziona quale serata stai gestendo (senza archiviare le altre). */
+export async function setActiveEvening(eveningId: string): Promise<void> {
+  await ensureEveningsReady();
+
+  if (getDataMode() === "demo") {
+    const store = readDemoStore();
+    const evening = store.evenings[eveningId];
+    if (!evening || evening.status === "archived") {
+      throw new Error("Serata non disponibile");
+    }
+    writeDemoStore({ ...store, activeEveningId: eveningId });
+    return;
+  }
+
+  const db = getFirebaseDb();
+  if (!db) throw new Error("Firebase non configurato");
+  const snap = await get(ref(db, `evenings/${eveningId}`));
+  const evening = normalizeEvening(
+    eveningId,
+    snap.val() as Partial<Evening> | null,
+  );
+  if (!evening || evening.status === "archived") {
+    throw new Error("Serata non disponibile");
+  }
+  await set(ref(db, "activeEveningId"), eveningId);
+}
+
+/**
+ * Archivia una serata: salva solo i totali, elimina le prenotazioni dettagliate.
+ * Non crea automaticamente una nuova serata.
+ */
+export async function archiveEvening(eveningId: string): Promise<ArchiveSummary> {
+  await ensureEveningsReady();
+
+  if (getDataMode() === "demo") {
+    const store = readDemoStore();
+    const current = store.evenings[eveningId];
+    if (!current) throw new Error("Serata non trovata");
+    if (current.status === "archived") throw new Error("Serata già archiviata");
+
+    const currentReservations = store.reservations[eveningId] ?? [];
+    const archive = buildArchiveSummary(current, currentReservations);
+
+    const nextEvenings = {
+      ...store.evenings,
+      [eveningId]: { ...current, status: "archived" as const },
+    };
+    const nextReservations = { ...store.reservations };
+    delete nextReservations[eveningId];
+
+    let nextActive = store.activeEveningId;
+    if (store.activeEveningId === eveningId) {
+      const other = Object.values(nextEvenings).find(
+        (e) => e.status === "active" && e.id !== eveningId,
+      );
+      nextActive = other?.id ?? "";
+    }
+
+    writeDemoStore({
+      activeEveningId: nextActive,
+      evenings: nextEvenings,
+      reservations: nextReservations,
+      archives: { ...store.archives, [eveningId]: archive },
+    });
+    return archive;
+  }
+
+  const db = getFirebaseDb();
+  if (!db) throw new Error("Firebase non configurato");
+
+  const eveningSnap = await get(ref(db, `evenings/${eveningId}`));
   const current = normalizeEvening(
-    activeId,
+    eveningId,
     eveningSnap.val() as Partial<Evening> | null,
   );
-  if (!current) throw new Error("Serata attiva non trovata");
+  if (!current) throw new Error("Serata non trovata");
+  if (current.status === "archived") throw new Error("Serata già archiviata");
 
-  const resSnap = await get(ref(db, `eveningReservations/${activeId}`));
+  const resSnap = await get(ref(db, `eveningReservations/${eveningId}`));
   const reservations: Reservation[] = [];
   if (resSnap.exists()) {
     const rows = resSnap.val() as Record<string, Partial<Reservation>>;
@@ -422,30 +487,52 @@ export async function archiveAndCreateEvening(newLabel: string): Promise<{
   }
 
   const archive = buildArchiveSummary(current, reservations);
-  const newId = createId();
-  const evening: Evening = {
-    id: newId,
-    label,
-    status: "active",
-    createdAt: Date.now(),
-  };
 
-  await set(ref(db, `archives/${activeId}`), {
+  await set(ref(db, `archives/${eveningId}`), {
     eveningLabel: archive.eveningLabel,
     archivedAt: archive.archivedAt,
     totalPeopleBooked: archive.totalPeopleBooked,
     reservationCount: archive.reservationCount,
     arrivedPeopleCount: archive.arrivedPeopleCount,
   });
-  await update(ref(db, `evenings/${activeId}`), { status: "archived" });
-  await remove(ref(db, `eveningReservations/${activeId}`));
-  await set(ref(db, `evenings/${newId}`), {
-    label: evening.label,
-    status: evening.status,
-    createdAt: evening.createdAt,
-  });
-  await set(ref(db, "activeEveningId"), newId);
+  await update(ref(db, `evenings/${eveningId}`), { status: "archived" });
+  await remove(ref(db, `eveningReservations/${eveningId}`));
 
+  const activeId = await getActiveEveningId();
+  if (activeId === eveningId) {
+    const allSnap = await get(ref(db, "evenings"));
+    let nextActive: string | null = null;
+    if (allSnap.exists()) {
+      const rows = allSnap.val() as Record<string, Partial<Evening>>;
+      for (const [id, row] of Object.entries(rows)) {
+        if (id === eveningId) continue;
+        if (row?.status !== "archived" && row?.label) {
+          nextActive = id;
+          break;
+        }
+      }
+    }
+    if (nextActive) {
+      await set(ref(db, "activeEveningId"), nextActive);
+    } else {
+      await remove(ref(db, "activeEveningId"));
+    }
+  }
+
+  return archive;
+}
+
+/**
+ * Archivia la serata attiva e ne crea una nuova (scorciatoia).
+ */
+export async function archiveAndCreateEvening(newLabel: string): Promise<{
+  archive: ArchiveSummary;
+  evening: Evening;
+}> {
+  const activeId = await getActiveEveningId();
+  if (!activeId) throw new Error("Nessuna serata attiva");
+  const archive = await archiveEvening(activeId);
+  const evening = await createEvening(newLabel, { switchTo: true });
   return { archive, evening };
 }
 

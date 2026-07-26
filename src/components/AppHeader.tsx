@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { CalendarDays, LogOut, Trees } from "lucide-react";
 import { getDataMode } from "@/lib/reservations";
-import { useAuthStore, canEditReservations } from "@/store/auth-store";
+import { useAuthStore } from "@/store/auth-store";
 import { EveningsPanel } from "@/components/EveningsPanel";
 import toast from "react-hot-toast";
 
@@ -17,7 +17,6 @@ export function AppHeader({
   const role = useAuthStore((s) => s.role);
   const logout = useAuthStore((s) => s.logout);
   const mode = getDataMode();
-  const isAdmin = canEditReservations(role);
   const [eveningsOpen, setEveningsOpen] = useState(false);
 
   return (
@@ -53,17 +52,15 @@ export function AppHeader({
             ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            {isAdmin ? (
-              <button
-                type="button"
-                onClick={() => setEveningsOpen(true)}
-                className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--forest)]/8 text-[var(--forest)] transition active:scale-95"
-                aria-label="Gestisci serate"
-                title="Gestisci serate"
-              >
-                <CalendarDays className="h-5 w-5" />
-              </button>
-            ) : null}
+            <button
+              type="button"
+              onClick={() => setEveningsOpen(true)}
+              className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--forest)]/8 text-[var(--forest)] transition active:scale-95"
+              aria-label="Gestisci serate"
+              title="Gestisci serate"
+            >
+              <CalendarDays className="h-5 w-5" />
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -78,9 +75,7 @@ export function AppHeader({
           </div>
         </div>
       </header>
-      {isAdmin ? (
-        <EveningsPanel open={eveningsOpen} onClose={() => setEveningsOpen(false)} />
-      ) : null}
+      <EveningsPanel open={eveningsOpen} onClose={() => setEveningsOpen(false)} />
     </>
   );
 }
