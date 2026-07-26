@@ -12,6 +12,7 @@ interface UiState {
   modalOpen: boolean;
   assigning: Reservation | null;
   printMapOpen: boolean;
+  settingsOpen: boolean;
   recentlyArrivedIds: Set<string>;
   setView: (view: AppView) => void;
   setSelectedZone: (zone: Zone) => void;
@@ -23,6 +24,8 @@ interface UiState {
   closeAssignTable: () => void;
   openPrintMap: () => void;
   closePrintMap: () => void;
+  openSettings: () => void;
+  closeSettings: () => void;
   markRecentlyArrived: (id: string) => void;
 }
 
@@ -34,6 +37,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   modalOpen: false,
   assigning: null,
   printMapOpen: false,
+  settingsOpen: false,
   recentlyArrivedIds: new Set(),
   setView: (view) => set({ view }),
   setSelectedZone: (zone) => set({ selectedZone: zone }),
@@ -49,6 +53,8 @@ export const useUiStore = create<UiState>((set, get) => ({
   closeAssignTable: () => set({ assigning: null }),
   openPrintMap: () => set({ printMapOpen: true }),
   closePrintMap: () => set({ printMapOpen: false }),
+  openSettings: () => set({ settingsOpen: true }),
+  closeSettings: () => set({ settingsOpen: false }),
   markRecentlyArrived: (id) => {
     const next = new Set(get().recentlyArrivedIds);
     next.add(id);

@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarDays, LogOut, Trees } from "lucide-react";
+import { CalendarDays, LogOut, Settings2, Trees } from "lucide-react";
 import { getDataMode } from "@/lib/reservations";
-import { useAuthStore } from "@/store/auth-store";
+import { canEditReservations, useAuthStore } from "@/store/auth-store";
+import { useUiStore } from "@/store/ui-store";
 import { EveningsPanel } from "@/components/EveningsPanel";
 import toast from "react-hot-toast";
 
@@ -16,7 +17,9 @@ export function AppHeader({
 }) {
   const role = useAuthStore((s) => s.role);
   const logout = useAuthStore((s) => s.logout);
+  const openSettings = useUiStore((s) => s.openSettings);
   const mode = getDataMode();
+  const isAdmin = canEditReservations(role);
   const [eveningsOpen, setEveningsOpen] = useState(false);
 
   return (
@@ -52,6 +55,18 @@ export function AppHeader({
             ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            {isAdmin ? (
+              <button
+                type="button"
+                onClick={openSettings}
+                className="inline-flex h-11 items-center gap-1.5 rounded-2xl bg-[var(--forest)] px-3 text-sm font-semibold text-white shadow-sm shadow-[var(--forest)]/20 transition active:scale-95"
+                aria-label="Impostazioni"
+                title="Impostazioni"
+              >
+                <Settings2 className="h-5 w-5" />
+                <span className="hidden xs:inline sm:inline">Set</span>
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => setEveningsOpen(true)}

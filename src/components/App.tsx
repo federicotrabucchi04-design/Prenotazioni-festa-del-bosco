@@ -11,6 +11,7 @@ import { AssignTablePicker } from "@/components/reservations/AssignTablePicker";
 import { TablesMap } from "@/components/map/TablesMap";
 import { GlobalCartina } from "@/components/map/GlobalCartina";
 import { ZoneEditor } from "@/components/zones/ZoneEditor";
+import { SettingsPanel } from "@/components/SettingsPanel";
 import { OrderSetupScreen } from "@/components/order/OrderSetupScreen";
 import { OrderDisplayScreen } from "@/components/order/OrderDisplayScreen";
 import { OrderKeypadScreen } from "@/components/order/OrderKeypadScreen";
@@ -32,6 +33,8 @@ export function App() {
   const setView = useUiStore((s) => s.setView);
   const isAdmin = canEditReservations(role);
   const { active: activeEvening } = useEvenings();
+  const settingsOpen = useUiStore((s) => s.settingsOpen);
+  const closeSettings = useUiStore((s) => s.closeSettings);
 
   useEffect(() => {
     const finish = () => setHydrated(true);
@@ -105,6 +108,9 @@ export function App() {
       <ReservationModal />
       <AssignTablePicker />
       <GlobalCartina />
+      {isAdmin ? (
+        <SettingsPanel open={settingsOpen} onClose={closeSettings} />
+      ) : null}
     </div>
   );
 }
