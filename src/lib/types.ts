@@ -31,6 +31,8 @@ export interface MapMark {
   h?: number;
   /** Testo etichetta */
   text?: string;
+  /** Colore opzionale (hex), default tema bosco */
+  color?: string;
 }
 
 export interface ZoneLayout {

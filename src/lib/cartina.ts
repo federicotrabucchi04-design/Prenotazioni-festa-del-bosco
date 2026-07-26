@@ -1,101 +1,148 @@
-import type { Reservation, VenueLayout, ZoneLayout } from "@/lib/types";
+import type { MapMark, Reservation, VenueLayout, ZoneLayout } from "@/lib/types";
+import { createId } from "@/lib/constants";
+import { clampPercent } from "@/lib/layout-utils";
 
-export const CARTINA_PREFS_KEY = "fdb-cartina-prefs-v2";
+export const CARTINA_PREFS_KEY = "fdb-cartina-prefs-v3";
 
-export interface ZonePlacement {
+/** Zona posizionata sulla lavagna (coordinate % 0–100) */
+export interface ZoneOnBoard {
   zoneId: string;
-  /** Riga 0-based */
-  row: number;
-  /** Colonna 0-based */
-  col: number;
-  rowSpan: number;
-  colSpan: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
 }
 
 export interface CartinaPrefs {
-  gridRows: number;
-  gridCols: number;
-  placements: ZonePlacement[];
+  placements: ZoneOnBoard[];
+  marks: MapMark[];
 }
 
-export const MIN_GRID = 1;
-export const MAX_GRID = 6;
+export const CARTINA_COLORS = [
+  { id: "forest", hex: "#2d5a27", label: "Verde" },
+  { id: "blue", hex: "#1d4ed8", label: "Blu" },
+  { id: "red", hex: "#b91c1c", label: "Rosso" },
+  { id: "amber", hex: "#a16207", label: "Ambra" },
+  { id: "purple", hex: "#7c3aed", label: "Viola" },
+  { id: "teal", hex: "#0f766e", label: "Teal" },
+  { id: "black", hex: "#142418", label: "Nero" },
+] as const;
 
-export function clampGrid(n: number) {
-  return Math.min(MAX_GRID, Math.max(MIN_GRID, Math.round(n)));
-}
+export const DEFAULT_ZONE_W = 32;
+export const DEFAULT_ZONE_H = 30;
+export const MIN_ZONE_SIZE = 14;
 
 export function defaultCartinaPrefs(layout: VenueLayout): CartinaPrefs {
-  const n = layout.zones.length;
-  const cols = clampGrid(n <= 2 ? n : n <= 4 ? 2 : n <= 6 ? 3 : 4);
-  const rows = clampGrid(Math.ceil(Math.max(1, n) / cols));
-  const placements: ZonePlacement[] = layout.zones.map((z, i) => ({
-    zoneId: z.id,
-    row: Math.floor(i / cols),
-    col: i % cols,
-    rowSpan: 1,
-    colSpan: 1,
-  }));
-  return { gridRows: rows, gridCols: cols, placements };
+  return {
+    placements: autoPlaceZones(layout.zones),
+    marks: [],
+  };
 }
 
-function migrateLegacyPrefs(
-  raw: Record<string, unknown>,
-  layout: VenueLayout,
-): CartinaPrefs | null {
-  const order = raw.zoneOrder;
-  const columns = raw.columns;
-  if (!Array.isArray(order) || typeof columns !== "number") return null;
+export function autoPlaceZones(zones: ZoneLayout[]): ZoneOnBoard[] {
+  const n = zones.length;
+  if (n === 0) return [];
+  const cols = Math.min(3, Math.max(1, Math.ceil(Math.sqrt(n))));
+  const rows = Math.ceil(n / cols);
+  const gap = 2;
+  const w = Math.min(DEFAULT_ZONE_W, (100 - gap * (cols + 1)) / cols);
+  const h = Math.min(DEFAULT_ZONE_H, (100 - gap * (rows + 1)) / rows);
+  return zones.map((z, i) => {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    return {
+      zoneId: z.id,
+      x: gap + col * (w + gap),
+      y: gap + row * (h + gap),
+      w,
+      h,
+    };
+  });
+}
+
+function migrateFromGrid(raw: Record<string, unknown>, layout: VenueLayout): CartinaPrefs | null {
+  if (!Array.isArray(raw.placements) || raw.placements.length === 0) return null;
+  const first = raw.placements[0] as Record<string, unknown>;
+  if (typeof first.row !== "number" || typeof first.col !== "number") return null;
+
+  const gridRows = Math.max(1, Number(raw.gridRows) || 2);
+  const gridCols = Math.max(1, Number(raw.gridCols) || 2);
+  const known = new Set(layout.zones.map((z) => z.id));
+  const gap = 1.5;
+  const cellW = (100 - gap * (gridCols + 1)) / gridCols;
+  const cellH = (100 - gap * (gridRows + 1)) / gridRows;
+
+  const placements: ZoneOnBoard[] = [];
+  for (const p of raw.placements as Record<string, unknown>[]) {
+    const zoneId = String(p.zoneId ?? "");
+    if (!known.has(zoneId)) continue;
+    const row = Number(p.row) || 0;
+    const col = Number(p.col) || 0;
+    const rowSpan = Math.max(1, Number(p.rowSpan) || 1);
+    const colSpan = Math.max(1, Number(p.colSpan) || 1);
+    placements.push({
+      zoneId,
+      x: gap + col * (cellW + gap),
+      y: gap + row * (cellH + gap),
+      w: cellW * colSpan + gap * (colSpan - 1),
+      h: cellH * rowSpan + gap * (rowSpan - 1),
+    });
+  }
+  return { placements, marks: [] };
+}
+
+function migrateFromOrder(raw: Record<string, unknown>, layout: VenueLayout): CartinaPrefs | null {
+  if (!Array.isArray(raw.zoneOrder)) return null;
   const known = new Set(layout.zones.map((z) => z.id));
   const hidden = new Set(
-    Array.isArray(raw.hiddenZoneIds)
-      ? (raw.hiddenZoneIds as string[]).filter((id) => known.has(id))
-      : [],
+    Array.isArray(raw.hiddenZoneIds) ? (raw.hiddenZoneIds as string[]) : [],
   );
-  const ids = (order as string[]).filter((id) => known.has(id) && !hidden.has(id));
-  for (const z of layout.zones) {
-    if (!ids.includes(z.id) && !hidden.has(z.id)) ids.push(z.id);
-  }
-  const cols = clampGrid(columns);
-  const rows = clampGrid(Math.max(1, Math.ceil(ids.length / cols)));
-  return {
-    gridRows: rows,
-    gridCols: cols,
-    placements: ids.map((zoneId, i) => ({
-      zoneId,
-      row: Math.floor(i / cols),
-      col: i % cols,
-      rowSpan: 1,
-      colSpan: 1,
-    })),
-  };
+  const zones = layout.zones.filter(
+    (z) => (raw.zoneOrder as string[]).includes(z.id) && !hidden.has(z.id),
+  );
+  const extras = layout.zones.filter(
+    (z) => !(raw.zoneOrder as string[]).includes(z.id) && !hidden.has(z.id),
+  );
+  return { placements: autoPlaceZones([...zones, ...extras]), marks: [] };
 }
 
 export function loadCartinaPrefs(layout: VenueLayout): CartinaPrefs {
   const fallback = defaultCartinaPrefs(layout);
   if (typeof window === "undefined") return fallback;
   try {
-    const rawV2 = localStorage.getItem(CARTINA_PREFS_KEY);
-    const rawLegacy = localStorage.getItem("fdb-cartina-prefs");
-    const raw = rawV2 ?? rawLegacy;
-    if (!raw) return fallback;
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const rawStr =
+      localStorage.getItem(CARTINA_PREFS_KEY) ??
+      localStorage.getItem("fdb-cartina-prefs-v2") ??
+      localStorage.getItem("fdb-cartina-prefs");
+    if (!rawStr) return fallback;
+    const parsed = JSON.parse(rawStr) as Record<string, unknown>;
 
-    if (Array.isArray(parsed.placements)) {
-      const known = new Set(layout.zones.map((z) => z.id));
-      const gridRows = clampGrid(Number(parsed.gridRows) || fallback.gridRows);
-      const gridCols = clampGrid(Number(parsed.gridCols) || fallback.gridCols);
-      const placements = (parsed.placements as ZonePlacement[])
-        .filter((p) => known.has(p.zoneId))
-        .map((p) => normalizePlacement(p, gridRows, gridCols))
-        .filter((p, i, arr) => arr.findIndex((x) => x.zoneId === p.zoneId) === i);
-      return { gridRows, gridCols, placements };
+    if (Array.isArray(parsed.placements) && parsed.placements[0]) {
+      const sample = parsed.placements[0] as Record<string, unknown>;
+      if (typeof sample.x === "number" && typeof sample.w === "number") {
+        const known = new Set(layout.zones.map((z) => z.id));
+        const placements = (parsed.placements as ZoneOnBoard[])
+          .filter((p) => known.has(p.zoneId))
+          .map(normalizePlacement)
+          .filter((p, i, arr) => arr.findIndex((x) => x.zoneId === p.zoneId) === i);
+        const marks = Array.isArray(parsed.marks)
+          ? (parsed.marks as MapMark[]).map(normalizeCartinaMark).filter(Boolean) as MapMark[]
+          : [];
+        const prefs = { placements, marks };
+        saveCartinaPrefs(prefs);
+        return prefs;
+      }
     }
 
-    const migrated = migrateLegacyPrefs(parsed, layout);
-    if (migrated) {
-      saveCartinaPrefs(migrated);
-      return migrated;
+    const fromGrid = migrateFromGrid(parsed, layout);
+    if (fromGrid) {
+      saveCartinaPrefs(fromGrid);
+      return fromGrid;
+    }
+    const fromOrder = migrateFromOrder(parsed, layout);
+    if (fromOrder) {
+      saveCartinaPrefs(fromOrder);
+      return fromOrder;
     }
     return fallback;
   } catch {
@@ -108,43 +155,50 @@ export function saveCartinaPrefs(prefs: CartinaPrefs) {
   localStorage.setItem(CARTINA_PREFS_KEY, JSON.stringify(prefs));
 }
 
-export function normalizePlacement(
-  p: ZonePlacement,
-  gridRows: number,
-  gridCols: number,
-): ZonePlacement {
-  const rowSpan = Math.min(Math.max(1, p.rowSpan || 1), gridRows);
-  const colSpan = Math.min(Math.max(1, p.colSpan || 1), gridCols);
-  const row = Math.min(Math.max(0, p.row), Math.max(0, gridRows - rowSpan));
-  const col = Math.min(Math.max(0, p.col), Math.max(0, gridCols - colSpan));
-  return { zoneId: p.zoneId, row, col, rowSpan, colSpan };
+export function normalizePlacement(p: ZoneOnBoard): ZoneOnBoard {
+  const w = Math.max(MIN_ZONE_SIZE, Math.min(100, p.w));
+  const h = Math.max(MIN_ZONE_SIZE, Math.min(100, p.h));
+  const x = clampPercent(Math.min(p.x, 100 - w));
+  const y = clampPercent(Math.min(p.y, 100 - h));
+  return { zoneId: p.zoneId, x, y, w, h };
 }
 
-/** Celle coperte da un placement (inclusa la cella d'origine) */
-export function cellsCovered(p: ZonePlacement): string[] {
-  const keys: string[] = [];
-  for (let r = p.row; r < p.row + p.rowSpan; r++) {
-    for (let c = p.col; c < p.col + p.colSpan; c++) {
-      keys.push(`${r}:${c}`);
-    }
+export function normalizeCartinaMark(m: Partial<MapMark>): MapMark | null {
+  if (!m || !m.kind) return null;
+  const id = m.id || createId();
+  const x = clampPercent(Number(m.x) || 0);
+  const y = clampPercent(Number(m.y) || 0);
+  const color = typeof m.color === "string" ? m.color : undefined;
+  if (m.kind === "line") {
+    return {
+      id,
+      kind: "line",
+      x,
+      y,
+      x2: clampPercent(Number(m.x2) || x),
+      y2: clampPercent(Number(m.y2) || y),
+      color,
+    };
   }
-  return keys;
-}
-
-export function placementFits(
-  candidate: ZonePlacement,
-  others: ZonePlacement[],
-  gridRows: number,
-  gridCols: number,
-): boolean {
-  const p = normalizePlacement(candidate, gridRows, gridCols);
-  if (p.row + p.rowSpan > gridRows || p.col + p.colSpan > gridCols) return false;
-  const used = new Set<string>();
-  for (const o of others) {
-    if (o.zoneId === p.zoneId) continue;
-    for (const k of cellsCovered(o)) used.add(k);
+  if (m.kind === "rect") {
+    return {
+      id,
+      kind: "rect",
+      x,
+      y,
+      w: Math.max(1, Number(m.w) || 10),
+      h: Math.max(1, Number(m.h) || 10),
+      color,
+    };
   }
-  return cellsCovered(p).every((k) => !used.has(k));
+  return {
+    id,
+    kind: "text",
+    x,
+    y,
+    text: String(m.text ?? "Etichetta"),
+    color,
+  };
 }
 
 export function placedZoneIds(prefs: CartinaPrefs): Set<string> {
@@ -154,16 +208,13 @@ export function placedZoneIds(prefs: CartinaPrefs): Set<string> {
 export function resolvePlacedZones(
   layout: VenueLayout,
   prefs: CartinaPrefs,
-): { zone: ZoneLayout; placement: ZonePlacement }[] {
+): { zone: ZoneLayout; placement: ZoneOnBoard }[] {
   const byId = new Map(layout.zones.map((z) => [z.id, z]));
-  const out: { zone: ZoneLayout; placement: ZonePlacement }[] = [];
+  const out: { zone: ZoneLayout; placement: ZoneOnBoard }[] = [];
   for (const p of prefs.placements) {
     const zone = byId.get(p.zoneId);
     if (!zone) continue;
-    out.push({
-      zone,
-      placement: normalizePlacement(p, prefs.gridRows, prefs.gridCols),
-    });
+    out.push({ zone, placement: normalizePlacement(p) });
   }
   return out;
 }
@@ -173,7 +224,6 @@ export interface GuestLabel {
   total: number;
 }
 
-/** Ospiti per tavolo (solo assegnati), con persone */
 export function guestsByTable(
   reservations: Reservation[],
   zoneName: string,
@@ -182,10 +232,7 @@ export function guestsByTable(
   for (const r of reservations) {
     if (r.zone !== zoneName || !r.tableNumber || r.tableNumber <= 0) continue;
     const list = map.get(r.tableNumber) ?? [];
-    list.push({
-      name: r.name.trim() || "—",
-      total: r.total,
-    });
+    list.push({ name: r.name.trim() || "—", total: r.total });
     map.set(r.tableNumber, list);
   }
   return map;
@@ -197,21 +244,6 @@ export function formatGuestLabel(g: GuestLabel): string {
 
 export function formatTableGuests(guests: GuestLabel[]): string {
   return guests.map(formatGuestLabel).join(" · ");
-}
-
-/** @deprecated usa guestsByTable */
-export function namesByTable(
-  reservations: Reservation[],
-  zoneName: string,
-): Map<number, string[]> {
-  const map = new Map<number, string[]>();
-  for (const [n, guests] of guestsByTable(reservations, zoneName)) {
-    map.set(
-      n,
-      guests.map((g) => formatGuestLabel(g)),
-    );
-  }
-  return map;
 }
 
 export function tableGridColumns(tableCount: number): number {
@@ -227,11 +259,12 @@ export function sortedTables(zone: ZoneLayout) {
   return [...zone.tables].sort((a, b) => a.number - b.number);
 }
 
-export const SPAN_PRESETS: { label: string; rowSpan: number; colSpan: number }[] = [
-  { label: "1×1", rowSpan: 1, colSpan: 1 },
-  { label: "2×1", rowSpan: 2, colSpan: 1 },
-  { label: "1×2", rowSpan: 1, colSpan: 2 },
-  { label: "2×2", rowSpan: 2, colSpan: 2 },
-  { label: "3×1", rowSpan: 3, colSpan: 1 },
-  { label: "1×3", rowSpan: 1, colSpan: 3 },
-];
+export function pointerPercent(
+  e: { clientX: number; clientY: number },
+  el: HTMLElement,
+) {
+  const rect = el.getBoundingClientRect();
+  const x = ((e.clientX - rect.left) / rect.width) * 100;
+  const y = ((e.clientY - rect.top) / rect.height) * 100;
+  return { x: clampPercent(x), y: clampPercent(y) };
+}

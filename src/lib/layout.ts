@@ -24,6 +24,7 @@ function normalizeMark(m: Partial<MapMark>, mi: number): MapMark | null {
     w: m.w != null ? Number(m.w) : undefined,
     h: m.h != null ? Number(m.h) : undefined,
     text: m.text != null ? String(m.text) : undefined,
+    color: m.color != null ? String(m.color) : undefined,
   };
 }
 

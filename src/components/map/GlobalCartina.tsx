@@ -1,14 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Download,
   Eye,
   Minus,
-  Plus,
+  MousePointer2,
   Printer,
   Settings2,
+  Square,
   Trash2,
+  Type,
   X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -17,29 +19,33 @@ import { useVenueLayout } from "@/hooks/use-venue-layout";
 import { useReservations } from "@/hooks/use-reservations";
 import { useEvenings } from "@/hooks/use-evenings";
 import { useUiStore } from "@/store/ui-store";
-import { EVENT_DATE } from "@/lib/constants";
+import { EVENT_DATE, createId } from "@/lib/constants";
 import { downloadCartinaPng } from "@/lib/cartina-export";
-import type { Reservation, ZoneLayout } from "@/lib/types";
+import { ZoneMarksLayer } from "@/components/map/ZoneMarksLayer";
+import type { MapMark, Reservation, ZoneLayout } from "@/lib/types";
 import {
   type CartinaPrefs,
-  type ZonePlacement,
-  SPAN_PRESETS,
-  clampGrid,
+  type ZoneOnBoard,
+  CARTINA_COLORS,
+  DEFAULT_ZONE_H,
+  DEFAULT_ZONE_W,
+  MIN_ZONE_SIZE,
+  autoPlaceZones,
   formatTableGuests,
   guestsByTable,
   loadCartinaPrefs,
-  MAX_GRID,
-  MIN_GRID,
   normalizePlacement,
   placedZoneIds,
-  placementFits,
+  pointerPercent,
   resolvePlacedZones,
   saveCartinaPrefs,
   sortedTables,
   tableGridColumns,
 } from "@/lib/cartina";
+import { clampPercent } from "@/lib/layout-utils";
 
 type Step = "arrange" | "preview";
+type Tool = "move" | "line" | "rect" | "text";
 
 export function GlobalCartina() {
   const open = useUiStore((s) => s.printMapOpen);
@@ -49,13 +55,11 @@ export function GlobalCartina() {
   const { active } = useEvenings();
   const [step, setStep] = useState<Step>("arrange");
   const [prefs, setPrefs] = useState<CartinaPrefs | null>(null);
-  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
     setPrefs(loadCartinaPrefs(layout));
     setStep("arrange");
-    setSelectedZoneId(null);
   }, [open, layout]);
 
   const eveningLabel = active?.label ?? EVENT_DATE;
@@ -66,166 +70,20 @@ export function GlobalCartina() {
 
   const activePrefs = prefs ?? loadCartinaPrefs(layout);
   const placed = resolvePlacedZones(layout, activePrefs);
-  const placedIds = placedZoneIds(activePrefs);
-  const unplaced = layout.zones.filter((z) => !placedIds.has(z.id));
 
   function updatePrefs(next: CartinaPrefs) {
     setPrefs(next);
     saveCartinaPrefs(next);
   }
 
-  function setGridSize(rows: number, cols: number) {
-    const gridRows = clampGrid(rows);
-    const gridCols = clampGrid(cols);
-    const placements = activePrefs.placements
-      .map((p) => normalizePlacement(p, gridRows, gridCols))
-      .filter((p, _, arr) =>
-        placementFits(p, arr, gridRows, gridCols),
-      );
-    // Re-filter collisions after shrink
-    const cleaned: ZonePlacement[] = [];
-    for (const p of placements) {
-      if (placementFits(p, cleaned, gridRows, gridCols)) cleaned.push(p);
-    }
-    updatePrefs({ gridRows, gridCols, placements: cleaned });
-  }
-
-  function placeOrMove(row: number, col: number) {
-    if (!selectedZoneId) {
-      // Se c'è già una zona nella cella, selezionala
-      const hit = activePrefs.placements.find((p) =>
-        cellsOf(p).some((k) => k === `${row}:${col}`),
-      );
-      if (hit) setSelectedZoneId(hit.zoneId);
-      return;
-    }
-
-    const existing = activePrefs.placements.find(
-      (p) => p.zoneId === selectedZoneId,
-    );
-    const candidate: ZonePlacement = {
-      zoneId: selectedZoneId,
-      row,
-      col,
-      rowSpan: existing?.rowSpan ?? 1,
-      colSpan: existing?.colSpan ?? 1,
-    };
-    const without = activePrefs.placements.filter(
-      (p) => p.zoneId !== selectedZoneId,
-    );
-
-    // Se la cella è occupata da un'altra zona, scambia le posizioni di origine
-    const occupant = without.find((p) =>
-      cellsOf(p).includes(`${row}:${col}`),
-    );
-    if (occupant && existing) {
-      const swappedOcc: ZonePlacement = {
-        ...occupant,
-        row: existing.row,
-        col: existing.col,
-      };
-      const swappedSel: ZonePlacement = {
-        ...existing,
-        row: occupant.row,
-        col: occupant.col,
-      };
-      const rest = without.filter((p) => p.zoneId !== occupant.zoneId);
-      if (
-        placementFits(swappedSel, [...rest, swappedOcc], activePrefs.gridRows, activePrefs.gridCols) &&
-        placementFits(swappedOcc, [...rest, swappedSel], activePrefs.gridRows, activePrefs.gridCols)
-      ) {
-        updatePrefs({
-          ...activePrefs,
-          placements: [...rest, swappedSel, swappedOcc],
-        });
-        return;
-      }
-    }
-
-    const fitted = normalizePlacement(
-      candidate,
-      activePrefs.gridRows,
-      activePrefs.gridCols,
-    );
-    if (!placementFits(fitted, without, activePrefs.gridRows, activePrefs.gridCols)) {
-      toast.error("Non c’è spazio qui (prova una cella libera o riduci la misura)");
-      return;
-    }
-    updatePrefs({
-      ...activePrefs,
-      placements: [...without, fitted],
-    });
-  }
-
-  function removePlacement(zoneId: string) {
-    updatePrefs({
-      ...activePrefs,
-      placements: activePrefs.placements.filter((p) => p.zoneId !== zoneId),
-    });
-    if (selectedZoneId === zoneId) setSelectedZoneId(null);
-  }
-
-  function setSpan(zoneId: string, rowSpan: number, colSpan: number) {
-    const current = activePrefs.placements.find((p) => p.zoneId === zoneId);
-    if (!current) return;
-    const candidate = { ...current, rowSpan, colSpan };
-    const without = activePrefs.placements.filter((p) => p.zoneId !== zoneId);
-    const fitted = normalizePlacement(
-      candidate,
-      activePrefs.gridRows,
-      activePrefs.gridCols,
-    );
-    if (!placementFits(fitted, without, activePrefs.gridRows, activePrefs.gridCols)) {
-      toast.error("Misura troppo grande per questa posizione");
-      return;
-    }
-    updatePrefs({
-      ...activePrefs,
-      placements: [...without, fitted],
-    });
-  }
-
-  function autoFill() {
-    const next = {
-      ...activePrefs,
-      placements: [] as ZonePlacement[],
-    };
-    const zones = layout.zones;
-    let i = 0;
-    for (let r = 0; r < activePrefs.gridRows && i < zones.length; r++) {
-      for (let c = 0; c < activePrefs.gridCols && i < zones.length; c++) {
-        const zone = zones[i]!;
-        const p: ZonePlacement = {
-          zoneId: zone.id,
-          row: r,
-          col: c,
-          rowSpan: 1,
-          colSpan: 1,
-        };
-        if (placementFits(p, next.placements, next.gridRows, next.gridCols)) {
-          next.placements.push(p);
-          i++;
-        }
-      }
-    }
-    updatePrefs(next);
-    toast.success("Zone disposte automaticamente");
-  }
-
-  function clearBoard() {
-    updatePrefs({ ...activePrefs, placements: [] });
-    setSelectedZoneId(null);
-  }
-
   function handleDownload() {
     if (placed.length === 0) {
-      toast.error("Posiziona almeno una zona sulla griglia");
+      toast.error("Posiziona almeno una zona sulla lavagna");
       return;
     }
     downloadCartinaPng({
       items: placed,
-      gridRows: activePrefs.gridRows,
-      gridCols: activePrefs.gridCols,
+      marks: activePrefs.marks,
       reservations: items,
       title,
       subtitle,
@@ -235,19 +93,12 @@ export function GlobalCartina() {
 
   function handlePrint() {
     if (placed.length === 0) {
-      toast.error("Posiziona almeno una zona sulla griglia");
+      toast.error("Posiziona almeno una zona sulla lavagna");
       return;
     }
     setStep("preview");
     window.setTimeout(() => window.print(), 180);
   }
-
-  const selectedPlacement = selectedZoneId
-    ? activePrefs.placements.find((p) => p.zoneId === selectedZoneId)
-    : null;
-  const selectedZone = selectedZoneId
-    ? layout.zones.find((z) => z.id === selectedZoneId)
-    : null;
 
   return (
     <AnimatePresence>
@@ -264,10 +115,10 @@ export function GlobalCartina() {
               Cartina globale
             </p>
             <h2 className="text-lg font-semibold text-[var(--forest-ink)]">
-              {step === "arrange" ? "Disponi le zone" : "Anteprima per cassa"}
+              {step === "arrange" ? "Lavagna disposizione" : "Anteprima per cassa"}
             </h2>
             <p className="text-sm text-[var(--forest-muted)]">
-              Nome + persone · libera disposizione
+              Trascina zone · linee e scritte colorate
             </p>
           </div>
           <button
@@ -284,7 +135,7 @@ export function GlobalCartina() {
           <StepTab
             active={step === "arrange"}
             icon={Settings2}
-            label="Disposizione"
+            label="Modifica"
             onClick={() => setStep("arrange")}
           />
           <StepTab
@@ -297,180 +148,17 @@ export function GlobalCartina() {
 
         <div className="min-h-0 flex-1 overflow-y-auto print:overflow-visible">
           {step === "arrange" ? (
-            <div className="mx-auto max-w-lg space-y-4 px-4 py-4 pb-28">
-              <section className="rounded-3xl border border-white/70 bg-white/80 p-4">
-                <p className="mb-3 text-sm font-semibold text-[var(--forest-ink)]">
-                  Dimensione griglia
-                </p>
-                <div className="flex items-center justify-between gap-3">
-                  <GridStepper
-                    label="Righe"
-                    value={activePrefs.gridRows}
-                    onChange={(v) => setGridSize(v, activePrefs.gridCols)}
-                  />
-                  <span className="text-lg font-bold text-[var(--forest-muted)]">
-                    ×
-                  </span>
-                  <GridStepper
-                    label="Colonne"
-                    value={activePrefs.gridCols}
-                    onChange={(v) => setGridSize(activePrefs.gridRows, v)}
-                  />
-                </div>
-                <div className="mt-3 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={autoFill}
-                    className="flex-1 rounded-2xl bg-[var(--forest)]/10 py-2.5 text-sm font-semibold text-[var(--forest)]"
-                  >
-                    Auto-riempi
-                  </button>
-                  <button
-                    type="button"
-                    onClick={clearBoard}
-                    className="rounded-2xl bg-red-50 px-3 py-2.5 text-sm font-semibold text-red-700"
-                  >
-                    Svuota
-                  </button>
-                </div>
-              </section>
-
-              <section className="rounded-3xl border border-white/70 bg-white/80 p-4">
-                <p className="mb-2 text-sm font-semibold text-[var(--forest-ink)]">
-                  Zone da posizionare
-                </p>
-                <p className="mb-3 text-xs text-[var(--forest-muted)]">
-                  Tocca una zona, poi tocca una cella della griglia. Tocca di nuovo
-                  una zona piazzata per cambiare misura o toglierla.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {layout.zones.map((z) => {
-                    const isPlaced = placedIds.has(z.id);
-                    const selected = selectedZoneId === z.id;
-                    return (
-                      <button
-                        key={z.id}
-                        type="button"
-                        onClick={() =>
-                          setSelectedZoneId((cur) => (cur === z.id ? null : z.id))
-                        }
-                        className={`rounded-full px-3 py-2 text-sm font-semibold transition active:scale-95 ${
-                          selected
-                            ? "bg-[var(--forest)] text-white ring-2 ring-[var(--forest)] ring-offset-2"
-                            : isPlaced
-                              ? "bg-[var(--forest)]/15 text-[var(--forest)]"
-                              : "bg-white text-[var(--forest-ink)] shadow-sm"
-                        }`}
-                      >
-                        {z.name}
-                        {isPlaced ? " ✓" : ""}
-                      </button>
-                    );
-                  })}
-                </div>
-                {unplaced.length > 0 ? (
-                  <p className="mt-2 text-xs text-amber-800">
-                    Ancora fuori griglia: {unplaced.map((z) => z.name).join(", ")}
-                  </p>
-                ) : (
-                  <p className="mt-2 text-xs text-[var(--forest)]">
-                    Tutte le zone sono sulla griglia.
-                  </p>
-                )}
-              </section>
-
-              <section className="rounded-3xl border border-white/70 bg-white/80 p-4">
-                <p className="mb-3 text-sm font-semibold text-[var(--forest-ink)]">
-                  Griglia disposizione
-                  {selectedZone ? (
-                    <span className="ml-2 font-normal text-[var(--forest-muted)]">
-                      · {selectedZone.name}
-                    </span>
-                  ) : null}
-                </p>
-                <div
-                  className="grid gap-2"
-                  style={{
-                    gridTemplateColumns: `repeat(${activePrefs.gridCols}, minmax(0, 1fr))`,
-                    gridTemplateRows: `repeat(${activePrefs.gridRows}, minmax(4.5rem, 1fr))`,
-                  }}
-                >
-                  <LayoutBoardCells
-                    prefs={activePrefs}
-                    layoutZones={layout.zones}
-                    selectedZoneId={selectedZoneId}
-                    onCell={placeOrMove}
-                  />
-                </div>
-                <p className="mt-2 text-xs text-[var(--forest-muted)]">
-                  Celle vuote = spazio libero sulla cartina. Puoi lasciare buchi.
-                </p>
-              </section>
-
-              {selectedPlacement && selectedZone ? (
-                <section className="rounded-3xl border border-[var(--forest)]/20 bg-white p-4 shadow-sm">
-                  <div className="mb-3 flex items-center justify-between gap-2">
-                    <p className="text-sm font-semibold text-[var(--forest-ink)]">
-                      {selectedZone.name}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => removePlacement(selectedZone.id)}
-                      className="inline-flex items-center gap-1 rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-700"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Togli
-                    </button>
-                  </div>
-                  <p className="mb-2 text-xs text-[var(--forest-muted)]">
-                    Quanto spazio occupa sulla cartina
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {SPAN_PRESETS.filter(
-                      (s) =>
-                        s.rowSpan <= activePrefs.gridRows &&
-                        s.colSpan <= activePrefs.gridCols,
-                    ).map((s) => {
-                      const active =
-                        selectedPlacement.rowSpan === s.rowSpan &&
-                        selectedPlacement.colSpan === s.colSpan;
-                      return (
-                        <button
-                          key={s.label}
-                          type="button"
-                          onClick={() =>
-                            setSpan(selectedZone.id, s.rowSpan, s.colSpan)
-                          }
-                          className={`rounded-full px-3 py-2 text-sm font-bold ${
-                            active
-                              ? "bg-[var(--forest)] text-white"
-                              : "bg-[var(--forest)]/10 text-[var(--forest)]"
-                          }`}
-                        >
-                          {s.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </section>
-              ) : null}
-
-              <button
-                type="button"
-                onClick={() => setStep("preview")}
-                disabled={placed.length === 0}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--forest)] py-3.5 text-sm font-bold text-white shadow-md shadow-[var(--forest)]/25 disabled:opacity-50"
-              >
-                <Eye className="h-4 w-4" />
-                Genera cartina
-              </button>
-            </div>
+            <CartinaArrangeBoard
+              layoutZones={layout.zones}
+              prefs={activePrefs}
+              onChange={updatePrefs}
+              onPreview={() => setStep("preview")}
+            />
           ) : (
             <div className="cartina-print-root px-3 py-3 pb-28 print:p-0 print:pb-0">
               <CartinaSheet
                 items={placed}
-                gridRows={activePrefs.gridRows}
-                gridCols={activePrefs.gridCols}
+                marks={activePrefs.marks}
                 reservations={items}
                 title={title}
                 subtitle={subtitle}
@@ -525,49 +213,461 @@ export function GlobalCartina() {
   );
 }
 
-function cellsOf(p: ZonePlacement): string[] {
-  const keys: string[] = [];
-  for (let r = p.row; r < p.row + p.rowSpan; r++) {
-    for (let c = p.col; c < p.col + p.colSpan; c++) {
-      keys.push(`${r}:${c}`);
+function CartinaArrangeBoard({
+  layoutZones,
+  prefs,
+  onChange,
+  onPreview,
+}: {
+  layoutZones: ZoneLayout[];
+  prefs: CartinaPrefs;
+  onChange: (next: CartinaPrefs) => void;
+  onPreview: () => void;
+}) {
+  const boardRef = useRef<HTMLDivElement>(null);
+  const [tool, setTool] = useState<Tool>("move");
+  const [color, setColor] = useState<string>(CARTINA_COLORS[0]!.hex);
+  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
+  const [selectedMarkId, setSelectedMarkId] = useState<string | null>(null);
+  const [pendingZoneId, setPendingZoneId] = useState<string | null>(null);
+  const [draftMark, setDraftMark] = useState<MapMark | null>(null);
+  const drawStart = useRef<{ x: number; y: number } | null>(null);
+  const drag = useRef<{
+    zoneId: string;
+    mode: "move" | "resize";
+    ox: number;
+    oy: number;
+    start: ZoneOnBoard;
+  } | null>(null);
+
+  const placedIds = placedZoneIds(prefs);
+  const unplaced = layoutZones.filter((z) => !placedIds.has(z.id));
+  const selectedPlacement = prefs.placements.find((p) => p.zoneId === selectedZoneId);
+  const selectedMark = prefs.marks.find((m) => m.id === selectedMarkId) ?? null;
+  const visibleMarks = draftMark ? [...prefs.marks, draftMark] : prefs.marks;
+
+  function patchPrefs(partial: Partial<CartinaPrefs>) {
+    onChange({ ...prefs, ...partial });
+  }
+
+  function upsertPlacement(next: ZoneOnBoard) {
+    const normalized = normalizePlacement(next);
+    const rest = prefs.placements.filter((p) => p.zoneId !== next.zoneId);
+    patchPrefs({ placements: [...rest, normalized] });
+  }
+
+  function removeZone(zoneId: string) {
+    patchPrefs({
+      placements: prefs.placements.filter((p) => p.zoneId !== zoneId),
+    });
+    if (selectedZoneId === zoneId) setSelectedZoneId(null);
+  }
+
+  function removeMark(id: string) {
+    patchPrefs({ marks: prefs.marks.filter((m) => m.id !== id) });
+    if (selectedMarkId === id) setSelectedMarkId(null);
+  }
+
+  function updateMark(id: string, patch: Partial<MapMark>) {
+    patchPrefs({
+      marks: prefs.marks.map((m) => (m.id === id ? { ...m, ...patch } : m)),
+    });
+  }
+
+  function onBoardPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (!boardRef.current) return;
+    const { x, y } = pointerPercent(e, boardRef.current);
+
+    if (pendingZoneId && tool === "move") {
+      upsertPlacement({
+        zoneId: pendingZoneId,
+        x: clampPercent(x - DEFAULT_ZONE_W / 2),
+        y: clampPercent(y - DEFAULT_ZONE_H / 2),
+        w: DEFAULT_ZONE_W,
+        h: DEFAULT_ZONE_H,
+      });
+      setSelectedZoneId(pendingZoneId);
+      setPendingZoneId(null);
+      setSelectedMarkId(null);
+      toast.success("Zona posizionata — trascinala e ridimensionala");
+      return;
+    }
+
+    if (tool === "text") {
+      const text = window.prompt("Testo da aggiungere", "Entrata");
+      if (!text?.trim()) return;
+      const id = createId();
+      patchPrefs({
+        marks: [
+          ...prefs.marks,
+          { id, kind: "text", x, y, text: text.trim(), color },
+        ],
+      });
+      setSelectedMarkId(id);
+      setSelectedZoneId(null);
+      return;
+    }
+
+    if (tool === "line" || tool === "rect") {
+      drawStart.current = { x, y };
+      setDraftMark({
+        id: "draft",
+        kind: tool,
+        x,
+        y,
+        x2: x,
+        y2: y,
+        w: 0,
+        h: 0,
+        color,
+      });
+      boardRef.current.setPointerCapture(e.pointerId);
+      return;
+    }
+
+    // move tool: deselect if clicking empty
+    setSelectedZoneId(null);
+    setSelectedMarkId(null);
+  }
+
+  function onBoardPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!boardRef.current) return;
+    const { x, y } = pointerPercent(e, boardRef.current);
+
+    if (drag.current) {
+      const d = drag.current;
+      if (d.mode === "move") {
+        upsertPlacement({
+          ...d.start,
+          x: clampPercent(d.start.x + (x - d.ox)),
+          y: clampPercent(d.start.y + (y - d.oy)),
+        });
+      } else {
+        upsertPlacement({
+          ...d.start,
+          w: Math.max(MIN_ZONE_SIZE, x - d.start.x),
+          h: Math.max(MIN_ZONE_SIZE, y - d.start.y),
+        });
+      }
+      return;
+    }
+
+    if (!draftMark || !drawStart.current) return;
+    const start = drawStart.current;
+    if (draftMark.kind === "line") {
+      setDraftMark({ ...draftMark, x2: x, y2: y });
+    } else if (draftMark.kind === "rect") {
+      const rx = Math.min(start.x, x);
+      const ry = Math.min(start.y, y);
+      setDraftMark({
+        ...draftMark,
+        x: rx,
+        y: ry,
+        w: Math.abs(x - start.x),
+        h: Math.abs(y - start.y),
+      });
     }
   }
-  return keys;
-}
 
-function GridStepper({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  onChange: (v: number) => void;
-}) {
+  function onBoardPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    drag.current = null;
+    try {
+      boardRef.current?.releasePointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
+
+    if (!draftMark || !drawStart.current) return;
+    const start = drawStart.current;
+    drawStart.current = null;
+
+    if (draftMark.kind === "line") {
+      const x2 = draftMark.x2 ?? start.x;
+      const y2 = draftMark.y2 ?? start.y;
+      setDraftMark(null);
+      if (Math.hypot(x2 - start.x, y2 - start.y) < 2) return;
+      const id = createId();
+      patchPrefs({
+        marks: [
+          ...prefs.marks,
+          { id, kind: "line", x: start.x, y: start.y, x2, y2, color },
+        ],
+      });
+      setSelectedMarkId(id);
+      return;
+    }
+
+    if (draftMark.kind === "rect") {
+      const w = draftMark.w ?? 0;
+      const h = draftMark.h ?? 0;
+      setDraftMark(null);
+      if (w < 2 || h < 2) return;
+      const id = createId();
+      patchPrefs({
+        marks: [
+          ...prefs.marks,
+          {
+            id,
+            kind: "rect",
+            x: draftMark.x,
+            y: draftMark.y,
+            w,
+            h,
+            color,
+          },
+        ],
+      });
+      setSelectedMarkId(id);
+    }
+  }
+
+  function startZoneDrag(
+    e: React.PointerEvent,
+    placement: ZoneOnBoard,
+    mode: "move" | "resize",
+  ) {
+    if (tool !== "move" || !boardRef.current) return;
+    e.stopPropagation();
+    const { x, y } = pointerPercent(e, boardRef.current);
+    setSelectedZoneId(placement.zoneId);
+    setSelectedMarkId(null);
+    drag.current = {
+      zoneId: placement.zoneId,
+      mode,
+      ox: x,
+      oy: y,
+      start: { ...placement },
+    };
+    boardRef.current.setPointerCapture(e.pointerId);
+  }
+
   return (
-    <div className="flex flex-1 flex-col items-center gap-1">
-      <span className="text-xs font-medium text-[var(--forest-muted)]">{label}</span>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => onChange(Math.max(MIN_GRID, value - 1))}
-          className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--forest)]/10 text-[var(--forest)]"
-          aria-label={`Diminuisci ${label}`}
-        >
-          <Minus className="h-4 w-4" />
-        </button>
-        <span className="w-8 text-center text-xl font-bold text-[var(--forest-ink)]">
-          {value}
+    <div className="mx-auto flex max-w-3xl flex-col gap-3 px-3 py-3 pb-28">
+      <div className="flex flex-wrap gap-2">
+        {(
+          [
+            { id: "move", label: "Sposta", icon: MousePointer2 },
+            { id: "line", label: "Linea", icon: Minus },
+            { id: "rect", label: "Box", icon: Square },
+            { id: "text", label: "Scritta", icon: Type },
+          ] as const
+        ).map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => {
+              setTool(id);
+              setPendingZoneId(null);
+            }}
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-semibold ${
+              tool === id
+                ? "bg-[var(--forest)] text-white"
+                : "bg-white text-[var(--forest-ink)]"
+            }`}
+          >
+            <Icon className="h-4 w-4" />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-semibold text-[var(--forest-muted)]">
+          Colore
         </span>
+        {CARTINA_COLORS.map((c) => (
+          <button
+            key={c.id}
+            type="button"
+            title={c.label}
+            onClick={() => {
+              setColor(c.hex);
+              if (selectedMarkId) updateMark(selectedMarkId, { color: c.hex });
+            }}
+            className={`h-8 w-8 rounded-full border-2 ${
+              color === c.hex ? "border-[var(--forest-ink)] scale-110" : "border-white"
+            }`}
+            style={{ backgroundColor: c.hex }}
+          />
+        ))}
+      </div>
+
+      {unplaced.length > 0 ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-3">
+          <p className="mb-2 text-xs font-semibold text-amber-900">
+            Zone da mettere sulla lavagna (tocca, poi tocca la griglia)
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {unplaced.map((z) => (
+              <button
+                key={z.id}
+                type="button"
+                onClick={() => {
+                  setTool("move");
+                  setPendingZoneId((cur) => (cur === z.id ? null : z.id));
+                  setSelectedZoneId(null);
+                  setSelectedMarkId(null);
+                }}
+                className={`rounded-full px-3 py-2 text-sm font-semibold ${
+                  pendingZoneId === z.id
+                    ? "bg-amber-700 text-white"
+                    : "bg-white text-amber-950"
+                }`}
+              >
+                {z.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="flex gap-2">
         <button
           type="button"
-          onClick={() => onChange(Math.min(MAX_GRID, value + 1))}
-          className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--forest)]/10 text-[var(--forest)]"
-          aria-label={`Aumenta ${label}`}
+          onClick={() => {
+            patchPrefs({ placements: autoPlaceZones(layoutZones), marks: prefs.marks });
+            setSelectedZoneId(null);
+            toast.success("Zone sistemate in automatico");
+          }}
+          className="rounded-2xl bg-[var(--forest)]/10 px-3 py-2 text-xs font-semibold text-[var(--forest)]"
         >
-          <Plus className="h-4 w-4" />
+          Auto-disponi zone
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            patchPrefs({ placements: [], marks: [] });
+            setSelectedZoneId(null);
+            setSelectedMarkId(null);
+          }}
+          className="rounded-2xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-700"
+        >
+          Svuota lavagna
         </button>
       </div>
+
+      <div
+        ref={boardRef}
+        onPointerDown={onBoardPointerDown}
+        onPointerMove={onBoardPointerMove}
+        onPointerUp={onBoardPointerUp}
+        className="relative aspect-[4/3] w-full touch-none overflow-hidden rounded-3xl border border-[var(--forest)]/15 bg-[linear-gradient(rgba(45,90,39,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(45,90,39,0.06)_1px,transparent_1px)] bg-size-[20px_20px] bg-white shadow-sm"
+      >
+        <ZoneMarksLayer
+          marks={visibleMarks}
+          selectedId={selectedMarkId}
+          interactive={tool === "move"}
+          onSelect={(id) => {
+            setSelectedMarkId(id);
+            setSelectedZoneId(null);
+          }}
+        />
+
+        {prefs.placements.map((p) => {
+          const zone = layoutZones.find((z) => z.id === p.zoneId);
+          if (!zone) return null;
+          const selected = p.zoneId === selectedZoneId;
+          return (
+            <div
+              key={p.zoneId}
+              style={{
+                left: `${p.x}%`,
+                top: `${p.y}%`,
+                width: `${p.w}%`,
+                height: `${p.h}%`,
+              }}
+              className={`absolute z-10 flex flex-col overflow-hidden rounded-xl border-2 bg-white/95 ${
+                selected
+                  ? "border-amber-500 shadow-lg"
+                  : "border-[var(--forest)]"
+              }`}
+              onPointerDown={(e) => startZoneDrag(e, p, "move")}
+            >
+              <div className="shrink-0 bg-[var(--forest)] px-1 py-0.5 text-center text-[10px] font-bold text-white sm:text-xs">
+                {zone.name}
+              </div>
+              <div className="flex min-h-0 flex-1 items-center justify-center bg-[var(--forest)]/5 px-1 text-[9px] text-[var(--forest-muted)]">
+                {zone.tables.length} tavoli
+              </div>
+              {selected && tool === "move" ? (
+                <button
+                  type="button"
+                  aria-label="Ridimensiona"
+                  className="absolute bottom-0 right-0 z-20 h-5 w-5 translate-x-1/4 translate-y-1/4 rounded-full border-2 border-white bg-amber-500"
+                  onPointerDown={(e) => startZoneDrag(e, p, "resize")}
+                />
+              ) : null}
+            </div>
+          );
+        })}
+
+        {pendingZoneId ? (
+          <div className="pointer-events-none absolute inset-x-0 bottom-3 text-center text-xs font-semibold text-amber-800">
+            Tocca dove mettere la zona
+          </div>
+        ) : null}
+      </div>
+
+      {selectedPlacement ? (
+        <div className="flex items-center justify-between gap-2 rounded-2xl bg-white px-3 py-2 shadow-sm">
+          <p className="text-sm font-semibold text-[var(--forest-ink)]">
+            {layoutZones.find((z) => z.id === selectedPlacement.zoneId)?.name}
+          </p>
+          <button
+            type="button"
+            onClick={() => removeZone(selectedPlacement.zoneId)}
+            className="inline-flex items-center gap-1 rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-700"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Togli dalla lavagna
+          </button>
+        </div>
+      ) : null}
+
+      {selectedMark ? (
+        <div className="space-y-2 rounded-2xl bg-white px-3 py-3 shadow-sm">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-[var(--forest-ink)]">
+              {selectedMark.kind === "text"
+                ? "Scritta"
+                : selectedMark.kind === "line"
+                  ? "Linea"
+                  : "Rettangolo"}
+            </p>
+            <button
+              type="button"
+              onClick={() => removeMark(selectedMark.id)}
+              className="inline-flex items-center gap-1 rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-700"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Elimina
+            </button>
+          </div>
+          {selectedMark.kind === "text" ? (
+            <button
+              type="button"
+              onClick={() => {
+                const text = window.prompt("Modifica testo", selectedMark.text || "");
+                if (text == null) return;
+                updateMark(selectedMark.id, { text: text.trim() || "Etichetta" });
+              }}
+              className="w-full rounded-xl bg-[var(--forest)]/10 py-2 text-sm font-semibold text-[var(--forest)]"
+            >
+              Modifica testo: “{selectedMark.text}”
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      <button
+        type="button"
+        onClick={onPreview}
+        disabled={prefs.placements.length === 0}
+        className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--forest)] py-3.5 text-sm font-bold text-white disabled:opacity-50"
+      >
+        <Eye className="h-4 w-4" />
+        Genera cartina
+      </button>
     </div>
   );
 }
@@ -599,96 +699,15 @@ function StepTab({
   );
 }
 
-function LayoutBoardCells({
-  prefs,
-  layoutZones,
-  selectedZoneId,
-  onCell,
-}: {
-  prefs: CartinaPrefs;
-  layoutZones: ZoneLayout[];
-  selectedZoneId: string | null;
-  onCell: (row: number, col: number) => void;
-}) {
-  const coveredBySpan = new Set<string>();
-  for (const p of prefs.placements) {
-    for (const k of cellsOf(p)) {
-      if (k !== `${p.row}:${p.col}`) coveredBySpan.add(k);
-    }
-  }
-
-  const cells: React.ReactNode[] = [];
-  for (let row = 0; row < prefs.gridRows; row++) {
-    for (let col = 0; col < prefs.gridCols; col++) {
-      const key = `${row}:${col}`;
-      if (coveredBySpan.has(key)) continue;
-
-      const cover = prefs.placements.find((p) => p.row === row && p.col === col);
-      const zone = cover
-        ? layoutZones.find((z) => z.id === cover.zoneId)
-        : null;
-      const selectedHere = cover?.zoneId === selectedZoneId;
-
-      cells.push(
-        <button
-          key={key}
-          type="button"
-          onClick={() => onCell(row, col)}
-          style={
-            cover
-              ? {
-                  gridRow: `${row + 1} / span ${cover.rowSpan}`,
-                  gridColumn: `${col + 1} / span ${cover.colSpan}`,
-                }
-              : {
-                  gridRow: row + 1,
-                  gridColumn: col + 1,
-                }
-          }
-          className={`flex min-h-[4.5rem] flex-col items-center justify-center rounded-xl border-2 px-2 py-2 text-center transition active:scale-[0.98] ${
-            cover
-              ? selectedHere
-                ? "border-[var(--forest)] bg-[var(--forest)] text-white shadow-md"
-                : "border-[var(--forest)]/40 bg-[var(--forest)]/12 text-[var(--forest-ink)]"
-              : selectedZoneId
-                ? "border-[var(--forest)]/40 border-dashed bg-[var(--forest)]/5 text-[var(--forest-muted)]"
-                : "border-[var(--forest)]/15 border-dashed bg-white/70 text-[var(--forest-muted)]"
-          }`}
-        >
-          {zone && cover ? (
-            <>
-              <span className="text-sm font-bold leading-tight">{zone.name}</span>
-              <span
-                className={`mt-1 text-[10px] ${
-                  selectedHere ? "text-white/80" : "opacity-70"
-                }`}
-              >
-                {cover.colSpan}×{cover.rowSpan}
-              </span>
-            </>
-          ) : (
-            <span className="text-xs">
-              {selectedZoneId ? "Posiziona qui" : "Vuota"}
-            </span>
-          )}
-        </button>,
-      );
-    }
-  }
-  return cells;
-}
-
 function CartinaSheet({
   items,
-  gridRows,
-  gridCols,
+  marks,
   reservations,
   title,
   subtitle,
 }: {
-  items: { zone: ZoneLayout; placement: ZonePlacement }[];
-  gridRows: number;
-  gridCols: number;
+  items: { zone: ZoneLayout; placement: ZoneOnBoard }[];
+  marks: MapMark[];
   reservations: Reservation[];
   title: string;
   subtitle: string;
@@ -696,7 +715,7 @@ function CartinaSheet({
   if (items.length === 0) {
     return (
       <div className="rounded-3xl border border-dashed border-[var(--forest)]/25 bg-white/60 px-6 py-16 text-center text-sm text-[var(--forest-muted)]">
-        Nessuna zona sulla griglia.
+        Nessuna zona sulla lavagna.
       </div>
     );
   }
@@ -709,13 +728,8 @@ function CartinaSheet({
         </h3>
         <p className="text-sm text-[var(--forest-muted)] print:text-xs">{subtitle}</p>
       </div>
-      <div
-        className="grid min-h-0 flex-1 gap-2 print:gap-1.5"
-        style={{
-          gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))`,
-          gridTemplateRows: `repeat(${gridRows}, minmax(0, 1fr))`,
-        }}
-      >
+      <div className="relative min-h-[60vh] flex-1 overflow-hidden rounded-xl border border-[var(--forest)]/15 bg-white print:min-h-[85vh] print:rounded-none print:border-0">
+        <ZoneMarksLayer marks={marks} />
         {items.map(({ zone, placement }) => {
           const tables = sortedTables(zone);
           const guests = guestsByTable(reservations, zone.name);
@@ -723,13 +737,15 @@ function CartinaSheet({
           return (
             <section
               key={zone.id}
-              className="flex min-h-0 flex-col overflow-hidden rounded-xl border-2 border-[var(--forest)] print:rounded-md"
+              className="absolute flex flex-col overflow-hidden rounded-md border-2 border-[var(--forest)] bg-white"
               style={{
-                gridRow: `${placement.row + 1} / span ${placement.rowSpan}`,
-                gridColumn: `${placement.col + 1} / span ${placement.colSpan}`,
+                left: `${placement.x}%`,
+                top: `${placement.y}%`,
+                width: `${placement.w}%`,
+                height: `${placement.h}%`,
               }}
             >
-              <h4 className="shrink-0 bg-[var(--forest)] px-2 py-1.5 text-center text-sm font-bold text-white print:py-1 print:text-xs">
+              <h4 className="shrink-0 bg-[var(--forest)] px-1 py-0.5 text-center text-[10px] font-bold text-white print:text-[8px] sm:text-xs">
                 {zone.name}
               </h4>
               <div
@@ -745,24 +761,17 @@ function CartinaSheet({
                   return (
                     <div
                       key={table.id}
-                      className={`flex items-center justify-center overflow-hidden px-1 py-1 text-center ${
+                      className={`flex items-center justify-center overflow-hidden px-0.5 py-0.5 text-center ${
                         occupied
                           ? "bg-[#f7faf7] text-[var(--forest-ink)]"
-                          : "bg-white text-transparent"
+                          : "bg-white"
                       }`}
                     >
                       {occupied ? (
-                        <span className="line-clamp-4 w-full text-[11px] font-bold leading-tight print:text-[9px] sm:text-xs">
+                        <span className="line-clamp-3 w-full text-[8px] font-bold leading-tight print:text-[7px] sm:text-[10px]">
                           {formatTableGuests(tableGuests)}
                         </span>
-                      ) : (
-                        <span
-                          aria-hidden
-                          className="select-none text-[10px] text-[var(--forest)]/15"
-                        >
-                          ·
-                        </span>
-                      )}
+                      ) : null}
                     </div>
                   );
                 })}

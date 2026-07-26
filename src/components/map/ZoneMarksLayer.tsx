@@ -27,13 +27,15 @@ export function ZoneMarksLayer({
     >
       {marks.map((mark) => {
         const selected = mark.id === selectedId;
-        const stroke = selected ? "#d97706" : "#2d5a27";
-        const fill = selected ? "rgba(217,119,6,0.12)" : "rgba(45,90,39,0.08)";
+        const base = mark.color || "#2d5a27";
+        const stroke = selected ? "#d97706" : base;
+        const fill = selected
+          ? "rgba(217,119,6,0.12)"
+          : hexToRgba(base, 0.1);
 
         if (mark.kind === "line") {
           return (
             <g key={mark.id}>
-              {/* hit area più larga in editor */}
               {interactive ? (
                 <line
                   x1={mark.x}
@@ -56,7 +58,7 @@ export function ZoneMarksLayer({
                 x2={mark.x2 ?? mark.x}
                 y2={mark.y2 ?? mark.y}
                 stroke={stroke}
-                strokeWidth={selected ? 1.2 : 0.7}
+                strokeWidth={selected ? 1.2 : 0.85}
                 strokeLinecap="round"
                 strokeDasharray={selected ? undefined : "2 1.2"}
                 vectorEffect="non-scaling-stroke"
@@ -95,7 +97,6 @@ export function ZoneMarksLayer({
           );
         }
 
-        // text
         return (
           <text
             key={mark.id}
@@ -103,7 +104,7 @@ export function ZoneMarksLayer({
             y={mark.y}
             fill={stroke}
             fontSize={3.2}
-            fontWeight={600}
+            fontWeight={700}
             textAnchor="middle"
             dominantBaseline="middle"
             className={interactive ? "cursor-pointer" : undefined}
@@ -123,4 +124,13 @@ export function ZoneMarksLayer({
       })}
     </svg>
   );
+}
+
+function hexToRgba(hex: string, alpha: number) {
+  const h = hex.replace("#", "");
+  if (h.length !== 6) return `rgba(45,90,39,${alpha})`;
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
 }

@@ -1,5 +1,5 @@
-import type { Reservation, ZoneLayout } from "@/lib/types";
-import type { ZonePlacement } from "@/lib/cartina";
+import type { MapMark, Reservation, ZoneLayout } from "@/lib/types";
+import type { ZoneOnBoard } from "@/lib/cartina";
 import {
   formatTableGuests,
   guestsByTable,
@@ -48,19 +48,20 @@ function drawZoneBlock(
   ctx.lineWidth = 3;
   ctx.strokeRect(x, y, w, h);
   ctx.fillStyle = "#e2efe1";
-  ctx.fillRect(x, y, w, 52);
+  ctx.fillRect(x, y, w, Math.min(44, h * 0.14));
   ctx.fillStyle = "#2d5a27";
-  ctx.font = "bold 28px system-ui, sans-serif";
-  ctx.fillText(zone.name, x + 16, y + 36);
+  ctx.font = "bold 26px system-ui, sans-serif";
+  ctx.fillText(zone.name, x + 12, y + Math.min(32, h * 0.1));
 
+  const headerH = Math.min(48, h * 0.16);
   const tables = sortedTables(zone);
   const guests = guestsByTable(reservations, zone.name);
   const tCols = tableGridColumns(tables.length);
   const tRows = Math.max(1, Math.ceil(tables.length / tCols));
-  const innerX = x + 10;
-  const innerY = y + 62;
-  const innerW = w - 20;
-  const innerH = h - 72;
+  const innerX = x + 8;
+  const innerY = y + headerH;
+  const innerW = w - 16;
+  const innerH = h - headerH - 8;
   const tw = innerW / tCols;
   const th = innerH / tRows;
 
@@ -73,25 +74,24 @@ function drawZoneBlock(
     const occupied = tableGuests.length > 0;
 
     ctx.fillStyle = occupied ? "#f7faf7" : "#ffffff";
-    ctx.fillRect(tx + 3, ty + 3, tw - 6, th - 6);
+    ctx.fillRect(tx + 2, ty + 2, tw - 4, th - 4);
     ctx.strokeStyle = occupied ? "#2d5a27" : "#c5d4c6";
-    ctx.lineWidth = occupied ? 2.5 : 1.5;
-    ctx.strokeRect(tx + 3, ty + 3, tw - 6, th - 6);
+    ctx.lineWidth = occupied ? 2 : 1.2;
+    ctx.strokeRect(tx + 2, ty + 2, tw - 4, th - 4);
 
     if (!occupied) return;
 
     const label = formatTableGuests(tableGuests);
-    const fontSize = Math.max(12, Math.min(26, Math.floor(Math.min(tw, th) / 4.5)));
+    const fontSize = Math.max(11, Math.min(24, Math.floor(Math.min(tw, th) / 4.5)));
     ctx.fillStyle = "#142418";
     ctx.font = `bold ${fontSize}px system-ui, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    const maxW = tw - 16;
     const lines = wrapText(
       ctx,
       label,
-      maxW,
-      Math.max(1, Math.floor((th - 12) / (fontSize * 1.15))),
+      tw - 12,
+      Math.max(1, Math.floor((th - 10) / (fontSize * 1.15))),
     );
     const blockH = lines.length * fontSize * 1.15;
     const startY = ty + th / 2 - blockH / 2 + fontSize / 2;
@@ -103,17 +103,64 @@ function drawZoneBlock(
   });
 }
 
+function drawMarks(
+  ctx: CanvasRenderingContext2D,
+  marks: MapMark[],
+  areaX: number,
+  areaY: number,
+  areaW: number,
+  areaH: number,
+) {
+  for (const mark of marks) {
+    const color = mark.color || "#2d5a27";
+    const px = (v: number) => areaX + (v / 100) * areaW;
+    const py = (v: number) => areaY + (v / 100) * areaH;
+
+    if (mark.kind === "line") {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 4;
+      ctx.setLineDash([10, 8]);
+      ctx.beginPath();
+      ctx.moveTo(px(mark.x), py(mark.y));
+      ctx.lineTo(px(mark.x2 ?? mark.x), py(mark.y2 ?? mark.y));
+      ctx.stroke();
+      ctx.setLineDash([]);
+      continue;
+    }
+
+    if (mark.kind === "rect") {
+      const x = px(mark.x);
+      const y = py(mark.y);
+      const w = ((mark.w ?? 10) / 100) * areaW;
+      const h = ((mark.h ?? 10) / 100) * areaH;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 3;
+      ctx.setLineDash([8, 6]);
+      ctx.strokeRect(x, y, w, h);
+      ctx.setLineDash([]);
+      continue;
+    }
+
+    ctx.fillStyle = color;
+    ctx.font = "bold 36px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(mark.text || "Etichetta", px(mark.x), py(mark.y));
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+  }
+}
+
 /** Genera e scarica PNG della cartina globale (A4 landscape). */
 export function downloadCartinaPng(opts: {
-  items: { zone: ZoneLayout; placement: ZonePlacement }[];
-  gridRows: number;
-  gridCols: number;
+  items: { zone: ZoneLayout; placement: ZoneOnBoard }[];
+  marks: MapMark[];
   reservations: Reservation[];
   title: string;
   subtitle: string;
   filename?: string;
 }) {
-  const { items, gridRows, gridCols, reservations, title, subtitle } = opts;
+  const { items, marks, reservations, title, subtitle } = opts;
   const W = 3508;
   const H = 2480;
   const pad = 48;
@@ -134,28 +181,29 @@ export function downloadCartinaPng(opts: {
   ctx.fillText(subtitle, pad, pad + 100);
 
   const headerH = 130;
-  const gap = 28;
   const areaX = pad;
   const areaY = pad + headerH;
   const areaW = W - pad * 2;
   const areaH = H - pad * 2 - headerH - 40;
-  const cols = Math.max(1, gridCols);
-  const rows = Math.max(1, gridRows);
-  const cellW = (areaW - gap * (cols - 1)) / cols;
-  const cellH = (areaH - gap * (rows - 1)) / rows;
+
+  ctx.strokeStyle = "#d7e5d8";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(areaX, areaY, areaW, areaH);
+
+  drawMarks(ctx, marks, areaX, areaY, areaW, areaH);
 
   for (const { zone, placement } of items) {
-    const x = areaX + placement.col * (cellW + gap);
-    const y = areaY + placement.row * (cellH + gap);
-    const w = cellW * placement.colSpan + gap * (placement.colSpan - 1);
-    const h = cellH * placement.rowSpan + gap * (placement.rowSpan - 1);
+    const x = areaX + (placement.x / 100) * areaW;
+    const y = areaY + (placement.y / 100) * areaH;
+    const w = (placement.w / 100) * areaW;
+    const h = (placement.h / 100) * areaH;
     drawZoneBlock(ctx, zone, reservations, x, y, w, h);
   }
 
   ctx.fillStyle = "#5a7260";
   ctx.font = "22px system-ui, sans-serif";
   ctx.fillText(
-    "Nome (persone) sui tavoli occupati · Feste del Bosco",
+    "Nome (persone) · Feste del Bosco",
     pad,
     H - 24,
   );
