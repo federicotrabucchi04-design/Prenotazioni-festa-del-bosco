@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useUiStore } from "@/store/ui-store";
 import { useVenueLayout } from "@/hooks/use-venue-layout";
 import { useReservations } from "@/hooks/use-reservations";
-import { getZoneByName } from "@/lib/layout-utils";
+import { getZoneByName, softCapacityLimit } from "@/lib/layout-utils";
 import { ZoneMarksLayer } from "@/components/map/ZoneMarksLayer";
 import { ZoneTabsBar } from "@/components/ZoneTabsBar";
 import { CapacityOverrideDialog } from "@/components/CapacityOverrideDialog";
@@ -146,7 +146,7 @@ export function AssignTablePicker() {
                   {zone.tables.map((table) => {
                     const occ = byTable.get(table.number);
                     const people = occ?.people ?? 0;
-                    const soft = table.capacity + 2;
+                    const soft = softCapacityLimit(table.capacity);
                     const wouldBe = people + assigning.total;
                     const tight = wouldBe > soft;
 

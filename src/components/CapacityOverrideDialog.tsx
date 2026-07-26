@@ -42,7 +42,8 @@ export function CapacityOverrideDialog({
             <p className="mt-2 text-sm leading-relaxed text-[var(--forest-muted)]">
               Capacità tavolo: <strong>{check.capacity}</strong> posti.
               <br />
-              Limite soft consentito: <strong>{check.softLimit}</strong> (capacità + 2).
+              Limite soft consentito: <strong>{check.softLimit}</strong> (capacità + extra
+              impostazioni).
               <br />
               Persone previste: <strong>{check.proposedTotal}</strong> (
               {check.currentOthers} già assegnate + {check.incoming} nuove).

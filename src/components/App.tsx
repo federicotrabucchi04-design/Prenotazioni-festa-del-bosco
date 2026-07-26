@@ -22,6 +22,7 @@ import {
 import { useUiStore } from "@/store/ui-store";
 import { useEvenings } from "@/hooks/use-evenings";
 import { EVENT_DATE } from "@/lib/constants";
+import { subscribeAppSettings } from "@/lib/app-settings";
 
 export function App() {
   const role = useAuthStore((s) => s.role);
@@ -38,6 +39,12 @@ export function App() {
     if (useAuthStore.persist.hasHydrated()) finish();
     return unsub;
   }, [setHydrated]);
+
+  useEffect(() => {
+    return subscribeAppSettings(() => {
+      // tiene aggiornata la cache PIN / regole
+    });
+  }, []);
 
   useEffect(() => {
     if (view === "zones" && !isAdmin) setView("list");

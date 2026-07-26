@@ -1,6 +1,7 @@
 "use client";
 
-import { AUTH_STORAGE_KEY, PINS } from "@/lib/constants";
+import { AUTH_STORAGE_KEY } from "@/lib/constants";
+import { getAppSettings } from "@/lib/app-settings";
 import type { UserRole } from "@/lib/types";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
@@ -13,13 +14,15 @@ interface AuthState {
   setHydrated: (value: boolean) => void;
 }
 
-const PIN_TO_ROLE: { pin: string; role: UserRole }[] = [
-  { pin: PINS.admin, role: "admin" },
-  { pin: PINS.staff, role: "staff" },
-  { pin: PINS.orderSetup, role: "orderSetup" },
-  { pin: PINS.orderDisplay, role: "orderDisplay" },
-  { pin: PINS.orderKeypad, role: "orderKeypad" },
-];
+function resolveRoleFromPin(normalized: string): UserRole | null {
+  const { pins } = getAppSettings();
+  if (normalized === pins.admin) return "admin";
+  if (normalized === pins.staff) return "staff";
+  if (normalized === pins.orderSetup) return "orderSetup";
+  if (normalized === pins.orderDisplay) return "orderDisplay";
+  if (normalized === pins.orderKeypad) return "orderKeypad";
+  return null;
+}
 
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -28,10 +31,10 @@ export const useAuthStore = create<AuthState>()(
       hydrated: false,
       login: (pin) => {
         const normalized = pin.trim().toUpperCase();
-        const match = PIN_TO_ROLE.find((p) => p.pin === normalized);
-        if (!match) return { ok: false, error: "PIN non valido" };
-        set({ role: match.role });
-        return { ok: true, role: match.role };
+        const role = resolveRoleFromPin(normalized);
+        if (!role) return { ok: false, error: "PIN non valido" };
+        set({ role });
+        return { ok: true, role };
       },
       logout: () => set({ role: null }),
       setHydrated: (value) => set({ hydrated: value }),

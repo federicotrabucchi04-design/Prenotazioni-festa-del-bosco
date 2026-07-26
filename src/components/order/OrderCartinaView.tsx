@@ -36,6 +36,7 @@ export function OrderCartinaView({
   highlight,
   interactive = false,
   variant = "setup",
+  highlightColor = "#dc2626",
   onTableClick,
   className = "",
 }: {
@@ -44,8 +45,9 @@ export function OrderCartinaView({
   assignments: OrderAssignments;
   highlight: OrderHighlight | null;
   interactive?: boolean;
-  /** display = numeri più grandi + cerchio rosso evidente */
+  /** display = numeri più grandi + cerchio evidente */
   variant?: "setup" | "display";
+  highlightColor?: string;
   onTableClick?: (zone: ZoneLayout, tableNumber: number) => void;
   className?: string;
 }) {
@@ -111,21 +113,22 @@ export function OrderCartinaView({
                       : {})}
                     className={`relative flex items-center justify-center overflow-visible px-0.5 py-0.5 text-center transition ${
                       interactive ? "active:scale-95" : ""
-                    } ${
+                    } ${isHit ? "z-20" : orderNum ? "bg-[#f3f8f3]" : "bg-white"}`}
+                    style={
                       isHit
-                        ? "z-20 bg-red-50"
-                        : orderNum
-                          ? "bg-[#f3f8f3]"
-                          : "bg-white"
-                    }`}
+                        ? { backgroundColor: `${highlightColor}18` }
+                        : undefined
+                    }
                   >
                     {isHit ? (
                       <span
-                        className={`pointer-events-none absolute inset-[4%] z-0 animate-order-pulse rounded-full border-red-600 ${
-                          isDisplay
-                            ? "border-[5px] shadow-[0_0_0_6px_rgba(220,38,38,0.35)]"
-                            : "border-[3px] shadow-[0_0_0_3px_rgba(220,38,38,0.25)]"
+                        className={`pointer-events-none absolute inset-[4%] z-0 animate-order-pulse rounded-full ${
+                          isDisplay ? "border-[5px]" : "border-[3px]"
                         }`}
+                        style={{
+                          borderColor: highlightColor,
+                          boxShadow: `0 0 0 6px ${highlightColor}55`,
+                        }}
                         aria-hidden
                       />
                     ) : null}
@@ -135,7 +138,10 @@ export function OrderCartinaView({
                           isDisplay
                             ? "text-base sm:text-xl md:text-2xl"
                             : "text-[11px] sm:text-sm"
-                        } ${isHit ? "text-red-700" : "text-[var(--forest-ink)]"}`}
+                        }`}
+                        style={{
+                          color: isHit ? highlightColor : "var(--forest-ink)",
+                        }}
                       >
                         {orderNum}
                       </span>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Trees,
   LockKeyhole,
@@ -11,6 +11,7 @@ import {
   Keyboard,
 } from "lucide-react";
 import { useAuthStore, orderRoleLabel } from "@/store/auth-store";
+import { subscribeAppSettings } from "@/lib/app-settings";
 import { motion } from "framer-motion";
 import toast from "react-hot-toast";
 import type { UserRole } from "@/lib/types";
@@ -19,6 +20,10 @@ export function LoginScreen() {
   const login = useAuthStore((s) => s.login);
   const [pin, setPin] = useState("");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    return subscribeAppSettings(() => {});
+  }, []);
 
   function submit(e?: React.FormEvent) {
     e?.preventDefault();

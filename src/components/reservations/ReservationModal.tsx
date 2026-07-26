@@ -280,7 +280,7 @@ export function ReservationModal() {
                     }`}
                   >
                     Occupazione tavolo: {liveCheck.proposedTotal}/
-                    {liveCheck.softLimit} (capacità {liveCheck.capacity} + 2)
+                    {liveCheck.softLimit} (capacità {liveCheck.capacity} + extra)
                     {liveCheck.guests.length
                       ? ` · già: ${liveCheck.guests.join(", ")}`
                       : ""}

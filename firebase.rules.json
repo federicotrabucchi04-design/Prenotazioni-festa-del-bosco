@@ -27,6 +27,10 @@
     "orderBoard": {
       ".read": true,
       ".write": true
+    },
+    "appSettings": {
+      ".read": true,
+      ".write": true
     }
   }
 }

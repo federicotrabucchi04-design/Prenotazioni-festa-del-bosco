@@ -5,15 +5,18 @@ import { Delete, LogOut } from "lucide-react";
 import toast from "react-hot-toast";
 import { useAuthStore } from "@/store/auth-store";
 import { useOrderBoard } from "@/hooks/use-order-board";
+import { useAppSettings } from "@/hooks/use-app-settings";
 import { clearOrderHighlight, setOrderHighlight } from "@/lib/order-board";
 
 /** Terminale minimale: solo tastierino → evidenzia sulla cartina grande */
 export function OrderKeypadScreen() {
   const logout = useAuthStore((s) => s.logout);
   const { board } = useOrderBoard();
+  const { settings } = useAppSettings();
   const [digits, setDigits] = useState("");
   const [busy, setBusy] = useState(false);
   const [lastResult, setLastResult] = useState<"ok" | "missing" | null>(null);
+  const maxDigits = settings.orderMaxDigits;
 
   async function submit() {
     if (!digits) return;
@@ -47,7 +50,7 @@ export function OrderKeypadScreen() {
       setDigits((d) => d.slice(0, -1));
       return;
     }
-    if (digits.length >= 4) return;
+    if (digits.length >= maxDigits) return;
     setDigits((d) => d + key);
     setLastResult(null);
   }

@@ -1,7 +1,8 @@
 import type { Reservation, TableSpot, VenueLayout, ZoneLayout } from "@/lib/types";
 import { createId } from "@/lib/constants";
+import { getAppSettings } from "@/lib/app-settings";
 
-/** Quanti posti oltre la capacità sono ammessi senza override */
+/** Quanti posti oltre la capacità sono ammessi senza override (default; override da Impostazioni) */
 export const CAPACITY_OVERFLOW = 2;
 
 export const LAYOUT_STORAGE_KEY = "fdb-venue-layout";
@@ -46,7 +47,8 @@ export function createDefaultLayout(): VenueLayout {
 }
 
 export function softCapacityLimit(capacity: number) {
-  return capacity + CAPACITY_OVERFLOW;
+  const overflow = getAppSettings().capacityOverflow;
+  return capacity + overflow;
 }
 
 export function getZoneByName(layout: VenueLayout, zoneName: string) {

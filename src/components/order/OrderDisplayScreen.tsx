@@ -6,6 +6,7 @@ import toast from "react-hot-toast";
 import { useAuthStore } from "@/store/auth-store";
 import { useVenueLayout } from "@/hooks/use-venue-layout";
 import { useOrderBoard } from "@/hooks/use-order-board";
+import { useAppSettings } from "@/hooks/use-app-settings";
 import {
   OrderCartinaView,
   resolveOrderCartina,
@@ -13,13 +14,12 @@ import {
 import { loadCartinaPrefs } from "@/lib/cartina";
 import { clearOrderHighlight } from "@/lib/order-board";
 
-const HIGHLIGHT_MS = 8000;
-
-/** Schermo a tutto schermo: cartina + cerchio rosso (8s) dal tastierino */
+/** Schermo a tutto schermo: cartina + cerchio (durata/colore da Impostazioni) */
 export function OrderDisplayScreen() {
   const logout = useAuthStore((s) => s.logout);
   const { layout, loading: layoutLoading } = useVenueLayout();
   const { board, loading: boardLoading } = useOrderBoard();
+  const { settings } = useAppSettings();
   const [showExit, setShowExit] = useState(false);
 
   const prefs = useMemo(() => {
@@ -29,11 +29,13 @@ export function OrderDisplayScreen() {
     return resolveOrderCartina(layout, loadCartinaPrefs(layout));
   }, [board.cartina, layout]);
 
-  // Cerchio rosso per 8 secondi, poi sparisce
+  const highlightMs = settings.orderHighlightSeconds * 1000;
+  const highlightColor = settings.orderHighlightColor;
+
   useEffect(() => {
     if (!board.highlight) return;
     const elapsed = Date.now() - board.highlight.at;
-    const remaining = Math.max(0, HIGHLIGHT_MS - elapsed);
+    const remaining = Math.max(0, highlightMs - elapsed);
     if (remaining === 0) {
       void clearOrderHighlight();
       return;
@@ -42,7 +44,7 @@ export function OrderDisplayScreen() {
       void clearOrderHighlight();
     }, remaining);
     return () => window.clearTimeout(t);
-  }, [board.highlight?.at, board.highlight?.orderNumber]);
+  }, [board.highlight?.at, board.highlight?.orderNumber, highlightMs]);
 
   if (layoutLoading || boardLoading) {
     return (
@@ -60,24 +62,22 @@ export function OrderDisplayScreen() {
       className="relative h-dvh w-full overflow-hidden bg-white"
       onClick={() => setShowExit((v) => !v)}
     >
-      {/* Cartina a tutto schermo */}
       <div className="absolute inset-0">
         <OrderCartinaView
           layout={layout}
           prefs={prefs}
           assignments={board.assignments}
           highlight={board.highlight}
+          highlightColor={highlightColor}
           variant="display"
           className="h-full w-full"
         />
       </div>
 
-      {/* Banner ordine cercato */}
       {hl ? (
         <div
-          className={`pointer-events-none absolute left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] z-30 -translate-x-1/2 rounded-2xl px-5 py-2.5 text-center shadow-lg ${
-            showCircle ? "bg-red-600 text-white" : "bg-red-800 text-white"
-          }`}
+          className="pointer-events-none absolute left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] z-30 -translate-x-1/2 rounded-2xl px-5 py-2.5 text-center text-white shadow-lg"
+          style={{ backgroundColor: showCircle ? highlightColor : "#7f1d1d" }}
         >
           <p className="text-[11px] font-bold uppercase tracking-wide opacity-90">
             {showCircle ? "Ordine" : "Non assegnato"}
@@ -99,13 +99,6 @@ export function OrderDisplayScreen() {
         >
           <LogOut className="h-5 w-5" />
         </button>
-      ) : null}
-
-      {!hl && prefs.placements.length === 0 ? (
-        <div className="absolute inset-0 flex items-center justify-center bg-white/90 p-6 text-center text-sm text-[var(--forest-muted)]">
-          Nessuna cartina. Su ORDINE2026 usa “Sincronizza disposizione”, oppure
-          sistema la cartina globale e sincronizza di nuovo.
-        </div>
       ) : null}
     </div>
   );

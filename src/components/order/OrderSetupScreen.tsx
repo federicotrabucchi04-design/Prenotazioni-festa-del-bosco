@@ -18,6 +18,7 @@ import {
   saveOrderCartina,
   setTableOrderNumber,
 } from "@/lib/order-board";
+import { useAppSettings } from "@/hooks/use-app-settings";
 import {
   autoPlaceZones,
   loadCartinaPrefs,
@@ -33,6 +34,7 @@ export function OrderSetupScreen() {
   const role = useAuthStore((s) => s.role)!;
   const { layout, loading: layoutLoading } = useVenueLayout();
   const { board, loading: boardLoading } = useOrderBoard();
+  const { settings } = useAppSettings();
   const [mode, setMode] = useState<"global" | "zone">("global");
   const [zoneName, setZoneName] = useState(layout.zones[0]?.name ?? "");
   const [pending, setPending] = useState<{
@@ -41,6 +43,7 @@ export function OrderSetupScreen() {
   } | null>(null);
   const [digits, setDigits] = useState("");
   const [busy, setBusy] = useState(false);
+  const maxDigits = settings.orderMaxDigits;
 
   const prefs = useMemo(() => {
     const remote = board.cartina;
@@ -236,7 +239,7 @@ export function OrderSetupScreen() {
                     onClick={() => {
                       if (k === "C") setDigits("");
                       else if (k === "⌫") setDigits((d) => d.slice(0, -1));
-                      else if (digits.length < 4) setDigits((d) => d + k);
+                      else if (digits.length < maxDigits) setDigits((d) => d + k);
                     }}
                     className="h-14 rounded-2xl bg-[var(--forest)]/8 text-xl font-bold text-[var(--forest-ink)] active:scale-95"
                   >

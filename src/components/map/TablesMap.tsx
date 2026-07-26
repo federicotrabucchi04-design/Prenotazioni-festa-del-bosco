@@ -8,7 +8,7 @@ import { useVenueLayout } from "@/hooks/use-venue-layout";
 import { canEditReservations, useAuthStore } from "@/store/auth-store";
 import { useUiStore } from "@/store/ui-store";
 import type { Reservation } from "@/lib/types";
-import { getZoneByName } from "@/lib/layout-utils";
+import { getZoneByName, softCapacityLimit } from "@/lib/layout-utils";
 import { ZoneMarksLayer } from "@/components/map/ZoneMarksLayer";
 import { ZoneTabsBar } from "@/components/ZoneTabsBar";
 import toast from "react-hot-toast";
@@ -114,7 +114,7 @@ export function TablesMap() {
             const arrivedAny = guests.some((r) => r.arrived);
             const occupiedTable = guests.length > 0;
             const pulse = guests.some((r) => recentlyArrivedIds.has(r.id));
-            const overSoft = people > table.capacity + 2;
+            const overSoft = people > softCapacityLimit(table.capacity);
 
             return (
               <button
