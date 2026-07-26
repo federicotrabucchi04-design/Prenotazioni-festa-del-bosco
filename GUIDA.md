@@ -1,231 +1,153 @@
-# Guida Feste del Bosco
+# Guida all’uso — Feste del Bosco
 
-Questa guida ti spiega **cosa fare una volta sola** (GitHub, Firebase, Vercel) e **come usare l’app** ogni giorno.
+App per **prenotazioni**, **mappa tavoli**, **cartina stampabile** e **servizio ordini** (tastierino + schermo).
 
----
-
-## Il quadro in 30 secondi
-
-| Servizio | A cosa serve | Lo usi tu? |
-|----------|--------------|------------|
-| **GitHub** | Salva il codice (macchina del tempo) | Sì, una volta per creare il repository e collegarlo |
-| **Vercel** | Mette online l’app (il link per i telefoni) | Sì, una volta: importa il repo GitHub |
-| **Firebase** | Salva i dati live (prenotazioni, tavoli, “Arrivato”) | Sì, una volta: crea progetto + chiavi in `.env.local` / Vercel |
-| **Questa app** | Interfaccia per staff e admin | Ogni sera dell’evento |
-
-Flusso: **tu (o Cursor) modifichi codice → GitHub → Vercel aggiorna il sito → i telefoni usano Firebase per i dati**.
+Link tipico: quello del deploy Vercel del progetto.
 
 ---
 
-# PARTE A — Setup una tantum
+## Accesso (PIN)
 
-Fai questi passi **in ordine**. Non serve rifarli ogni sera.
+| Ruolo | PIN predefinito | Cosa apre |
+|-------|-----------------|-----------|
+| Staff | `STAFF2026` | Lista + Mappa (segna Arrivato) |
+| Admin | `BOSCOADMIN` | Tutto lo staff + Zone + Impostazioni |
+| Assegna ordini | `ORDINE2026` | Metti i numeri d’ordine sui tavoli |
+| Schermo cartina | `SCHERMO2026` | Cartina a tutto schermo |
+| Tastierino | `TASTO2026` | Solo tastiera numerica |
 
-## A1. GitHub (archivio codice)
-
-### Cosa fare
-1. Vai su [https://github.com](https://github.com) e accedi (o crea un account).
-2. Clicca **New repository**.
-3. Nome esempio: `feste-del-bosco`.
-4. Lascia **vuoto** (niente README se il progetto esiste già sul PC).
-5. Crea il repository e copia l’URL (es. `https://github.com/TUONOME/feste-del-bosco.git`).
-
-### Sul PC (cartella del progetto)
-Apri il terminale nella cartella `feste-del-bosco` e (quando sei pronto):
-
-```bash
-git add .
-git commit -m "Prima versione Feste del Bosco"
-git branch -M main
-git remote add origin https://github.com/TUONOME/feste-del-bosco.git
-git push -u origin main
-```
-
-> Il repository locale è già inizializzato (`git init`). Manca solo il collegamento al tuo account e il primo push.
-
-**Non caricare mai** il file `.env.local` (contiene le chiavi). È già escluso dal `.gitignore`.
+I PIN si possono cambiare da **Admin → Impostazioni** (rotella **Set** in alto o in basso).
 
 ---
 
-## A2. Firebase (magazzino dati)
+## Flusso tipico di una serata
 
-### Cosa fare
-1. Vai su [https://console.firebase.google.com](https://console.firebase.google.com).
-2. **Aggiungi progetto** → nome es. `Feste-Del-Bosco`.
-3. Nel progetto: **Build → Realtime Database → Crea database**.
-   - Scegli una regione (es. Europa).
-   - Per l’evento puoi partire in modalità test, poi applica le regole sotto.
-4. **Impostazioni progetto** (ingranaggio) → **Le tue app** → aggiungi app **Web** (`</>`).
-5. Copia la config (`apiKey`, `authDomain`, `databaseURL`, `projectId`, …).
-
-### Regole database (Realtime Database → Rules)
-Incolla qualcosa di simile (per staff interno durante l’evento):
-
-```json
-{
-  "rules": {
-    ".read": true,
-    ".write": true
-  }
-}
-```
-
-> Attenzione: chiunque abbia l’URL può leggere/scrivere. Va bene per un evento interno a breve termine. Per dopo, valuta regole più strette.
-
-### Collegare l’app
-1. Nella cartella progetto copia `.env.example` → `.env.local`.
-2. Incolla le chiavi:
-
-```env
-NEXT_PUBLIC_FIREBASE_API_KEY=...
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...
-NEXT_PUBLIC_FIREBASE_DATABASE_URL=...
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=...
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
-NEXT_PUBLIC_FIREBASE_APP_ID=...
-```
-
-3. Riavvia `npm run dev` (o ridistribuisci su Vercel).
-
-Finché le chiavi non ci sono, l’app funziona in **modalità Demo** (dati sul telefono/PC, badge “Demo”).
-
-Su **Vercel** dovrai inserire le **stesse** variabili in: Project → Settings → Environment Variables.
+1. **Admin** entra e controlla le **serate** (icona calendario).
+2. Configura **zone e tavoli** (tab Zone) se serve.
+3. Sistema la **Cartina globale** (da Mappa) e sincronizza per lo schermo ordini.
+4. Staff usa **Lista** e **Mappa** per prenotazioni e “Arrivato”.
+5. Per il servizio cucina/sala: un tablet con **ORDINE2026**, uno con **SCHERMO2026**, uno con **TASTO2026**.
 
 ---
 
-## A3. Vercel (link pubblico dell’app)
+## Lista prenotazioni (Staff / Admin)
 
-### Cosa fare
-1. Vai su [https://vercel.com](https://vercel.com) e accedi (meglio con lo stesso account GitHub).
-2. **Add New → Project**.
-3. **Import** del repository `feste-del-bosco`.
-4. Framework: Next.js (di solito riconosciuto da solo).
-5. Aggiungi le variabili `NEXT_PUBLIC_FIREBASE_*` (come in `.env.local`).
-6. **Deploy**.
+- Cerca per nome / telefono.
+- Tocca **Arrivato** quando il gruppo è al tavolo.
+- **Admin**: crea, modifica, elimina; assegna tavolo dalla mappa se manca.
 
-Al termine ottieni un link tipo:
+### Prenotazione senza tavolo
+Se il tavolo non è ancora scelto, da Lista usa **Assegna** → scegli zona e tavolo sulla mappa.
 
-`https://feste-del-bosco.vercel.app`
-
-**Quello è il link da aprire sui telefoni dello staff.**
-
-### Aggiornamenti futuri
-Ogni volta che fai push su GitHub (`main`), Vercel ricostruisce l’app da sola in circa 1 minuto.
+### Capacità
+Più gruppi possono condividere un tavolo fino a **capacità + extra** (extra regolabile in Impostazioni). Oltre il limite l’app chiede conferma.
 
 ---
 
-# PARTE B — Come usi l’app (tu e lo staff)
+## Mappa tavoli
 
-Apri il link Vercel (o `http://localhost:3000` in locale).
-
-## B1. Login
-
-| Ruolo | PIN | Cosa può fare |
-|-------|-----|----------------|
-| **Staff** | `STAFF2026` | Vedere lista e mappa, segnare **Arrivato** |
-| **Admin** | `BOSCOADMIN` | Tutto lo staff + creare/modificare/eliminare prenotazioni + **Modifica zone/tavoli** |
-
-Il login resta salvato: non serve reinserire il PIN a ogni refresh.
+- Cambia zona con le pill in alto (scorri se sono tante).
+- Colori: libero / occupato / arrivato / oltre limite soft.
+- Pulsante **Cartina globale** → lavagna stampabile.
 
 ---
 
-## B2. Lista prenotazioni (tab Lista)
+## Cartina globale (importante per la cassa)
 
-- Scorri le card: nome, telefono, adulti/bambini, zona, tavolo, note.
-- Tocca **Segna** (o swipe a destra) per **Arrivato**.
-- Cerca in alto per nome / telefono / tavolo.
-- **Solo Admin**: pulsante **Nuova**, Modifica, Elimina.
+Apri da **Mappa → Cartina globale**.
 
----
+### 1) Modifica (lavagna)
+- Tocca una zona dalla lista “da mettere”, poi tocca dove posizionarla.
+- **Sposta** e **ridimensiona** (pallino in basso a destra).
+- Strumenti **Linea / Box / Scritta** + colori.
+- **Auto-disponi** / **Svuota lavagna**.
+- La disposizione si salva e si sincronizza anche verso lo schermo ordini.
 
-## B3. Mappa tavoli (tab Mappa)
+### 2) Anteprima
+- Mostra la cartina in proporzione **A4 verticale**, il più grande possibile.
+- Nomi + persone sui tavoli occupati (niente numeri tavolo).
+- **Scarica PNG** o **Stampa** (pagina A4 verticale, senza margini inutili).
 
-- Scegli la **zona** dalle pill in alto.
-- Ogni punto/riquadro è un tavolo:
-  - verde chiaro = libero
-  - rosso = occupato
-  - verde scuro = qualcuno arrivato
-- Tocca un tavolo libero (admin) per creare una prenotazione già assegnata lì.
-- Tocca un tavolo occupato per vedere/modificare (admin) o un riepilogo (staff).
-- **Più prenotazioni sullo stesso tavolo** sono ammesse se la somma delle persone è entro **capacità + 2**. Oltre quel limite compare un popup: puoi **annullare** o **forzare comunque**.
+Suggerimento: in stampa scegli “Adatta alla pagina” / carta A4 verticale.
 
 ---
 
-## B4. Modifica zone (solo Admin — tab Zone)
+## Zone (solo Admin)
 
-Qui configuri il piazzale **prima dell’evento** (da PC o telefono).
-
-1. Apri tab **Zone**.
-2. Seleziona una zona (o creane una nuova).
-3. Scegli lo strumento:
-   - **Tavolo** → tocca per aggiungere un tavolo (oggetto operativo)
-   - **Linea** → tieni premuto e trascina (solo riferimento)
-   - **Rettangolo** → trascina un’area (solo riferimento)
-   - **Scritta** → tocca e digita (es. “Ingresso”, “Bar”)
-   - **Seleziona** → tocca un riferimento per modificarlo/eliminarlo
-4. Trascina i tavoli per posizionarli; imposta numero e capacità.
-5. Salva.
-
-La mappa mostra tavoli + riferimenti. I riferimenti **non** si assegnano alle prenotazioni.
+- Aggiungi zone, tavoli (posizione e capacità).
+- Linee / rettangoli / scritte di riferimento sulla mappa operativa.
+- Salva il layout: vale per tutti i device collegati a Firebase.
 
 ---
 
-## B5. Assegnare un tavolo a una prenotazione
+## Serate (calendario in alto)
 
-1. Admin → **Nuova** oppure **Modifica**.
-2. Compila nome, adulti, bambini, note.
-3. Scegli **zona** e **tavolo** (elenco dai tavoli creati nell’editor).
-4. Salva.
-5. Se il tavolo è pieno oltre la regola (capacità + 2), compare il popup:
-   - **Annulla** → non salva
-   - **Assegna comunque** → salva forzando
+- Più serate aperte in parallelo; cambia quella attiva.
+- **Archivia** una serata: resta solo un riepilogo (totale persone), non il dettaglio prenotazioni.
+- Creare una nuova serata **non** archivia automaticamente quella corrente.
 
 ---
 
-## B6. Serate (solo Admin)
+## Modalità servizio ordini
 
-L’app gestisce **più serate** (date). Lo staff lavora sempre sulla **serata attiva**.
+### Assegna (`ORDINE2026`)
+1. **Sincronizza disposizione** (usa la cartina globale già fatta).
+2. Cartina globale o **Per zona**: tocca un tavolo → digita il numero d’ordine → Salva.
+3. Un numero ordine sta su **un solo** tavolo.
 
-1. Admin → icona calendario in alto a destra.
-2. Vedi la **serata attiva** e lo **storico archivi**.
-3. Per passare a una nuova sera: inserisci il nome (es. `9 Agosto`) → **Archivia e crea nuova** → conferma.
-4. All’archivio le prenotazioni dettagliate vengono **eliminate**. Resta solo un riepilogo: **numero di persone prenotate** (più conteggio prenotazioni / arrivate).
+### Schermo (`SCHERMO2026`)
+- Cartina a tutto schermo con i numeri.
+- Colori per fasce e dimensione numeri: da Impostazioni admin.
+- Quando il tastierino cerca un numero: **cerchio** (colore/durata da Impostazioni), poi sparisce.
 
-I dati Firebase usano i nodi `evenings`, `activeEveningId`, `eveningReservations/{id}`, `archives/{id}`. Un eventuale vecchio nodo flat `reservations` viene migrato automaticamente alla prima serata.
+### Tastierino (`TASTO2026`)
+- Digita il numero → **Cerca sulla cartina**.
+- Se esiste, lo schermo lo cerchia; se no, avvisa “non assegnato”.
+- **Togli cerchio** per cancellare subito.
 
 ---
 
-## Checklist sera evento
+## Impostazioni (solo Admin)
 
-1. [ ] Link Vercel funzionante  
-2. [ ] Firebase collegato (niente badge Demo)  
-3. [ ] Zone e tavoli già impostati dall’admin  
-4. [ ] Serata attiva corretta (o nuova serata creata dopo archivio)  
-5. [ ] Prenotazioni caricate  
-6. [ ] Staff con PIN `STAFF2026` sui telefoni  
-7. [ ] Admin di riserva con `BOSCOADMIN`
+Apri con il bottone verde **Set** (header) o la tab **Set** in basso.
+
+| Sezione | Cosa regola |
+|---------|-------------|
+| Password (PIN) | Tutti i PIN di accesso |
+| Servizio ordini | Durata e colore del cerchio; dimensione numeri; cifre max |
+| Colori per fasce | Es. 1–19 blu, 20–39 rosso… |
+| Capacità | Extra posti senza conferma (capacità + N) |
+| Ripristina | Torna ai valori di fabbrica |
+
+Le impostazioni sono condivise via Firebase (`appSettings`).
+
+---
+
+## Firebase — regole da pubblicare
+
+In Console → Realtime Database → **Rules**, devono esserci almeno:
+
+- `venueLayout`, `evenings`, `activeEveningId`, `eveningReservations`, `archives`
+- `orderBoard` (ordini + cartina servizio)
+- `appSettings` (PIN e preferenze)
+
+Copia il file del progetto `firebase.rules.json` e premi **Pubblica**.
 
 ---
 
 ## Problemi frequenti
 
-| Problema | Cosa controllare |
-|----------|------------------|
-| Badge **Demo** | Mancano chiavi in `.env.local` o su Vercel |
-| Dati non si aggiornano tra telefoni | Firebase non collegato / regole DB / URL database sbagliato |
-| Deploy Vercel fallisce | Variabili env, build log su Vercel |
-| Non vedo tab Zone | Sei entrato come Staff: serve Admin |
-| Non vedo gestione serate | Solo Admin: icona calendario in header |
+| Problema | Cosa fare |
+|----------|-----------|
+| Non vedo Impostazioni | Entra come **Admin** (`BOSCOADMIN`) |
+| Schermo senza cartina | Su Assegna: **Sincronizza disposizione** (dopo aver fatto la Cartina globale) |
+| Tastierino non cerchia | Controlla che il numero sia assegnato; regole Firebase `orderBoard` pubblicate |
+| PIN personalizzato non funziona | Attendi sync impostazioni / ripeti login; PIN min 4 caratteri |
+| Anteprima/stampa tagliata | Usa Anteprima, stampa in **A4 verticale**, margini zero |
 
 ---
 
-## Riepilogo “cosa faccio io adesso”
+## Demo vs Live
 
-1. Crea repo su **GitHub** e fai il primo push.  
-2. Crea progetto **Firebase** + Realtime Database + copia chiavi in `.env.local` e su Vercel.  
-3. Importa il repo su **Vercel** e ottieni il link.  
-4. Entra come **Admin**, apri **Zone**, disegna i tavoli.  
-5. Carica le prenotazioni e assegna i tavoli.  
-6. Dai il link + PIN Staff allo staff.  
-7. A fine serata (Admin): archivia e crea la serata successiva.
+- Senza chiavi Firebase: modalità **Demo** (dati sul telefono).
+- Con Firebase configurato su Vercel: dati **live** tra tutti i device.

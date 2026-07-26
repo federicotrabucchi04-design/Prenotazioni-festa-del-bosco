@@ -150,7 +150,11 @@ export function GlobalCartina() {
           />
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto print:overflow-visible">
+        <div
+          className={`min-h-0 flex-1 print:overflow-visible ${
+            step === "preview" ? "overflow-hidden" : "overflow-y-auto"
+          }`}
+        >
           {step === "arrange" ? (
             <CartinaArrangeBoard
               layoutZones={layout.zones}
@@ -159,7 +163,7 @@ export function GlobalCartina() {
               onPreview={() => setStep("preview")}
             />
           ) : (
-            <div className="cartina-print-root pb-24 print:pb-0">
+            <div className="cartina-print-root flex h-full min-h-0 w-full items-stretch justify-center print:block">
               <CartinaSheet
                 items={placed}
                 marks={activePrefs.marks}
@@ -555,7 +559,7 @@ function CartinaArrangeBoard({
         onPointerDown={onBoardPointerDown}
         onPointerMove={onBoardPointerMove}
         onPointerUp={onBoardPointerUp}
-        className="relative aspect-[4/3] w-full touch-none overflow-hidden rounded-3xl border border-[var(--forest)]/15 bg-[linear-gradient(rgba(45,90,39,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(45,90,39,0.06)_1px,transparent_1px)] bg-size-[20px_20px] bg-white shadow-sm"
+        className="relative mx-auto aspect-[210/297] w-full max-h-[min(68dvh,820px)] touch-none overflow-hidden rounded-2xl border border-[var(--forest)]/15 bg-[linear-gradient(rgba(45,90,39,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(45,90,39,0.06)_1px,transparent_1px)] bg-size-[20px_20px] bg-white shadow-sm"
       >
         <ZoneMarksLayer
           marks={visibleMarks}
@@ -725,14 +729,15 @@ function CartinaSheet({
   }
 
   return (
-    <div className="cartina-sheet cartina-a4 mx-auto flex h-[calc(100dvh-9rem)] w-full max-w-none flex-col bg-white print:h-dvh print:min-h-0">
+    <div className="cartina-sheet cartina-a4-portrait mx-auto flex h-full min-h-0 w-full max-w-[min(100%,calc((100dvh-10rem)*210/297))] flex-col bg-white pb-24 print:max-w-none print:pb-0 print:h-dvh">
+      {/* Titolo solo a schermo; in stampa sparisce per massimizzare lo spazio */}
       <div className="no-print shrink-0 px-2 py-1">
         <h3 className="font-[family-name:var(--font-display)] text-sm font-bold text-[var(--forest-ink)]">
           {title}
         </h3>
         <p className="text-xs text-[var(--forest-muted)]">{subtitle}</p>
       </div>
-      <div className="relative min-h-0 flex-1 overflow-hidden bg-white print:rounded-none">
+      <div className="relative min-h-0 flex-1 overflow-hidden bg-white">
         <ZoneMarksLayer marks={marks} />
         {items.map(({ zone, placement }) => {
           const tables = sortedTables(zone);
@@ -749,7 +754,7 @@ function CartinaSheet({
                 height: `${placement.h}%`,
               }}
             >
-              <h4 className="shrink-0 bg-[var(--forest)] px-0.5 py-0.5 text-center text-[9px] font-bold leading-tight text-white print:text-[8px]">
+              <h4 className="shrink-0 bg-[var(--forest)] px-0.5 py-0.5 text-center text-[9px] font-bold leading-tight text-white">
                 {zone.name}
               </h4>
               <div
@@ -772,7 +777,7 @@ function CartinaSheet({
                       }`}
                     >
                       {occupied ? (
-                        <span className="line-clamp-3 w-full px-0.5 text-[8px] font-bold leading-tight print:text-[7px] sm:text-[10px]">
+                        <span className="line-clamp-4 w-full px-0.5 text-[8px] font-bold leading-tight sm:text-[10px]">
                           {formatTableGuests(tableGuests)}
                         </span>
                       ) : null}

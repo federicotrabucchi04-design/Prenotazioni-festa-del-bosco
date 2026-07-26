@@ -98,8 +98,9 @@ textarea.field-input {
   background-size: 20px 20px;
 }
 
-/* Cartina massimizzata (proporzione A4 landscape quando serve) */
-.cartina-a4 {
+/* Cartina massimizzata — proporzione A4 verticale (210×297) */
+.cartina-a4,
+.cartina-a4-portrait {
   width: 100%;
   height: 100%;
   max-width: 100%;
@@ -108,14 +109,18 @@ textarea.field-input {
 
 @media print {
   @page {
-    size: A4 landscape;
+    size: A4 portrait;
     margin: 0;
   }
 
+  html,
   body {
     background: white !important;
     color: black !important;
     margin: 0 !important;
+    padding: 0 !important;
+    height: 100% !important;
+    width: 100% !important;
   }
 
   body * {
@@ -129,6 +134,7 @@ textarea.field-input {
 
   .no-print {
     display: none !important;
+    visibility: hidden !important;
   }
 
   .cartina-print-root {
@@ -138,14 +144,17 @@ textarea.field-input {
     margin: 0 !important;
     overflow: hidden !important;
     background: white !important;
+    z-index: 9999 !important;
   }
 
-  .cartina-sheet {
+  .cartina-sheet,
+  .cartina-a4-portrait {
     width: 100vw !important;
     height: 100vh !important;
     max-width: none !important;
-    min-height: 100vh !important;
+    max-height: none !important;
     margin: 0 !important;
+    padding: 0 !important;
     break-inside: avoid;
   }
 }

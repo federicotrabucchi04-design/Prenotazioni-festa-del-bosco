@@ -12,7 +12,7 @@ import {
   resolveOrderCartina,
 } from "@/components/order/OrderCartinaView";
 import { loadCartinaPrefs } from "@/lib/cartina";
-import { clearOrderHighlight } from "@/lib/order-board";
+import { clearOrderHighlightIf } from "@/lib/order-board";
 
 /** Schermo a tutto schermo: cartina edge-to-edge + cerchio da impostazioni */
 export function OrderDisplayScreen() {
@@ -34,14 +34,15 @@ export function OrderDisplayScreen() {
 
   useEffect(() => {
     if (!board.highlight) return;
-    const elapsed = Date.now() - board.highlight.at;
+    const startedAt = board.highlight.at;
+    const elapsed = Date.now() - startedAt;
     const remaining = Math.max(0, highlightMs - elapsed);
     if (remaining === 0) {
-      void clearOrderHighlight();
+      void clearOrderHighlightIf(startedAt);
       return;
     }
     const t = window.setTimeout(() => {
-      void clearOrderHighlight();
+      void clearOrderHighlightIf(startedAt);
     }, remaining);
     return () => window.clearTimeout(t);
   }, [board.highlight?.at, board.highlight?.orderNumber, highlightMs]);

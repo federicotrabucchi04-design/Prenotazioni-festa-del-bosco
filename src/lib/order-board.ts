@@ -185,24 +185,53 @@ export async function setTableOrderNumber(
 
 export async function setOrderHighlight(orderNumber: number | null) {
   const current = dataMode() === "demo" ? readDemo() : await fetchBoardOnce();
-  if (orderNumber == null || orderNumber <= 0) {
-    return persist({ ...current, highlight: null });
+  const highlight =
+    orderNumber == null || orderNumber <= 0
+      ? null
+      : {
+          orderNumber: Math.floor(orderNumber),
+          found: Object.values(current.assignments).includes(
+            Math.floor(orderNumber),
+          ),
+          at: Date.now(),
+        };
+
+  if (dataMode() === "demo") {
+    return persist({ ...current, highlight });
   }
-  const n = Math.floor(orderNumber);
-  const found = Object.values(current.assignments).includes(n);
-  return persist({
-    ...current,
-    highlight: { orderNumber: n, found, at: Date.now() },
+
+  const db = getFirebaseDb();
+  if (!db) throw new Error("Firebase non configurato");
+  await update(ref(db, ORDER_BOARD_PATH), {
+    highlight,
+    updatedAt: Date.now(),
   });
+  return fetchBoardOnce();
 }
 
 export async function clearOrderHighlight() {
   return setOrderHighlight(null);
 }
 
-export async function saveOrderCartina(cartina: CartinaPrefs) {
+/** Pulisce lo highlight solo se è ancora quello partito a `at` (evita race tra device) */
+export async function clearOrderHighlightIf(at: number) {
   const current = dataMode() === "demo" ? readDemo() : await fetchBoardOnce();
-  return persist({ ...current, cartina });
+  if (!current.highlight || current.highlight.at !== at) return current;
+  return clearOrderHighlight();
+}
+
+export async function saveOrderCartina(cartina: CartinaPrefs) {
+  if (dataMode() === "demo") {
+    const current = readDemo();
+    return persist({ ...current, cartina });
+  }
+  const db = getFirebaseDb();
+  if (!db) throw new Error("Firebase non configurato");
+  await update(ref(db, ORDER_BOARD_PATH), {
+    cartina,
+    updatedAt: Date.now(),
+  });
+  return fetchBoardOnce();
 }
 
 export async function clearAllAssignments() {

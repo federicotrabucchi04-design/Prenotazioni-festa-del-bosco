@@ -151,7 +151,7 @@ function drawMarks(
   }
 }
 
-/** Genera e scarica PNG della cartina globale (A4 landscape). */
+/** Genera e scarica PNG della cartina globale (A4 verticale). */
 export function downloadCartinaPng(opts: {
   items: { zone: ZoneLayout; placement: ZoneOnBoard }[];
   marks: MapMark[];
@@ -161,9 +161,10 @@ export function downloadCartinaPng(opts: {
   filename?: string;
 }) {
   const { items, marks, reservations, title, subtitle } = opts;
-  const W = 3508; // A4 landscape ~300dpi
-  const H = 2480;
-  const pad = 12;
+  // A4 portrait ~300dpi
+  const W = 2480;
+  const H = 3508;
+  const pad = 16;
   const canvas = document.createElement("canvas");
   canvas.width = W;
   canvas.height = H;
@@ -174,21 +175,17 @@ export function downloadCartinaPng(opts: {
   ctx.fillRect(0, 0, W, H);
 
   ctx.fillStyle = "#142418";
-  ctx.font = "bold 40px system-ui, sans-serif";
-  ctx.fillText(title, pad, pad + 36);
-  ctx.font = "26px system-ui, sans-serif";
+  ctx.font = "bold 44px system-ui, sans-serif";
+  ctx.fillText(title, pad, pad + 40);
+  ctx.font = "28px system-ui, sans-serif";
   ctx.fillStyle = "#5a7260";
-  ctx.fillText(subtitle, pad, pad + 72);
+  ctx.fillText(subtitle, pad, pad + 80);
 
-  const headerH = 84;
+  const headerH = 96;
   const areaX = pad;
   const areaY = pad + headerH;
   const areaW = W - pad * 2;
   const areaH = H - pad * 2 - headerH;
-
-  ctx.strokeStyle = "#d7e5d8";
-  ctx.lineWidth = 2;
-  ctx.strokeRect(areaX, areaY, areaW, areaH);
 
   drawMarks(ctx, marks, areaX, areaY, areaW, areaH);
 
@@ -199,14 +196,6 @@ export function downloadCartinaPng(opts: {
     const h = (placement.h / 100) * areaH;
     drawZoneBlock(ctx, zone, reservations, x, y, w, h);
   }
-
-  ctx.fillStyle = "#5a7260";
-  ctx.font = "22px system-ui, sans-serif";
-  ctx.fillText(
-    "Nome (persone) · Feste del Bosco",
-    pad,
-    H - 24,
-  );
 
   const link = document.createElement("a");
   link.download =
