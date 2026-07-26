@@ -13,6 +13,14 @@ interface AuthState {
   setHydrated: (value: boolean) => void;
 }
 
+const PIN_TO_ROLE: { pin: string; role: UserRole }[] = [
+  { pin: PINS.admin, role: "admin" },
+  { pin: PINS.staff, role: "staff" },
+  { pin: PINS.orderSetup, role: "orderSetup" },
+  { pin: PINS.orderDisplay, role: "orderDisplay" },
+  { pin: PINS.orderKeypad, role: "orderKeypad" },
+];
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
@@ -20,15 +28,10 @@ export const useAuthStore = create<AuthState>()(
       hydrated: false,
       login: (pin) => {
         const normalized = pin.trim().toUpperCase();
-        if (normalized === PINS.admin) {
-          set({ role: "admin" });
-          return { ok: true, role: "admin" as const };
-        }
-        if (normalized === PINS.staff) {
-          set({ role: "staff" });
-          return { ok: true, role: "staff" as const };
-        }
-        return { ok: false, error: "PIN non valido" };
+        const match = PIN_TO_ROLE.find((p) => p.pin === normalized);
+        if (!match) return { ok: false, error: "PIN non valido" };
+        set({ role: match.role });
+        return { ok: true, role: match.role };
       },
       logout: () => set({ role: null }),
       setHydrated: (value) => set({ hydrated: value }),
@@ -45,4 +48,27 @@ export const useAuthStore = create<AuthState>()(
 
 export function canEditReservations(role: UserRole | null) {
   return role === "admin";
+}
+
+export function isOrderRole(role: UserRole | null) {
+  return (
+    role === "orderSetup" ||
+    role === "orderDisplay" ||
+    role === "orderKeypad"
+  );
+}
+
+export function orderRoleLabel(role: UserRole) {
+  switch (role) {
+    case "orderSetup":
+      return "Assegna ordini";
+    case "orderDisplay":
+      return "Schermo cartina";
+    case "orderKeypad":
+      return "Tastierino";
+    case "admin":
+      return "Admin";
+    case "staff":
+      return "Staff";
+  }
 }

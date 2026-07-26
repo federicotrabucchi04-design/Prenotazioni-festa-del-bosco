@@ -23,6 +23,10 @@
     "reservations": {
       ".read": true,
       ".write": true
+    },
+    "orderBoard": {
+      ".read": true,
+      ".write": true
     }
   }
 }

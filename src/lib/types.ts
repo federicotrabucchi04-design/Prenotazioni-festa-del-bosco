@@ -1,4 +1,9 @@
-export type UserRole = "staff" | "admin";
+export type UserRole =
+  | "staff"
+  | "admin"
+  | "orderSetup"
+  | "orderDisplay"
+  | "orderKeypad";
 
 /** Nome zona dinamico (configurabile dall'admin) */
 export type Zone = string;

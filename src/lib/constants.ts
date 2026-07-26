@@ -15,6 +15,12 @@ export const EVENT_DATE = "8 Agosto";
 export const PINS = {
   staff: "STAFF2026",
   admin: "BOSCOADMIN",
+  /** Assegna numeri d’ordine ai tavoli */
+  orderSetup: "ORDINE2026",
+  /** Schermo cartina a tutto schermo */
+  orderDisplay: "SCHERMO2026",
+  /** Tastierino numerico */
+  orderKeypad: "TASTO2026",
 } as const;
 
 export const AUTH_STORAGE_KEY = "fdb-auth-role";

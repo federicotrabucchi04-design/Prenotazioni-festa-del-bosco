@@ -1,10 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { Trees, LockKeyhole, ShieldCheck, Users } from "lucide-react";
-import { useAuthStore } from "@/store/auth-store";
+import {
+  Trees,
+  LockKeyhole,
+  ShieldCheck,
+  Users,
+  LayoutGrid,
+  Monitor,
+  Keyboard,
+} from "lucide-react";
+import { useAuthStore, orderRoleLabel } from "@/store/auth-store";
 import { motion } from "framer-motion";
 import toast from "react-hot-toast";
+import type { UserRole } from "@/lib/types";
 
 export function LoginScreen() {
   const login = useAuthStore((s) => s.login);
@@ -21,9 +30,7 @@ export function LoginScreen() {
       setPin("");
       return;
     }
-    toast.success(
-      result.role === "admin" ? "Accesso Admin" : "Accesso Staff",
-    );
+    toast.success(`Accesso: ${loginToast(result.role)}`);
   }
 
   return (
@@ -46,7 +53,7 @@ export function LoginScreen() {
             Feste del Bosco
           </p>
           <p className="mt-2 text-[15px] text-[var(--forest-muted)]">
-            Gestione prenotazioni e tavoli per lo staff
+            Prenotazioni, cartina e servizio ordini
           </p>
         </motion.div>
 
@@ -81,20 +88,37 @@ export function LoginScreen() {
             Entra
           </button>
 
-          <div className="mt-6 grid grid-cols-2 gap-3 text-left text-xs text-[var(--forest-muted)]">
-            <div className="rounded-2xl bg-[var(--forest)]/5 p-3">
-              <Users className="mb-1.5 h-4 w-4 text-[var(--forest)]" />
-              <p className="font-semibold text-[var(--forest-ink)]">Staff</p>
-              <p>Lista, mappa, segno Arrivato</p>
-            </div>
-            <div className="rounded-2xl bg-[var(--forest)]/5 p-3">
-              <ShieldCheck className="mb-1.5 h-4 w-4 text-[var(--forest)]" />
-              <p className="font-semibold text-[var(--forest-ink)]">Admin</p>
-              <p>Aggiungi, modifica, elimina</p>
-            </div>
+          <div className="mt-6 grid grid-cols-2 gap-2 text-left text-[11px] text-[var(--forest-muted)]">
+            <Hint icon={Users} title="Staff" text="Lista e mappa" />
+            <Hint icon={ShieldCheck} title="Admin" text="Modifica tutto" />
+            <Hint icon={LayoutGrid} title="Ordini" text="Assegna numeri" />
+            <Hint icon={Monitor} title="Schermo" text="Cartina live" />
+            <Hint icon={Keyboard} title="Tastierino" text="Cerca ordine" />
           </div>
         </motion.form>
       </main>
+    </div>
+  );
+}
+
+function loginToast(role: UserRole) {
+  return orderRoleLabel(role);
+}
+
+function Hint({
+  icon: Icon,
+  title,
+  text,
+}: {
+  icon: typeof Users;
+  title: string;
+  text: string;
+}) {
+  return (
+    <div className="rounded-2xl bg-[var(--forest)]/5 p-2.5">
+      <Icon className="mb-1 h-3.5 w-3.5 text-[var(--forest)]" />
+      <p className="font-semibold text-[var(--forest-ink)]">{title}</p>
+      <p>{text}</p>
     </div>
   );
 }

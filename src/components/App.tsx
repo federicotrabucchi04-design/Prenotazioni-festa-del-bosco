@@ -11,7 +11,14 @@ import { AssignTablePicker } from "@/components/reservations/AssignTablePicker";
 import { TablesMap } from "@/components/map/TablesMap";
 import { GlobalCartina } from "@/components/map/GlobalCartina";
 import { ZoneEditor } from "@/components/zones/ZoneEditor";
-import { useAuthStore, canEditReservations } from "@/store/auth-store";
+import { OrderSetupScreen } from "@/components/order/OrderSetupScreen";
+import { OrderDisplayScreen } from "@/components/order/OrderDisplayScreen";
+import { OrderKeypadScreen } from "@/components/order/OrderKeypadScreen";
+import {
+  useAuthStore,
+  canEditReservations,
+  isOrderRole,
+} from "@/store/auth-store";
 import { useUiStore } from "@/store/ui-store";
 import { useEvenings } from "@/hooks/use-evenings";
 import { EVENT_DATE } from "@/lib/constants";
@@ -46,6 +53,12 @@ export function App() {
 
   if (!role) {
     return <LoginScreen />;
+  }
+
+  if (isOrderRole(role)) {
+    if (role === "orderSetup") return <OrderSetupScreen />;
+    if (role === "orderDisplay") return <OrderDisplayScreen />;
+    return <OrderKeypadScreen />;
   }
 
   const title =

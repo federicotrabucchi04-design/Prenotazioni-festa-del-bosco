@@ -74,8 +74,28 @@ textarea.field-input {
   animation: pulse-soft 1.2s ease-in-out 2;
 }
 
+@keyframes order-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.04);
+    opacity: 0.85;
+  }
+}
+
+.animate-order-pulse {
+  animation: order-pulse 1s ease-in-out infinite;
+}
+
 .bg-size-\[24px_24px\] {
   background-size: 24px 24px;
+}
+
+.bg-size-\[20px_20px\] {
+  background-size: 20px 20px;
 }
 
 @media print {

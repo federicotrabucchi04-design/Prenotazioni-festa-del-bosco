@@ -42,6 +42,7 @@ import {
   sortedTables,
   tableGridColumns,
 } from "@/lib/cartina";
+import { saveOrderCartina } from "@/lib/order-board";
 import { clampPercent } from "@/lib/layout-utils";
 
 type Step = "arrange" | "preview";
@@ -74,6 +75,9 @@ export function GlobalCartina() {
   function updatePrefs(next: CartinaPrefs) {
     setPrefs(next);
     saveCartinaPrefs(next);
+    void saveOrderCartina(next).catch(() => {
+      // sync best-effort verso schermo servizio
+    });
   }
 
   function handleDownload() {
