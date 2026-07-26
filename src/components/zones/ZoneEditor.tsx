@@ -29,6 +29,7 @@ import type {
 } from "@/lib/types";
 import { useUiStore } from "@/store/ui-store";
 import { ZoneMarksLayer } from "@/components/map/ZoneMarksLayer";
+import { ZoneTabsBar } from "@/components/ZoneTabsBar";
 import toast from "react-hot-toast";
 
 type EditorTool = "select" | "table" | "line" | "rect" | "text";
@@ -399,7 +400,7 @@ export function ZoneEditor() {
         </p>
       </div>
 
-      <div className="-mx-4 mb-3 flex gap-2 overflow-x-auto px-4 pb-1 scrollbar-none">
+      <ZoneTabsBar>
         {layout.zones.map((z) => (
           <button
             key={z.id}
@@ -427,7 +428,7 @@ export function ZoneEditor() {
           <Plus className="h-4 w-4" />
           Zona
         </button>
-      </div>
+      </ZoneTabsBar>
 
       <div className="mb-3 flex gap-2">
         <button

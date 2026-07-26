@@ -8,11 +8,12 @@ import { useVenueLayout } from "@/hooks/use-venue-layout";
 import { useReservations } from "@/hooks/use-reservations";
 import { getZoneByName } from "@/lib/layout-utils";
 import { ZoneMarksLayer } from "@/components/map/ZoneMarksLayer";
+import { ZoneTabsBar } from "@/components/ZoneTabsBar";
+import { CapacityOverrideDialog } from "@/components/CapacityOverrideDialog";
 import {
   CapacityExceededError,
   upsertReservation,
 } from "@/lib/reservations";
-import { CapacityOverrideDialog } from "@/components/CapacityOverrideDialog";
 import type { CapacityCheck } from "@/lib/types";
 import toast from "react-hot-toast";
 
@@ -115,7 +116,7 @@ export function AssignTablePicker() {
               </button>
             </header>
 
-            <div className="-mx-0 flex gap-2 overflow-x-auto px-4 py-3 scrollbar-none">
+            <ZoneTabsBar edgeToEdge={false} className="mb-0">
               {layout.zones.map((z) => {
                 const active = z.name === (zone?.name ?? selectedZone);
                 return (
@@ -133,8 +134,7 @@ export function AssignTablePicker() {
                   </button>
                 );
               })}
-            </div>
-
+            </ZoneTabsBar>
             <div className="flex-1 overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
               {!zone || zone.tables.length === 0 ? (
                 <div className="rounded-3xl border border-dashed border-[var(--forest)]/20 bg-white/60 px-6 py-16 text-center text-sm text-[var(--forest-muted)]">

@@ -10,6 +10,7 @@ import { useUiStore } from "@/store/ui-store";
 import type { Reservation } from "@/lib/types";
 import { getZoneByName } from "@/lib/layout-utils";
 import { ZoneMarksLayer } from "@/components/map/ZoneMarksLayer";
+import { ZoneTabsBar } from "@/components/ZoneTabsBar";
 import toast from "react-hot-toast";
 
 export function TablesMap() {
@@ -42,8 +43,8 @@ export function TablesMap() {
   const hasContent = Boolean(zone && (zone.tables.length > 0 || marks.length > 0));
 
   return (
-    <div className="mx-auto max-w-lg px-4 pb-28 pt-4">
-      <div className="-mx-4 mb-4 flex gap-2 overflow-x-auto px-4 pb-1 scrollbar-none">
+    <div className="mx-auto max-w-lg min-w-0 px-4 pb-28 pt-4">
+      <ZoneTabsBar>
         {layout.zones.map((z) => {
           const active = z.name === (zone?.name ?? selectedZone);
           const count = items.filter((r) => r.zone === z.name).length;
@@ -69,8 +70,7 @@ export function TablesMap() {
             </button>
           );
         })}
-      </div>
-
+      </ZoneTabsBar>
       <div className="mb-4 flex items-center justify-between rounded-2xl border border-white/70 bg-white/70 px-4 py-3 text-sm backdrop-blur">
         <p className="font-medium text-[var(--forest-ink)]">
           {zone?.name ?? "Nessuna zona"}
