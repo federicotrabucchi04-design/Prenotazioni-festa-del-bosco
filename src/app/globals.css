@@ -77,3 +77,45 @@ textarea.field-input {
 .bg-size-\[24px_24px\] {
   background-size: 24px 24px;
 }
+
+@media print {
+  @page {
+    size: landscape;
+    margin: 8mm;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Nasconde tutta l’app tranne la cartina */
+  body * {
+    visibility: hidden !important;
+  }
+
+  .cartina-print-root,
+  .cartina-print-root * {
+    visibility: visible !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .cartina-print-root {
+    position: absolute !important;
+    inset: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: white !important;
+  }
+
+  .cartina-sheet {
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 100vh !important;
+    height: 100vh !important;
+    break-inside: avoid;
+  }
+}

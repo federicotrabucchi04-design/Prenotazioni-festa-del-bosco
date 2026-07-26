@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { Trees } from "lucide-react";
+import { Map as MapIcon, Trees } from "lucide-react";
 import { EVENT_DATE } from "@/lib/constants";
 import { useReservations } from "@/hooks/use-reservations";
 import { useVenueLayout } from "@/hooks/use-venue-layout";
@@ -20,6 +20,7 @@ export function TablesMap() {
   const setSelectedZone = useUiStore((s) => s.setSelectedZone);
   const recentlyArrivedIds = useUiStore((s) => s.recentlyArrivedIds);
   const openEditModal = useUiStore((s) => s.openEditModal);
+  const openPrintMap = useUiStore((s) => s.openPrintMap);
   const role = useAuthStore((s) => s.role);
   const isAdmin = canEditReservations(role);
 
@@ -71,7 +72,7 @@ export function TablesMap() {
           );
         })}
       </ZoneTabsBar>
-      <div className="mb-4 flex items-center justify-between rounded-2xl border border-white/70 bg-white/70 px-4 py-3 text-sm backdrop-blur">
+      <div className="mb-3 flex items-center justify-between rounded-2xl border border-white/70 bg-white/70 px-4 py-3 text-sm backdrop-blur">
         <p className="font-medium text-[var(--forest-ink)]">
           {zone?.name ?? "Nessuna zona"}
         </p>
@@ -79,6 +80,15 @@ export function TablesMap() {
           {occupiedTables}/{zone?.tables.length ?? 0} tavoli usati
         </p>
       </div>
+
+      <button
+        type="button"
+        onClick={openPrintMap}
+        className="mb-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-[var(--forest)]/15 bg-white/90 px-4 py-3 text-sm font-semibold text-[var(--forest)] shadow-sm transition active:scale-[0.99]"
+      >
+        <MapIcon className="h-4 w-4" />
+        Cartina globale (stampa / scarica)
+      </button>
 
       {loading || !zone ? (
         <div className="aspect-[4/5] animate-pulse rounded-3xl bg-white/70" />

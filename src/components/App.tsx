@@ -9,6 +9,7 @@ import { ReservationList } from "@/components/reservations/ReservationList";
 import { ReservationModal } from "@/components/reservations/ReservationModal";
 import { AssignTablePicker } from "@/components/reservations/AssignTablePicker";
 import { TablesMap } from "@/components/map/TablesMap";
+import { GlobalCartina } from "@/components/map/GlobalCartina";
 import { ZoneEditor } from "@/components/zones/ZoneEditor";
 import { useAuthStore, canEditReservations } from "@/store/auth-store";
 import { useUiStore } from "@/store/ui-store";
@@ -83,6 +84,7 @@ export function App() {
       <BottomNav />
       <ReservationModal />
       <AssignTablePicker />
+      <GlobalCartina />
     </div>
   );
 }
