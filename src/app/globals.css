@@ -78,16 +78,16 @@ textarea.field-input {
   0%,
   100% {
     transform: scale(1);
-    opacity: 1;
+    box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.35);
   }
   50% {
-    transform: scale(1.04);
-    opacity: 0.85;
+    transform: scale(1.08);
+    box-shadow: 0 0 0 10px rgba(220, 38, 38, 0.15);
   }
 }
 
 .animate-order-pulse {
-  animation: order-pulse 1s ease-in-out infinite;
+  animation: order-pulse 0.9s ease-in-out infinite;
 }
 
 .bg-size-\[24px_24px\] {

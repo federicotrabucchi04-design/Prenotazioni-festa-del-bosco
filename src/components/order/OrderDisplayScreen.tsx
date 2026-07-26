@@ -13,12 +13,14 @@ import {
 import { loadCartinaPrefs } from "@/lib/cartina";
 import { clearOrderHighlight } from "@/lib/order-board";
 
-/** Schermo a tutto schermo: cartina + cerchio sul numero cercato dal tastierino */
+const HIGHLIGHT_MS = 8000;
+
+/** Schermo a tutto schermo: cartina + cerchio rosso (8s) dal tastierino */
 export function OrderDisplayScreen() {
   const logout = useAuthStore((s) => s.logout);
   const { layout, loading: layoutLoading } = useVenueLayout();
   const { board, loading: boardLoading } = useOrderBoard();
-  const [chrome, setChrome] = useState(true);
+  const [showExit, setShowExit] = useState(false);
 
   const prefs = useMemo(() => {
     if (board.cartina?.placements.length) {
@@ -27,12 +29,18 @@ export function OrderDisplayScreen() {
     return resolveOrderCartina(layout, loadCartinaPrefs(layout));
   }, [board.cartina, layout]);
 
-  // Auto-nascondi highlight dopo 25s
+  // Cerchio rosso per 8 secondi, poi sparisce
   useEffect(() => {
     if (!board.highlight) return;
+    const elapsed = Date.now() - board.highlight.at;
+    const remaining = Math.max(0, HIGHLIGHT_MS - elapsed);
+    if (remaining === 0) {
+      void clearOrderHighlight();
+      return;
+    }
     const t = window.setTimeout(() => {
       void clearOrderHighlight();
-    }, 25000);
+    }, remaining);
     return () => window.clearTimeout(t);
   }, [board.highlight?.at, board.highlight?.orderNumber]);
 
@@ -45,66 +53,60 @@ export function OrderDisplayScreen() {
   }
 
   const hl = board.highlight;
+  const showCircle = Boolean(hl?.found);
 
   return (
     <div
-      className="relative flex min-h-dvh flex-col bg-white"
-      onClick={() => setChrome((c) => !c)}
+      className="relative h-dvh w-full overflow-hidden bg-white"
+      onClick={() => setShowExit((v) => !v)}
     >
-      {chrome ? (
-        <div className="absolute right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-20">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              logout();
-              toast.success("Disconnesso");
-            }}
-            className="flex h-11 w-11 items-center justify-center rounded-2xl bg-black/5 text-[var(--forest)]"
-            aria-label="Esci"
-          >
-            <LogOut className="h-5 w-5" />
-          </button>
+      {/* Cartina a tutto schermo */}
+      <div className="absolute inset-0">
+        <OrderCartinaView
+          layout={layout}
+          prefs={prefs}
+          assignments={board.assignments}
+          highlight={board.highlight}
+          variant="display"
+          className="h-full w-full"
+        />
+      </div>
+
+      {/* Banner ordine cercato */}
+      {hl ? (
+        <div
+          className={`pointer-events-none absolute left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] z-30 -translate-x-1/2 rounded-2xl px-5 py-2.5 text-center shadow-lg ${
+            showCircle ? "bg-red-600 text-white" : "bg-red-800 text-white"
+          }`}
+        >
+          <p className="text-[11px] font-bold uppercase tracking-wide opacity-90">
+            {showCircle ? "Ordine" : "Non assegnato"}
+          </p>
+          <p className="text-4xl font-black leading-none">{hl.orderNumber}</p>
         </div>
       ) : null}
 
-      <div className="flex items-center justify-between gap-3 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))]">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--forest)]">
-            Schermo servizio
-          </p>
-          <h1 className="text-xl font-bold text-[var(--forest-ink)]">
-            Cartina ordini
-          </h1>
-        </div>
-        {hl ? (
-          <div
-            className={`rounded-2xl px-4 py-2 text-center ${
-              hl.found
-                ? "bg-amber-500 text-white"
-                : "bg-red-600 text-white"
-            }`}
-          >
-            <p className="text-[10px] font-semibold uppercase opacity-90">
-              {hl.found ? "Ordine" : "Non in cartina"}
-            </p>
-            <p className="text-3xl font-black leading-none">{hl.orderNumber}</p>
-          </div>
-        ) : (
-          <p className="text-sm text-[var(--forest-muted)]">In attesa tastierino…</p>
-        )}
-      </div>
+      {showExit ? (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            logout();
+            toast.success("Disconnesso");
+          }}
+          className="absolute right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-40 flex h-11 w-11 items-center justify-center rounded-2xl bg-black/50 text-white"
+          aria-label="Esci"
+        >
+          <LogOut className="h-5 w-5" />
+        </button>
+      ) : null}
 
-      <div className="min-h-0 flex-1 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-        <div className="h-full min-h-[70vh] overflow-hidden rounded-2xl border border-[var(--forest)]/10">
-          <OrderCartinaView
-            layout={layout}
-            prefs={prefs}
-            assignments={board.assignments}
-            highlight={board.highlight}
-          />
+      {!hl && prefs.placements.length === 0 ? (
+        <div className="absolute inset-0 flex items-center justify-center bg-white/90 p-6 text-center text-sm text-[var(--forest-muted)]">
+          Nessuna cartina. Su ORDINE2026 usa “Sincronizza disposizione”, oppure
+          sistema la cartina globale e sincronizza di nuovo.
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }

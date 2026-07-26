@@ -65,15 +65,13 @@ export function OrderSetupScreen() {
     if (!pending) return;
     setBusy(true);
     try {
+      // Sempre sincronizza la cartina così lo schermo la vede
+      await saveOrderCartina(prefs);
       await setTableOrderNumber(
         pending.zone.id,
         pending.tableNumber,
         orderNumber,
       );
-      // Assicura che la cartina sia su Firebase per lo schermo
-      if (!board.cartina?.placements.length) {
-        await saveOrderCartina(prefs);
-      }
       toast.success(
         orderNumber
           ? `Tavolo ${pending.tableNumber} → ordine ${orderNumber}`

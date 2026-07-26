@@ -20,10 +20,10 @@ export function resolveOrderCartina(
 ): CartinaPrefs {
   if (remote && remote.placements.length > 0) {
     const known = new Set(layout.zones.map((z) => z.id));
-    return {
-      placements: remote.placements.filter((p) => known.has(p.zoneId)),
-      marks: remote.marks ?? [],
-    };
+    const placements = remote.placements.filter((p) => known.has(p.zoneId));
+    if (placements.length > 0) {
+      return { placements, marks: remote.marks ?? [] };
+    }
   }
   return { placements: autoPlaceZones(layout.zones), marks: [] };
 }
@@ -35,6 +35,7 @@ export function OrderCartinaView({
   assignments,
   highlight,
   interactive = false,
+  variant = "setup",
   onTableClick,
   className = "",
 }: {
@@ -43,6 +44,8 @@ export function OrderCartinaView({
   assignments: OrderAssignments;
   highlight: OrderHighlight | null;
   interactive?: boolean;
+  /** display = numeri più grandi + cerchio rosso evidente */
+  variant?: "setup" | "display";
   onTableClick?: (zone: ZoneLayout, tableNumber: number) => void;
   className?: string;
 }) {
@@ -54,9 +57,11 @@ export function OrderCartinaView({
     })
     .filter(Boolean) as { zone: ZoneLayout; placement: ZoneOnBoard }[];
 
+  const isDisplay = variant === "display";
+
   return (
     <div
-      className={`relative h-full w-full overflow-hidden bg-white ${className}`}
+      className={`relative h-full w-full overflow-hidden bg-[#f7faf7] ${className}`}
     >
       <ZoneMarksLayer marks={prefs.marks as MapMark[]} />
       {items.map(({ zone, placement }) => {
@@ -65,7 +70,7 @@ export function OrderCartinaView({
         return (
           <section
             key={zone.id}
-            className="absolute flex flex-col overflow-hidden rounded-md border-2 border-[var(--forest)] bg-white"
+            className="absolute flex flex-col overflow-hidden rounded-md border-2 border-[var(--forest)] bg-white shadow-sm"
             style={{
               left: `${placement.x}%`,
               top: `${placement.y}%`,
@@ -73,7 +78,11 @@ export function OrderCartinaView({
               height: `${placement.h}%`,
             }}
           >
-            <h4 className="shrink-0 bg-[var(--forest)] px-1 py-0.5 text-center text-[10px] font-bold text-white sm:text-xs">
+            <h4
+              className={`shrink-0 bg-[var(--forest)] px-1 text-center font-bold text-white ${
+                isDisplay ? "py-1 text-xs sm:text-sm" : "py-0.5 text-[10px] sm:text-xs"
+              }`}
+            >
               {zone.name}
             </h4>
             <div
@@ -100,11 +109,11 @@ export function OrderCartinaView({
                           onClick: () => onTableClick?.(zone, table.number),
                         }
                       : {})}
-                    className={`relative flex items-center justify-center overflow-hidden px-0.5 py-0.5 text-center transition ${
+                    className={`relative flex items-center justify-center overflow-visible px-0.5 py-0.5 text-center transition ${
                       interactive ? "active:scale-95" : ""
                     } ${
                       isHit
-                        ? "z-10 bg-amber-100"
+                        ? "z-20 bg-red-50"
                         : orderNum
                           ? "bg-[#f3f8f3]"
                           : "bg-white"
@@ -112,20 +121,26 @@ export function OrderCartinaView({
                   >
                     {isHit ? (
                       <span
-                        className="pointer-events-none absolute inset-0.5 animate-order-pulse rounded-full border-[3px] border-amber-500 shadow-[0_0_0_4px_rgba(245,158,11,0.25)]"
+                        className={`pointer-events-none absolute inset-[4%] z-0 animate-order-pulse rounded-full border-red-600 ${
+                          isDisplay
+                            ? "border-[5px] shadow-[0_0_0_6px_rgba(220,38,38,0.35)]"
+                            : "border-[3px] shadow-[0_0_0_3px_rgba(220,38,38,0.25)]"
+                        }`}
                         aria-hidden
                       />
                     ) : null}
                     {orderNum ? (
                       <span
-                        className={`relative z-[1] text-[11px] font-black leading-none sm:text-sm ${
-                          isHit ? "text-amber-800" : "text-[var(--forest-ink)]"
-                        }`}
+                        className={`relative z-[1] font-black leading-none ${
+                          isDisplay
+                            ? "text-base sm:text-xl md:text-2xl"
+                            : "text-[11px] sm:text-sm"
+                        } ${isHit ? "text-red-700" : "text-[var(--forest-ink)]"}`}
                       >
                         {orderNum}
                       </span>
                     ) : (
-                      <span className="relative z-[1] text-[8px] text-[var(--forest)]/25">
+                      <span className="relative z-[1] text-[8px] text-[var(--forest)]/20">
                         ·
                       </span>
                     )}
