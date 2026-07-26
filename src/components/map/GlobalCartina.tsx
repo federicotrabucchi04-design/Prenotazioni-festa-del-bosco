@@ -159,7 +159,7 @@ export function GlobalCartina() {
               onPreview={() => setStep("preview")}
             />
           ) : (
-            <div className="cartina-print-root px-3 py-3 pb-28 print:p-0 print:pb-0">
+            <div className="cartina-print-root pb-24 print:pb-0">
               <CartinaSheet
                 items={placed}
                 marks={activePrefs.marks}
@@ -725,14 +725,14 @@ function CartinaSheet({
   }
 
   return (
-    <div className="cartina-sheet mx-auto flex min-h-[70vh] max-w-6xl flex-col bg-white print:min-h-0 print:max-w-none">
-      <div className="mb-2 shrink-0 px-1 print:mb-1 print:px-0">
-        <h3 className="font-[family-name:var(--font-display)] text-lg font-bold text-[var(--forest-ink)] print:text-base">
+    <div className="cartina-sheet cartina-a4 mx-auto flex h-[calc(100dvh-9rem)] w-full max-w-none flex-col bg-white print:h-dvh print:min-h-0">
+      <div className="no-print shrink-0 px-2 py-1">
+        <h3 className="font-[family-name:var(--font-display)] text-sm font-bold text-[var(--forest-ink)]">
           {title}
         </h3>
-        <p className="text-sm text-[var(--forest-muted)] print:text-xs">{subtitle}</p>
+        <p className="text-xs text-[var(--forest-muted)]">{subtitle}</p>
       </div>
-      <div className="relative min-h-[60vh] flex-1 overflow-hidden rounded-xl border border-[var(--forest)]/15 bg-white print:min-h-[85vh] print:rounded-none print:border-0">
+      <div className="relative min-h-0 flex-1 overflow-hidden bg-white print:rounded-none">
         <ZoneMarksLayer marks={marks} />
         {items.map(({ zone, placement }) => {
           const tables = sortedTables(zone);
@@ -741,7 +741,7 @@ function CartinaSheet({
           return (
             <section
               key={zone.id}
-              className="absolute flex flex-col overflow-hidden rounded-md border-2 border-[var(--forest)] bg-white"
+              className="absolute flex flex-col overflow-hidden border border-[var(--forest)] bg-white"
               style={{
                 left: `${placement.x}%`,
                 top: `${placement.y}%`,
@@ -749,7 +749,7 @@ function CartinaSheet({
                 height: `${placement.h}%`,
               }}
             >
-              <h4 className="shrink-0 bg-[var(--forest)] px-1 py-0.5 text-center text-[10px] font-bold text-white print:text-[8px] sm:text-xs">
+              <h4 className="shrink-0 bg-[var(--forest)] px-0.5 py-0.5 text-center text-[9px] font-bold leading-tight text-white print:text-[8px]">
                 {zone.name}
               </h4>
               <div
@@ -765,14 +765,14 @@ function CartinaSheet({
                   return (
                     <div
                       key={table.id}
-                      className={`flex items-center justify-center overflow-hidden px-0.5 py-0.5 text-center ${
+                      className={`flex items-center justify-center overflow-hidden text-center ${
                         occupied
                           ? "bg-[#f7faf7] text-[var(--forest-ink)]"
                           : "bg-white"
                       }`}
                     >
                       {occupied ? (
-                        <span className="line-clamp-3 w-full text-[8px] font-bold leading-tight print:text-[7px] sm:text-[10px]">
+                        <span className="line-clamp-3 w-full px-0.5 text-[8px] font-bold leading-tight print:text-[7px] sm:text-[10px]">
                           {formatTableGuests(tableGuests)}
                         </span>
                       ) : null}

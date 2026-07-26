@@ -1,5 +1,5 @@
 import { getFirebaseDb, isFirebaseConfigured } from "@/lib/firebase";
-import { PINS } from "@/lib/constants";
+import { PINS, createId } from "@/lib/constants";
 import { onValue, ref, set } from "firebase/database";
 
 export const APP_SETTINGS_PATH = "appSettings";
@@ -13,18 +13,37 @@ export interface AppPins {
   orderKeypad: string;
 }
 
+export interface OrderColorRange {
+  id: string;
+  from: number;
+  to: number;
+  color: string;
+}
+
 export interface AppSettings {
   pins: AppPins;
-  /** Secondi di cerchio rosso sullo schermo ordini */
+  /** Secondi di cerchio highlight sullo schermo ordini */
   orderHighlightSeconds: number;
   /** Colore cerchio highlight (hex) */
   orderHighlightColor: string;
+  /** Scala dimensione numeri ordine (0.6–2.2) */
+  orderNumberScale: number;
+  /** Colori numeri per fasce (es. 1–19 blu) */
+  orderColorRanges: OrderColorRange[];
   /** Posti oltre capacità senza chiedere override */
   capacityOverflow: number;
   /** Cifre max numero ordine (tastierino) */
   orderMaxDigits: number;
   updatedAt: number;
 }
+
+export const DEFAULT_COLOR_RANGES: OrderColorRange[] = [
+  { id: "r1", from: 1, to: 19, color: "#2563eb" },
+  { id: "r2", from: 20, to: 39, color: "#dc2626" },
+  { id: "r3", from: 40, to: 59, color: "#2d5a27" },
+  { id: "r4", from: 60, to: 79, color: "#d97706" },
+  { id: "r5", from: 80, to: 999, color: "#7c3aed" },
+];
 
 export const DEFAULT_SETTINGS: AppSettings = {
   pins: {
@@ -36,6 +55,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   },
   orderHighlightSeconds: 8,
   orderHighlightColor: "#dc2626",
+  orderNumberScale: 1,
+  orderColorRanges: DEFAULT_COLOR_RANGES.map((r) => ({ ...r })),
   capacityOverflow: 2,
   orderMaxDigits: 4,
   updatedAt: 0,
@@ -44,7 +65,15 @@ export const DEFAULT_SETTINGS: AppSettings = {
 type Listener = (settings: AppSettings) => void;
 
 const listeners = new Set<Listener>();
-let cached: AppSettings = { ...DEFAULT_SETTINGS, pins: { ...DEFAULT_SETTINGS.pins } };
+let cached: AppSettings = cloneSettings(DEFAULT_SETTINGS);
+
+function cloneSettings(s: AppSettings): AppSettings {
+  return {
+    ...s,
+    pins: { ...s.pins },
+    orderColorRanges: s.orderColorRanges.map((r) => ({ ...r })),
+  };
+}
 
 export function getAppSettings(): AppSettings {
   return cached;
@@ -60,9 +89,52 @@ function clampInt(n: number, min: number, max: number, fallback: number) {
   return Math.min(max, Math.max(min, Math.round(n)));
 }
 
+function clampFloat(n: number, min: number, max: number, fallback: number) {
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(n * 100) / 100));
+}
+
 function normalizePin(value: unknown, fallback: string) {
   const s = String(value ?? "").trim().toUpperCase();
   return s.length >= 4 ? s : fallback;
+}
+
+function normalizeHex(value: unknown, fallback: string) {
+  if (typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value)) {
+    return value.toLowerCase();
+  }
+  return fallback;
+}
+
+function normalizeRanges(raw: unknown): OrderColorRange[] {
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return DEFAULT_COLOR_RANGES.map((r) => ({ ...r }));
+  }
+  const out: OrderColorRange[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const r = item as Partial<OrderColorRange>;
+    const from = clampInt(Number(r.from), 1, 9999, 1);
+    const to = clampInt(Number(r.to), from, 9999, from);
+    out.push({
+      id: String(r.id || createId()),
+      from,
+      to,
+      color: normalizeHex(r.color, "#2563eb"),
+    });
+  }
+  return out.length ? out : DEFAULT_COLOR_RANGES.map((r) => ({ ...r }));
+}
+
+export function colorForOrderNumber(
+  n: number,
+  ranges: OrderColorRange[],
+  fallback = "#142418",
+): string {
+  for (const r of ranges) {
+    if (n >= r.from && n <= r.to) return r.color;
+  }
+  return fallback;
 }
 
 export function normalizeSettings(raw: Partial<AppSettings> | null): AppSettings {
@@ -90,11 +162,17 @@ export function normalizeSettings(raw: Partial<AppSettings> | null): AppSettings
       60,
       DEFAULT_SETTINGS.orderHighlightSeconds,
     ),
-    orderHighlightColor:
-      typeof raw?.orderHighlightColor === "string" &&
-      /^#[0-9a-fA-F]{6}$/.test(raw.orderHighlightColor)
-        ? raw.orderHighlightColor.toLowerCase()
-        : DEFAULT_SETTINGS.orderHighlightColor,
+    orderHighlightColor: normalizeHex(
+      raw?.orderHighlightColor,
+      DEFAULT_SETTINGS.orderHighlightColor,
+    ),
+    orderNumberScale: clampFloat(
+      Number(raw?.orderNumberScale),
+      0.6,
+      2.2,
+      DEFAULT_SETTINGS.orderNumberScale,
+    ),
+    orderColorRanges: normalizeRanges(raw?.orderColorRanges),
     capacityOverflow: clampInt(
       Number(raw?.capacityOverflow),
       0,
@@ -112,13 +190,13 @@ export function normalizeSettings(raw: Partial<AppSettings> | null): AppSettings
 }
 
 function readDemo(): AppSettings {
-  if (typeof window === "undefined") return DEFAULT_SETTINGS;
+  if (typeof window === "undefined") return cloneSettings(DEFAULT_SETTINGS);
   try {
     const raw = localStorage.getItem(APP_SETTINGS_STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_SETTINGS, pins: { ...DEFAULT_SETTINGS.pins } };
+    if (!raw) return cloneSettings(DEFAULT_SETTINGS);
     return normalizeSettings(JSON.parse(raw) as Partial<AppSettings>);
   } catch {
-    return { ...DEFAULT_SETTINGS, pins: { ...DEFAULT_SETTINGS.pins } };
+    return cloneSettings(DEFAULT_SETTINGS);
   }
 }
 
@@ -153,7 +231,7 @@ export function subscribeAppSettings(listener: Listener): () => void {
     (snap) => {
       const next = snap.exists()
         ? normalizeSettings(snap.val() as Partial<AppSettings>)
-        : { ...DEFAULT_SETTINGS, pins: { ...DEFAULT_SETTINGS.pins }, updatedAt: Date.now() };
+        : cloneSettings({ ...DEFAULT_SETTINGS, updatedAt: Date.now() });
       notify(next);
       listener(next);
     },
@@ -171,6 +249,7 @@ export async function saveAppSettings(partial: Partial<AppSettings>) {
     ...cached,
     ...partial,
     pins: { ...cached.pins, ...(partial.pins ?? {}) },
+    orderColorRanges: partial.orderColorRanges ?? cached.orderColorRanges,
     updatedAt: Date.now(),
   });
 
@@ -187,12 +266,7 @@ export async function saveAppSettings(partial: Partial<AppSettings>) {
 }
 
 export async function resetAppSettings() {
-  const next = {
-    ...DEFAULT_SETTINGS,
-    pins: { ...DEFAULT_SETTINGS.pins },
-    updatedAt: Date.now(),
-  };
-  return saveAppSettings(next);
+  return saveAppSettings(cloneSettings({ ...DEFAULT_SETTINGS, updatedAt: Date.now() }));
 }
 
 export const HIGHLIGHT_COLOR_PRESETS = [

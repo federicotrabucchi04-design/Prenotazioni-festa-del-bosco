@@ -179,15 +179,18 @@ export function OrderSetupScreen() {
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 px-3 pb-4">
+      <div className="flex min-h-0 flex-1 flex-col px-1 pb-2">
         {mode === "global" ? (
-          <div className="h-[min(70vh,560px)] overflow-hidden rounded-3xl border border-[var(--forest)]/15 bg-white shadow-sm">
+          <div className="cartina-a4 min-h-0 flex-1 overflow-hidden rounded-xl border border-[var(--forest)]/15 bg-white">
             <OrderCartinaView
               layout={layout}
               prefs={prefs}
               assignments={board.assignments}
               highlight={board.highlight}
               interactive
+              numberScale={settings.orderNumberScale}
+              colorRanges={settings.orderColorRanges}
+              highlightColor={settings.orderHighlightColor}
               onTableClick={openAssign}
             />
           </div>

@@ -161,9 +161,9 @@ export function downloadCartinaPng(opts: {
   filename?: string;
 }) {
   const { items, marks, reservations, title, subtitle } = opts;
-  const W = 3508;
+  const W = 3508; // A4 landscape ~300dpi
   const H = 2480;
-  const pad = 48;
+  const pad = 12;
   const canvas = document.createElement("canvas");
   canvas.width = W;
   canvas.height = H;
@@ -174,17 +174,17 @@ export function downloadCartinaPng(opts: {
   ctx.fillRect(0, 0, W, H);
 
   ctx.fillStyle = "#142418";
-  ctx.font = "bold 56px system-ui, sans-serif";
-  ctx.fillText(title, pad, pad + 48);
-  ctx.font = "36px system-ui, sans-serif";
+  ctx.font = "bold 40px system-ui, sans-serif";
+  ctx.fillText(title, pad, pad + 36);
+  ctx.font = "26px system-ui, sans-serif";
   ctx.fillStyle = "#5a7260";
-  ctx.fillText(subtitle, pad, pad + 100);
+  ctx.fillText(subtitle, pad, pad + 72);
 
-  const headerH = 130;
+  const headerH = 84;
   const areaX = pad;
   const areaY = pad + headerH;
   const areaW = W - pad * 2;
-  const areaH = H - pad * 2 - headerH - 40;
+  const areaH = H - pad * 2 - headerH;
 
   ctx.strokeStyle = "#d7e5d8";
   ctx.lineWidth = 2;

@@ -98,18 +98,26 @@ textarea.field-input {
   background-size: 20px 20px;
 }
 
+/* Cartina massimizzata (proporzione A4 landscape quando serve) */
+.cartina-a4 {
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+}
+
 @media print {
   @page {
-    size: landscape;
-    margin: 8mm;
+    size: A4 landscape;
+    margin: 0;
   }
 
   body {
     background: white !important;
     color: black !important;
+    margin: 0 !important;
   }
 
-  /* Nasconde tutta l’app tranne la cartina */
   body * {
     visibility: hidden !important;
   }
@@ -124,18 +132,20 @@ textarea.field-input {
   }
 
   .cartina-print-root {
-    position: absolute !important;
+    position: fixed !important;
     inset: 0 !important;
     padding: 0 !important;
-    overflow: visible !important;
+    margin: 0 !important;
+    overflow: hidden !important;
     background: white !important;
   }
 
   .cartina-sheet {
-    width: 100% !important;
+    width: 100vw !important;
+    height: 100vh !important;
     max-width: none !important;
     min-height: 100vh !important;
-    height: 100vh !important;
+    margin: 0 !important;
     break-inside: avoid;
   }
 }

@@ -1,17 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Eye, EyeOff, RotateCcw, Settings2, X } from "lucide-react";
+import { Eye, EyeOff, Plus, RotateCcw, Settings2, Trash2, X } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import toast from "react-hot-toast";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import {
   type AppPins,
   type AppSettings,
+  type OrderColorRange,
   HIGHLIGHT_COLOR_PRESETS,
   resetAppSettings,
   saveAppSettings,
 } from "@/lib/app-settings";
+import { createId } from "@/lib/constants";
 
 const PIN_FIELDS: { key: keyof AppPins; label: string; hint: string }[] = [
   { key: "staff", label: "Staff", hint: "Lista e mappa" },
@@ -220,6 +222,39 @@ export function SettingsPanel({
 
                   <label className="mt-4 block">
                     <span className="text-xs font-semibold text-[var(--forest-muted)]">
+                      Dimensione numeri sulla cartina
+                    </span>
+                    <div className="mt-2 flex items-center gap-3">
+                      <input
+                        type="range"
+                        min={0.6}
+                        max={2.2}
+                        step={0.1}
+                        value={draft.orderNumberScale}
+                        onChange={(e) =>
+                          setDraft((d) => ({
+                            ...d,
+                            orderNumberScale: Number(e.target.value),
+                          }))
+                        }
+                        className="w-full accent-[var(--forest)]"
+                      />
+                      <span className="w-14 text-center text-lg font-bold text-[var(--forest-ink)]">
+                        {draft.orderNumberScale.toFixed(1)}×
+                      </span>
+                    </div>
+                    <p
+                      className="mt-2 font-black"
+                      style={{ fontSize: `${1.1 * draft.orderNumberScale}rem` }}
+                    >
+                      <span style={{ color: "#2563eb" }}>12</span>{" "}
+                      <span style={{ color: "#dc2626" }}>28</span>{" "}
+                      <span style={{ color: "#2d5a27" }}>45</span>
+                    </p>
+                  </label>
+
+                  <label className="mt-4 block">
+                    <span className="text-xs font-semibold text-[var(--forest-muted)]">
                       Cifre massime numero ordine
                     </span>
                     <div className="mt-2 grid grid-cols-5 gap-2">
@@ -241,6 +276,120 @@ export function SettingsPanel({
                       ))}
                     </div>
                   </label>
+                </section>
+
+                <section className="rounded-3xl border border-white/70 bg-white/90 p-4">
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-[var(--forest-ink)]">
+                        Colori per fasce di numeri
+                      </p>
+                      <p className="text-xs text-[var(--forest-muted)]">
+                        Es. 1–19 blu, 20–39 rosso…
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setDraft((d) => ({
+                          ...d,
+                          orderColorRanges: [
+                            ...d.orderColorRanges,
+                            {
+                              id: createId(),
+                              from: 1,
+                              to: 10,
+                              color: "#2563eb",
+                            } satisfies OrderColorRange,
+                          ],
+                        }))
+                      }
+                      className="inline-flex items-center gap-1 rounded-xl bg-[var(--forest)]/10 px-2.5 py-2 text-xs font-semibold text-[var(--forest)]"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Fascia
+                    </button>
+                  </div>
+                  <ul className="space-y-2">
+                    {draft.orderColorRanges.map((range, idx) => (
+                      <li
+                        key={range.id}
+                        className="flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--forest)]/10 bg-[var(--forest)]/5 p-2"
+                      >
+                        <input
+                          type="number"
+                          min={1}
+                          value={range.from}
+                          onChange={(e) => {
+                            const from = Number(e.target.value) || 1;
+                            setDraft((d) => {
+                              const next = [...d.orderColorRanges];
+                              next[idx] = {
+                                ...range,
+                                from,
+                                to: Math.max(from, range.to),
+                              };
+                              return { ...d, orderColorRanges: next };
+                            });
+                          }}
+                          className="h-10 w-16 rounded-xl border border-[var(--forest)]/15 bg-white px-2 text-center text-sm font-bold"
+                          aria-label="Da"
+                        />
+                        <span className="text-xs text-[var(--forest-muted)]">–</span>
+                        <input
+                          type="number"
+                          min={1}
+                          value={range.to}
+                          onChange={(e) => {
+                            const to = Number(e.target.value) || range.from;
+                            setDraft((d) => {
+                              const next = [...d.orderColorRanges];
+                              next[idx] = {
+                                ...range,
+                                to: Math.max(range.from, to),
+                              };
+                              return { ...d, orderColorRanges: next };
+                            });
+                          }}
+                          className="h-10 w-16 rounded-xl border border-[var(--forest)]/15 bg-white px-2 text-center text-sm font-bold"
+                          aria-label="A"
+                        />
+                        <input
+                          type="color"
+                          value={range.color}
+                          onChange={(e) =>
+                            setDraft((d) => {
+                              const next = [...d.orderColorRanges];
+                              next[idx] = { ...range, color: e.target.value };
+                              return { ...d, orderColorRanges: next };
+                            })
+                          }
+                          className="h-10 w-12 cursor-pointer rounded-xl border-0 bg-transparent"
+                        />
+                        <span
+                          className="rounded-full px-2.5 py-1 text-xs font-bold text-white"
+                          style={{ backgroundColor: range.color }}
+                        >
+                          {range.from}–{range.to}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDraft((d) => ({
+                              ...d,
+                              orderColorRanges: d.orderColorRanges.filter(
+                                (r) => r.id !== range.id,
+                              ),
+                            }))
+                          }
+                          className="ml-auto flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 text-red-700"
+                          aria-label="Elimina fascia"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
                 </section>
 
                 <section className="rounded-3xl border border-white/70 bg-white/90 p-4">

@@ -14,7 +14,7 @@ import {
 import { loadCartinaPrefs } from "@/lib/cartina";
 import { clearOrderHighlight } from "@/lib/order-board";
 
-/** Schermo a tutto schermo: cartina + cerchio (durata/colore da Impostazioni) */
+/** Schermo a tutto schermo: cartina edge-to-edge + cerchio da impostazioni */
 export function OrderDisplayScreen() {
   const logout = useAuthStore((s) => s.logout);
   const { layout, loading: layoutLoading } = useVenueLayout();
@@ -59,16 +59,19 @@ export function OrderDisplayScreen() {
 
   return (
     <div
-      className="relative h-dvh w-full overflow-hidden bg-white"
+      className="relative h-dvh w-dvw overflow-hidden bg-white"
       onClick={() => setShowExit((v) => !v)}
     >
-      <div className="absolute inset-0">
+      {/* A4 landscape massimizzata: riempie tutto lo schermo */}
+      <div className="cartina-a4 absolute inset-0">
         <OrderCartinaView
           layout={layout}
           prefs={prefs}
           assignments={board.assignments}
           highlight={board.highlight}
           highlightColor={highlightColor}
+          numberScale={settings.orderNumberScale}
+          colorRanges={settings.orderColorRanges}
           variant="display"
           className="h-full w-full"
         />
@@ -76,13 +79,13 @@ export function OrderDisplayScreen() {
 
       {hl ? (
         <div
-          className="pointer-events-none absolute left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] z-30 -translate-x-1/2 rounded-2xl px-5 py-2.5 text-center text-white shadow-lg"
+          className="pointer-events-none absolute left-1/2 top-2 z-30 -translate-x-1/2 rounded-xl px-4 py-1.5 text-center text-white shadow-lg"
           style={{ backgroundColor: showCircle ? highlightColor : "#7f1d1d" }}
         >
-          <p className="text-[11px] font-bold uppercase tracking-wide opacity-90">
+          <p className="text-[10px] font-bold uppercase tracking-wide opacity-90">
             {showCircle ? "Ordine" : "Non assegnato"}
           </p>
-          <p className="text-4xl font-black leading-none">{hl.orderNumber}</p>
+          <p className="text-3xl font-black leading-none">{hl.orderNumber}</p>
         </div>
       ) : null}
 
@@ -94,7 +97,7 @@ export function OrderDisplayScreen() {
             logout();
             toast.success("Disconnesso");
           }}
-          className="absolute right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-40 flex h-11 w-11 items-center justify-center rounded-2xl bg-black/50 text-white"
+          className="absolute right-2 top-2 z-40 flex h-10 w-10 items-center justify-center rounded-xl bg-black/50 text-white"
           aria-label="Esci"
         >
           <LogOut className="h-5 w-5" />
