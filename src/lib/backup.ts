@@ -18,7 +18,7 @@ export const MAX_LOCAL_BACKUPS = 10;
 /** Max copie su Firebase */
 export const MAX_REMOTE_BACKUPS = 20;
 
-export type BackupSource = "auto" | "manual" | "change";
+export type BackupSource = "auto" | "manual" | "change" | "archive";
 
 export interface BackupSnapshot {
   id: string;
@@ -209,6 +209,67 @@ async function pruneRemoteBackups() {
   );
 }
 
+/**
+ * Dopo archiviazione serata: tiene solo l’ultimo backup, cancella tutti gli altri
+ * (locale + Firebase).
+ */
+export async function keepOnlyLatestBackup() {
+  const local = readLocalBackups().sort((a, b) => b.createdAt - a.createdAt);
+  const keep = local[0] ?? null;
+  writeLocalBackups(keep ? [keep] : []);
+
+  if (dataMode() !== "firebase") {
+    if (keep) {
+      writeMeta({
+        ...getBackupMeta(),
+        lastBackupAt: keep.createdAt,
+        lastBackupId: keep.id,
+        lastSource: keep.source,
+        lastError: null,
+        lastCheckedAt: Date.now(),
+        lastSkippedIdentical: false,
+      });
+    }
+    return keep;
+  }
+
+  const db = getFirebaseDb();
+  if (!db) return keep;
+
+  const snap = await get(ref(db, BACKUPS_PATH));
+  if (!snap.exists()) return keep;
+
+  const all = Object.values(snap.val() as Record<string, BackupSnapshot>).sort(
+    (a, b) => b.createdAt - a.createdAt,
+  );
+  const remoteKeep = all[0] ?? keep;
+  const removeIds = all
+    .filter((b) => b.id !== remoteKeep?.id)
+    .map((b) => b.id);
+
+  await Promise.all(
+    removeIds.map((id) => remove(ref(db, `${BACKUPS_PATH}/${id}`))),
+  );
+
+  // Allinea locale all’unico rimasto
+  if (remoteKeep) {
+    writeLocalBackups([remoteKeep]);
+    writeMeta({
+      ...getBackupMeta(),
+      lastBackupAt: remoteKeep.createdAt,
+      lastBackupId: remoteKeep.id,
+      lastSource: remoteKeep.source,
+      lastError: null,
+      lastCheckedAt: Date.now(),
+      lastSkippedIdentical: false,
+    });
+  } else {
+    writeLocalBackups([]);
+  }
+
+  return remoteKeep;
+}
+
 export async function createBackup(source: BackupSource = "manual") {
   if (running) return getBackupMeta();
   running = true;
@@ -217,7 +278,13 @@ export async function createBackup(source: BackupSource = "manual") {
     const latest = readLocalBackups()[0];
 
     // Auto / dopo modifica: non salvare se identico → niente intasamento
-    if (source !== "manual" && latest && sameBackupContent(latest, snapshot)) {
+    // Manuale e archiviazione: salvano sempre
+    if (
+      source !== "manual" &&
+      source !== "archive" &&
+      latest &&
+      sameBackupContent(latest, snapshot)
+    ) {
       writeMeta({
         ...getBackupMeta(),
         lastCheckedAt: Date.now(),

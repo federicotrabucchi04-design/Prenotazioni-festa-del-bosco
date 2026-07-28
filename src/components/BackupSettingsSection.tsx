@@ -72,7 +72,8 @@ export function BackupSettingsSection() {
       <p className="mb-3 text-xs text-[var(--forest-muted)]">
         Automatico ogni 3 minuti e dopo ogni modifica, ma salva solo se i dati
         sono cambiati. Tiene max 10 copie sul dispositivo e 20 su Firebase (le
-        più vecchie si cancellano da sole). “Archivia serata” non è un backup.
+        più vecchie si cancellano da sole). Archiviando una serata resta solo
+        l’ultimo backup (con i dettagli completi di quella sera).
       </p>
 
       <div className="mb-3 rounded-2xl bg-white/80 px-3 py-2 text-xs text-[var(--forest-ink)]">

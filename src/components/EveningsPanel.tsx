@@ -87,7 +87,7 @@ export function EveningsPanel({
       const archive = await archiveEvening(id);
       refreshReservationListeners();
       toast.success(
-        `«${archive.eveningLabel}» archiviata · ${archive.totalPeopleBooked} persone`,
+        `«${archive.eveningLabel}» archiviata · ${archive.totalPeopleBooked} persone · tenuto solo l’ultimo backup`,
       );
       setArchiveConfirmId(null);
     } catch (err) {
@@ -226,7 +226,9 @@ export function EveningsPanel({
                           <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-950">
                             Confermi archivio di «{e.label}»? Restano solo i
                             totali persone; le prenotazioni dettagliate vengono
-                            eliminate. Tocca di nuovo Archivia per confermare.
+                            eliminate. Si salva un backup completo e si cancellano
+                            tutti i backup precedenti tranne quest’ultimo. Tocca
+                            di nuovo Archivia per confermare.
                           </div>
                         ) : null}
                       </li>

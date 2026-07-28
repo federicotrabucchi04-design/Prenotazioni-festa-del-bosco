@@ -412,10 +412,21 @@ export async function setActiveEvening(eveningId: string): Promise<void> {
 
 /**
  * Archivia una serata: salva solo i totali, elimina le prenotazioni dettagliate.
+ * Prima fa un backup completo, poi tiene solo quell’ultimo backup (cancella gli altri).
  * Non crea automaticamente una nuova serata.
  */
 export async function archiveEvening(eveningId: string): Promise<ArchiveSummary> {
   await ensureEveningsReady();
+
+  // Snapshot completo prima di cancellare i dettagli, poi si terrà solo questo
+  try {
+    const { createBackup } = await import("@/lib/backup");
+    await createBackup("archive");
+  } catch {
+    // best-effort: l’archivio procede comunque
+  }
+
+  let archive: ArchiveSummary;
 
   if (getDataMode() === "demo") {
     const store = readDemoStore();
@@ -424,7 +435,7 @@ export async function archiveEvening(eveningId: string): Promise<ArchiveSummary>
     if (current.status === "archived") throw new Error("Serata già archiviata");
 
     const currentReservations = store.reservations[eveningId] ?? [];
-    const archive = buildArchiveSummary(current, currentReservations);
+    archive = buildArchiveSummary(current, currentReservations);
 
     const nextEvenings = {
       ...store.evenings,
@@ -447,76 +458,82 @@ export async function archiveEvening(eveningId: string): Promise<ArchiveSummary>
       reservations: nextReservations,
       archives: { ...store.archives, [eveningId]: archive },
     });
-    return archive;
-  }
+  } else {
+    const db = getFirebaseDb();
+    if (!db) throw new Error("Firebase non configurato");
 
-  const db = getFirebaseDb();
-  if (!db) throw new Error("Firebase non configurato");
+    const eveningSnap = await get(ref(db, `evenings/${eveningId}`));
+    const current = normalizeEvening(
+      eveningId,
+      eveningSnap.val() as Partial<Evening> | null,
+    );
+    if (!current) throw new Error("Serata non trovata");
+    if (current.status === "archived") throw new Error("Serata già archiviata");
 
-  const eveningSnap = await get(ref(db, `evenings/${eveningId}`));
-  const current = normalizeEvening(
-    eveningId,
-    eveningSnap.val() as Partial<Evening> | null,
-  );
-  if (!current) throw new Error("Serata non trovata");
-  if (current.status === "archived") throw new Error("Serata già archiviata");
-
-  const resSnap = await get(ref(db, `eveningReservations/${eveningId}`));
-  const reservations: Reservation[] = [];
-  if (resSnap.exists()) {
-    const rows = resSnap.val() as Record<string, Partial<Reservation>>;
-    for (const [id, row] of Object.entries(rows)) {
-      if (!row?.name) continue;
-      const adults = Number(row.adults ?? 0);
-      const children = Number(row.children ?? 0);
-      reservations.push({
-        id,
-        name: String(row.name),
-        phone: String(row.phone ?? ""),
-        adults,
-        children,
-        total: Number(row.total ?? adults + children),
-        notes: String(row.notes ?? ""),
-        zone: String(row.zone ?? ""),
-        tableNumber: Number(row.tableNumber ?? 0),
-        arrived: Boolean(row.arrived),
-        date: String(row.date ?? current.label),
-        updatedAt: Number(row.updatedAt ?? Date.now()),
-      });
-    }
-  }
-
-  const archive = buildArchiveSummary(current, reservations);
-
-  await set(ref(db, `archives/${eveningId}`), {
-    eveningLabel: archive.eveningLabel,
-    archivedAt: archive.archivedAt,
-    totalPeopleBooked: archive.totalPeopleBooked,
-    reservationCount: archive.reservationCount,
-    arrivedPeopleCount: archive.arrivedPeopleCount,
-  });
-  await update(ref(db, `evenings/${eveningId}`), { status: "archived" });
-  await remove(ref(db, `eveningReservations/${eveningId}`));
-
-  const activeId = await getActiveEveningId();
-  if (activeId === eveningId) {
-    const allSnap = await get(ref(db, "evenings"));
-    let nextActive: string | null = null;
-    if (allSnap.exists()) {
-      const rows = allSnap.val() as Record<string, Partial<Evening>>;
+    const resSnap = await get(ref(db, `eveningReservations/${eveningId}`));
+    const reservations: Reservation[] = [];
+    if (resSnap.exists()) {
+      const rows = resSnap.val() as Record<string, Partial<Reservation>>;
       for (const [id, row] of Object.entries(rows)) {
-        if (id === eveningId) continue;
-        if (row?.status !== "archived" && row?.label) {
-          nextActive = id;
-          break;
-        }
+        if (!row?.name) continue;
+        const adults = Number(row.adults ?? 0);
+        const children = Number(row.children ?? 0);
+        reservations.push({
+          id,
+          name: String(row.name),
+          phone: String(row.phone ?? ""),
+          adults,
+          children,
+          total: Number(row.total ?? adults + children),
+          notes: String(row.notes ?? ""),
+          zone: String(row.zone ?? ""),
+          tableNumber: Number(row.tableNumber ?? 0),
+          arrived: Boolean(row.arrived),
+          date: String(row.date ?? current.label),
+          updatedAt: Number(row.updatedAt ?? Date.now()),
+        });
       }
     }
-    if (nextActive) {
-      await set(ref(db, "activeEveningId"), nextActive);
-    } else {
-      await remove(ref(db, "activeEveningId"));
+
+    archive = buildArchiveSummary(current, reservations);
+
+    await set(ref(db, `archives/${eveningId}`), {
+      eveningLabel: archive.eveningLabel,
+      archivedAt: archive.archivedAt,
+      totalPeopleBooked: archive.totalPeopleBooked,
+      reservationCount: archive.reservationCount,
+      arrivedPeopleCount: archive.arrivedPeopleCount,
+    });
+    await update(ref(db, `evenings/${eveningId}`), { status: "archived" });
+    await remove(ref(db, `eveningReservations/${eveningId}`));
+
+    const activeId = await getActiveEveningId();
+    if (activeId === eveningId) {
+      const allSnap = await get(ref(db, "evenings"));
+      let nextActive: string | null = null;
+      if (allSnap.exists()) {
+        const rows = allSnap.val() as Record<string, Partial<Evening>>;
+        for (const [id, row] of Object.entries(rows)) {
+          if (id === eveningId) continue;
+          if (row?.status !== "archived" && row?.label) {
+            nextActive = id;
+            break;
+          }
+        }
+      }
+      if (nextActive) {
+        await set(ref(db, "activeEveningId"), nextActive);
+      } else {
+        await remove(ref(db, "activeEveningId"));
+      }
     }
+  }
+
+  try {
+    const { keepOnlyLatestBackup } = await import("@/lib/backup");
+    await keepOnlyLatestBackup();
+  } catch {
+    // best-effort
   }
 
   return archive;
