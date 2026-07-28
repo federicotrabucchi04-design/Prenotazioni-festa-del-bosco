@@ -9,7 +9,7 @@ import { canEditReservations, useAuthStore } from "@/store/auth-store";
 import { useUiStore } from "@/store/ui-store";
 import { AnimatePresence, motion } from "framer-motion";
 
-export function ReservationList() {
+export function ReservationList({ compact = false }: { compact?: boolean }) {
   const { items, loading } = useReservations();
   const search = useUiStore((s) => s.search);
   const setSearch = useUiStore((s) => s.setSearch);
@@ -30,20 +30,26 @@ export function ReservationList() {
   const peopleCount = items.reduce((sum, r) => sum + r.total, 0);
 
   return (
-    <div className="relative mx-auto max-w-lg px-4 pb-28 pt-4">
-      <div className="mb-4 grid grid-cols-3 gap-2 text-center">
-        <Stat label="Prenotazioni" value={String(items.length)} />
-        <Stat label="Arrivati" value={`${arrivedCount}`} />
-        <Stat label="Persone" value={String(peopleCount)} />
+    <div
+      className={`relative mx-auto max-w-lg px-4 pt-4 ${
+        compact ? "pb-4 pt-7" : "pb-28"
+      }`}
+    >
+      <div className={`mb-4 grid grid-cols-3 gap-2 text-center ${compact ? "mb-2" : ""}`}>
+        <Stat label="Prenotazioni" value={String(items.length)} compact={compact} />
+        <Stat label="Arrivati" value={`${arrivedCount}`} compact={compact} />
+        <Stat label="Persone" value={String(peopleCount)} compact={compact} />
       </div>
 
-      <div className="relative mb-4">
+      <div className={`relative ${compact ? "mb-2" : "mb-4"}`}>
         <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--forest-muted)]" />
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Cerca nome, telefono, tavolo…"
-          className="h-12 w-full rounded-2xl border border-white bg-white/80 pl-11 pr-4 text-sm text-[var(--forest-ink)] outline-none ring-[var(--forest)]/25 placeholder:text-[var(--forest-muted)] focus:ring-2"
+          className={`w-full rounded-2xl border border-white bg-white/80 pl-11 pr-4 text-sm text-[var(--forest-ink)] outline-none ring-[var(--forest)]/25 placeholder:text-[var(--forest-muted)] focus:ring-2 ${
+            compact ? "h-10" : "h-12"
+          }`}
         />
       </div>
 
@@ -52,7 +58,7 @@ export function ReservationList() {
       ) : filtered.length === 0 ? (
         <EmptyState hasSearch={Boolean(search.trim())} />
       ) : (
-        <ul className="space-y-3">
+        <ul className={`space-y-3 ${compact ? "space-y-2" : ""}`}>
           <AnimatePresence initial={false}>
             {filtered.map((reservation) => (
               <motion.li
@@ -69,7 +75,7 @@ export function ReservationList() {
         </ul>
       )}
 
-      {isAdmin ? (
+      {isAdmin && !compact ? (
         <button
           type="button"
           onClick={openCreateModal}
@@ -83,10 +89,28 @@ export function ReservationList() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({
+  label,
+  value,
+  compact,
+}: {
+  label: string;
+  value: string;
+  compact?: boolean;
+}) {
   return (
-    <div className="rounded-2xl border border-white/70 bg-white/70 px-2 py-3 shadow-sm backdrop-blur">
-      <p className="text-lg font-bold text-[var(--forest-ink)]">{value}</p>
+    <div
+      className={`rounded-2xl border border-white/70 bg-white/70 shadow-sm backdrop-blur ${
+        compact ? "px-1.5 py-2" : "px-2 py-3"
+      }`}
+    >
+      <p
+        className={`font-bold text-[var(--forest-ink)] ${
+          compact ? "text-base" : "text-lg"
+        }`}
+      >
+        {value}
+      </p>
       <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--forest-muted)]">
         {label}
       </p>

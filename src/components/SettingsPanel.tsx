@@ -14,10 +14,12 @@ import {
   saveAppSettings,
 } from "@/lib/app-settings";
 import { createId } from "@/lib/constants";
+import { BackupSettingsSection } from "@/components/BackupSettingsSection";
 
 const PIN_FIELDS: { key: keyof AppPins; label: string; hint: string }[] = [
   { key: "staff", label: "Staff", hint: "Lista e mappa" },
   { key: "admin", label: "Admin", hint: "Controllo totale + impostazioni" },
+  { key: "computer", label: "Computer", hint: "4 pannelli insieme" },
   { key: "orderSetup", label: "Assegna ordini", hint: "Metti numeri sui tavoli" },
   { key: "orderDisplay", label: "Schermo cartina", hint: "TV / tablet grande" },
   { key: "orderKeypad", label: "Tastierino", hint: "Cerca ordine" },
@@ -423,6 +425,8 @@ export function SettingsPanel({
                     Oltre questo limite l’app chiede conferma (override).
                   </p>
                 </section>
+
+                <BackupSettingsSection />
 
                 <button
                   type="button"

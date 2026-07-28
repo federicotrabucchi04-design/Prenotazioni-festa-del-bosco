@@ -28,36 +28,201 @@ export const CARTINA_COLORS = [
   { id: "black", hex: "#142418", label: "Nero" },
 ] as const;
 
-export const DEFAULT_ZONE_W = 32;
-export const DEFAULT_ZONE_H = 30;
-export const MIN_ZONE_SIZE = 14;
+export const DEFAULT_ZONE_W = 38;
+export const DEFAULT_ZONE_H = 36;
+export const MIN_ZONE_SIZE = 8;
+/** Gap minimo % tra zone sulla lavagna A4 */
+export const CARTINA_GAP = 0.6;
+export const CARTINA_MARGIN = 0.4;
 
 export function defaultCartinaPrefs(layout: VenueLayout): CartinaPrefs {
+  return placeZonesLikeCartina(layout.zones);
+}
+
+/**
+ * Dispposizione stile CARTINA.pdf (A4 verticale):
+ * fascia BAR in alto, CASSA a sinistra, zone che riempiono il resto.
+ */
+export function defaultCartinaMarks(): MapMark[] {
+  return [
+    {
+      id: "tpl-bar",
+      kind: "rect",
+      x: 0.4,
+      y: 0.4,
+      w: 99.2,
+      h: 6.2,
+      color: "#ca8a04",
+    },
+    {
+      id: "tpl-bar-text",
+      kind: "text",
+      x: 50,
+      y: 3.5,
+      text: "BAR — BAR — BAR — BAR — BAR — BAR",
+      color: "#142418",
+    },
+    {
+      id: "tpl-cassa",
+      kind: "text",
+      x: 14,
+      y: 11.5,
+      text: "CASSA",
+      color: "#1d4ed8",
+    },
+  ];
+}
+
+/** Packing aggressivo che riempie quasi tutto l’A4 (sotto la fascia BAR). */
+export function autoPlaceZones(zones: ZoneLayout[]): ZoneOnBoard[] {
+  return packZonesInBox(zones, {
+    left: CARTINA_MARGIN,
+    top: CARTINA_MARGIN,
+    right: 100 - CARTINA_MARGIN,
+    bottom: 100 - CARTINA_MARGIN,
+  });
+}
+
+export function placeZonesLikeCartina(zones: ZoneLayout[]): CartinaPrefs {
+  const marks = defaultCartinaMarks();
+  if (zones.length === 0) return { placements: [], marks };
+
+  const barBottom = 8.2;
+  const cassaReserve = 10; // spazio sotto BAR per etichetta CASSA
+  const contentTop = barBottom + cassaReserve;
+  const n = zones.length;
+
+  // Layout ispirato alla cartina cartacea: colonna sinistra + stack centrale + striscia destra
+  if (n >= 4) {
+    const leftW = 24;
+    const rightW = 12;
+    const gap = CARTINA_GAP;
+    const midLeft = CARTINA_MARGIN + leftW + gap;
+    const midRight = 100 - CARTINA_MARGIN - rightW - gap;
+
+    const leftZone = zones[0]!;
+    const rightZone = zones[zones.length - 1]!;
+    const midZones = zones.slice(1, -1);
+
+    if (midZones.length === 0) {
+      return {
+        placements: packZonesInBox(zones, {
+          left: CARTINA_MARGIN,
+          top: contentTop,
+          right: 100 - CARTINA_MARGIN,
+          bottom: 100 - CARTINA_MARGIN,
+        }),
+        marks,
+      };
+    }
+
+    const midPack = packZonesInBox(midZones, {
+      left: midLeft,
+      top: barBottom,
+      right: midRight,
+      bottom: 100 - CARTINA_MARGIN,
+      preferColumns: 1,
+    });
+
+    const placements: ZoneOnBoard[] = [
+      normalizePlacement({
+        zoneId: leftZone.id,
+        x: CARTINA_MARGIN,
+        y: contentTop,
+        w: leftW,
+        h: 100 - CARTINA_MARGIN - contentTop,
+      }),
+      ...midPack,
+      normalizePlacement({
+        zoneId: rightZone.id,
+        x: midRight + gap,
+        y: barBottom,
+        w: rightW,
+        h: 100 - CARTINA_MARGIN - barBottom,
+      }),
+    ];
+
+    return { placements, marks };
+  }
+
   return {
-    placements: autoPlaceZones(layout.zones),
-    marks: [],
+    placements: packZonesInBox(zones, {
+      left: CARTINA_MARGIN,
+      top: contentTop,
+      right: 100 - CARTINA_MARGIN,
+      bottom: 100 - CARTINA_MARGIN,
+    }),
+    marks,
   };
 }
 
-export function autoPlaceZones(zones: ZoneLayout[]): ZoneOnBoard[] {
+function packZonesInBox(
+  zones: ZoneLayout[],
+  box: {
+    left: number;
+    top: number;
+    right: number;
+    bottom: number;
+    preferColumns?: number;
+  },
+): ZoneOnBoard[] {
   const n = zones.length;
   if (n === 0) return [];
-  const cols = Math.min(3, Math.max(1, Math.ceil(Math.sqrt(n))));
+  const gap = CARTINA_GAP;
+  const width = box.right - box.left;
+  const height = box.bottom - box.top;
+  if (width <= 0 || height <= 0) return [];
+
+  let cols =
+    box.preferColumns ??
+    Math.min(3, Math.max(1, Math.ceil(Math.sqrt(n * (width / height)))));
+  // Su A4 verticale preferisci poche colonne e tante righe (come i blocchi 2×8)
+  if (height > width * 1.15 && !box.preferColumns) {
+    cols = Math.min(cols, n <= 3 ? 1 : 2);
+  }
   const rows = Math.ceil(n / cols);
-  const gap = 2;
-  const w = Math.min(DEFAULT_ZONE_W, (100 - gap * (cols + 1)) / cols);
-  const h = Math.min(DEFAULT_ZONE_H, (100 - gap * (rows + 1)) / rows);
+  const cellW = (width - gap * (cols - 1)) / cols;
+  const cellH = (height - gap * (rows - 1)) / rows;
+
   return zones.map((z, i) => {
     const col = i % cols;
     const row = Math.floor(i / cols);
-    return {
+    // Ultima riga: espandi in larghezza se non riempie le colonne
+    const itemsInRow =
+      row === rows - 1 ? n - row * cols : cols;
+    const rowCols = itemsInRow;
+    const rowCellW =
+      row === rows - 1 && itemsInRow < cols
+        ? (width - gap * (rowCols - 1)) / rowCols
+        : cellW;
+    const c = row === rows - 1 && itemsInRow < cols ? i - row * cols : col;
+    return normalizePlacement({
       zoneId: z.id,
-      x: gap + col * (w + gap),
-      y: gap + row * (h + gap),
-      w,
-      h,
-    };
+      x: box.left + c * (rowCellW + gap),
+      y: box.top + row * (cellH + gap),
+      w: rowCellW,
+      h: cellH,
+    });
   });
+}
+
+/** Espande le zone già posizionate per riempire l’intero foglio (gap minimo). */
+export function fillPagePlacements(placements: ZoneOnBoard[]): ZoneOnBoard[] {
+  if (placements.length === 0) return [];
+  const zones = placements.map((p) => ({ id: p.zoneId } as ZoneLayout));
+  // Mantieni ordine attuale
+  return packZonesInBox(
+    zones.map((z) => ({ id: z.id, name: z.id, tables: [], marks: [] })),
+    {
+      left: CARTINA_MARGIN,
+      top: CARTINA_MARGIN,
+      right: 100 - CARTINA_MARGIN,
+      bottom: 100 - CARTINA_MARGIN,
+    },
+  ).map((p, i) => ({
+    ...p,
+    zoneId: placements[i]!.zoneId,
+  }));
 }
 
 function migrateFromGrid(raw: Record<string, unknown>, layout: VenueLayout): CartinaPrefs | null {

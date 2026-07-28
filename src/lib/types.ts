@@ -3,7 +3,8 @@ export type UserRole =
   | "admin"
   | "orderSetup"
   | "orderDisplay"
-  | "orderKeypad";
+  | "orderKeypad"
+  | "computer";
 
 /** Nome zona dinamico (configurabile dall'admin) */
 export type Zone = string;

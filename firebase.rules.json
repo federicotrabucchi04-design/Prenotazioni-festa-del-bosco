@@ -31,6 +31,10 @@
     "appSettings": {
       ".read": true,
       ".write": true
+    },
+    "dataBackups": {
+      ".read": true,
+      ".write": true
     }
   }
 }

@@ -29,7 +29,7 @@ import {
 import type { ZoneLayout } from "@/lib/types";
 
 /** Assegna numeri d’ordine toccando i tavoli (cartina globale + per zona) */
-export function OrderSetupScreen() {
+export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
   const logout = useAuthStore((s) => s.logout);
   const role = useAuthStore((s) => s.role)!;
   const { layout, loading: layoutLoading } = useVenueLayout();
@@ -98,55 +98,75 @@ export function OrderSetupScreen() {
 
   if (layoutLoading || boardLoading) {
     return (
-      <div className="flex min-h-dvh items-center justify-center bg-[var(--forest-bg)]">
+      <div
+        className={`flex items-center justify-center bg-[var(--forest-bg)] ${
+          embedded ? "h-full" : "min-h-dvh"
+        }`}
+      >
         <div className="h-10 w-10 animate-pulse rounded-2xl bg-[var(--forest)]/20" />
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-dvh flex-col bg-[var(--forest-bg)]">
-      <header className="flex items-start justify-between gap-3 border-b border-white/50 bg-white/80 px-4 pb-3 pt-[max(0.85rem,env(safe-area-inset-top))] backdrop-blur-xl">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--forest)]">
-            Modalità servizio
-          </p>
-          <h1 className="text-lg font-semibold text-[var(--forest-ink)]">
-            {orderRoleLabel(role)}
-          </h1>
-          <p className="text-sm text-[var(--forest-muted)]">
-            Tocca un tavolo e digita il numero d’ordine
+    <div
+      className={`flex flex-col bg-[var(--forest-bg)] ${
+        embedded ? "h-full overflow-hidden" : "min-h-dvh"
+      }`}
+    >
+      {!embedded ? (
+        <header className="flex items-start justify-between gap-3 border-b border-white/50 bg-white/80 px-4 pb-3 pt-[max(0.85rem,env(safe-area-inset-top))] backdrop-blur-xl">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--forest)]">
+              Modalità servizio
+            </p>
+            <h1 className="text-lg font-semibold text-[var(--forest-ink)]">
+              {orderRoleLabel(role)}
+            </h1>
+            <p className="text-sm text-[var(--forest-muted)]">
+              Tocca un tavolo e digita il numero d’ordine
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              logout();
+              toast.success("Disconnesso");
+            }}
+            className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--forest)]/8 text-[var(--forest)]"
+            aria-label="Esci"
+          >
+            <LogOut className="h-5 w-5" />
+          </button>
+        </header>
+      ) : (
+        <div className="shrink-0 border-b border-white/40 bg-white/80 px-2 pb-1 pt-6">
+          <p className="text-[10px] font-semibold text-[var(--forest-muted)]">
+            Tocca tavolo → numero ordine
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            logout();
-            toast.success("Disconnesso");
-          }}
-          className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--forest)]/8 text-[var(--forest)]"
-          aria-label="Esci"
-        >
-          <LogOut className="h-5 w-5" />
-        </button>
-      </header>
+      )}
 
-      <div className="flex gap-2 px-4 py-2">
+      <div className={`flex gap-2 ${embedded ? "px-1.5 py-1" : "px-4 py-2"}`}>
         <button
           type="button"
           onClick={() => setMode("global")}
-          className={`flex-1 rounded-2xl py-2.5 text-sm font-semibold ${
+          className={`flex-1 font-semibold ${
+            embedded ? "rounded-xl py-1.5 text-[11px]" : "rounded-2xl py-2.5 text-sm"
+          } ${
             mode === "global"
               ? "bg-[var(--forest)] text-white"
               : "bg-white text-[var(--forest-ink)]"
           }`}
         >
-          Cartina globale
+          Globale
         </button>
         <button
           type="button"
           onClick={() => setMode("zone")}
-          className={`flex-1 rounded-2xl py-2.5 text-sm font-semibold ${
+          className={`flex-1 font-semibold ${
+            embedded ? "rounded-xl py-1.5 text-[11px]" : "rounded-2xl py-2.5 text-sm"
+          } ${
             mode === "zone"
               ? "bg-[var(--forest)] text-white"
               : "bg-white text-[var(--forest-ink)]"
@@ -156,39 +176,49 @@ export function OrderSetupScreen() {
         </button>
       </div>
 
-      <div className="flex gap-2 px-4 pb-2">
-        <button
-          type="button"
-          onClick={() => void syncCartinaFromLocal()}
-          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-2xl bg-white px-3 py-2 text-xs font-semibold text-[var(--forest)]"
-        >
-          <MapPinned className="h-3.5 w-3.5" />
-          Sincronizza disposizione
-        </button>
-        <button
-          type="button"
-          onClick={async () => {
-            if (!window.confirm("Cancellare tutti i numeri d’ordine?")) return;
-            await clearAllAssignments();
-            toast.success("Assegnazioni azzerate");
-          }}
-          className="inline-flex items-center gap-1 rounded-2xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-700"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-          Azzera
-        </button>
-      </div>
+      {!embedded ? (
+        <div className="flex gap-2 px-4 pb-2">
+          <button
+            type="button"
+            onClick={() => void syncCartinaFromLocal()}
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-2xl bg-white px-3 py-2 text-xs font-semibold text-[var(--forest)]"
+          >
+            <MapPinned className="h-3.5 w-3.5" />
+            Sincronizza disposizione
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              if (!window.confirm("Cancellare tutti i numeri d’ordine?")) return;
+              await clearAllAssignments();
+              toast.success("Assegnazioni azzerate");
+            }}
+            className="inline-flex items-center gap-1 rounded-2xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-700"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Azzera
+          </button>
+        </div>
+      ) : null}
 
-      <div className="flex min-h-0 flex-1 flex-col px-1 pb-2">
+      <div
+        className={`flex min-h-0 flex-1 flex-col overflow-auto ${
+          embedded ? "px-0.5 pb-1" : "px-1 pb-2"
+        }`}
+      >
         {mode === "global" ? (
-          <div className="cartina-a4 min-h-0 flex-1 overflow-hidden rounded-xl border border-[var(--forest)]/15 bg-white">
+          <div className="cartina-a4-portrait min-h-0 flex-1 overflow-hidden rounded-xl border border-[var(--forest)]/15 bg-white">
             <OrderCartinaView
               layout={layout}
               prefs={prefs}
               assignments={board.assignments}
               highlight={board.highlight}
               interactive
-              numberScale={settings.orderNumberScale}
+              numberScale={
+                embedded
+                  ? Math.max(0.5, settings.orderNumberScale * 0.65)
+                  : settings.orderNumberScale
+              }
               colorRanges={settings.orderColorRanges}
               highlightColor={settings.orderHighlightColor}
               onTableClick={openAssign}

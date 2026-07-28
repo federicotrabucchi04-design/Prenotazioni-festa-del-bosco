@@ -9,7 +9,7 @@ import { useAppSettings } from "@/hooks/use-app-settings";
 import { clearOrderHighlight, setOrderHighlight } from "@/lib/order-board";
 
 /** Terminale minimale: solo tastierino → evidenzia sulla cartina grande */
-export function OrderKeypadScreen() {
+export function OrderKeypadScreen({ embedded = false }: { embedded?: boolean }) {
   const logout = useAuthStore((s) => s.logout);
   const { board } = useOrderBoard();
   const { settings } = useAppSettings();
@@ -58,32 +58,50 @@ export function OrderKeypadScreen() {
   const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "C", "0", "⌫"] as const;
 
   return (
-    <div className="flex min-h-dvh flex-col bg-[var(--forest-bg)]">
-      <header className="flex items-center justify-between px-4 pb-2 pt-[max(0.85rem,env(safe-area-inset-top))]">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--forest)]">
-            Tastierino
+    <div
+      className={`flex flex-col bg-[var(--forest-bg)] ${
+        embedded ? "h-full overflow-hidden" : "min-h-dvh"
+      }`}
+    >
+      {!embedded ? (
+        <header className="flex items-center justify-between px-4 pb-2 pt-[max(0.85rem,env(safe-area-inset-top))]">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--forest)]">
+              Tastierino
+            </p>
+            <h1 className="text-lg font-semibold text-[var(--forest-ink)]">
+              Cerca ordine
+            </h1>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              logout();
+              toast.success("Disconnesso");
+            }}
+            className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-[var(--forest)]"
+            aria-label="Esci"
+          >
+            <LogOut className="h-5 w-5" />
+          </button>
+        </header>
+      ) : (
+        <div className="shrink-0 px-2 pb-1 pt-6">
+          <p className="text-[10px] font-semibold text-[var(--forest-muted)]">
+            Digita e cerca
           </p>
-          <h1 className="text-lg font-semibold text-[var(--forest-ink)]">
-            Cerca ordine
-          </h1>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            logout();
-            toast.success("Disconnesso");
-          }}
-          className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-[var(--forest)]"
-          aria-label="Esci"
-        >
-          <LogOut className="h-5 w-5" />
-        </button>
-      </header>
+      )}
 
-      <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-5 pb-10">
+      <div
+        className={`mx-auto flex w-full flex-1 flex-col justify-center ${
+          embedded ? "max-w-none px-2 pb-2" : "max-w-md px-5 pb-10"
+        }`}
+      >
         <div
-          className={`mb-6 rounded-3xl border px-4 py-8 text-center ${
+          className={`mb-3 border text-center ${
+            embedded ? "rounded-2xl px-2 py-3" : "mb-6 rounded-3xl px-4 py-8"
+          } ${
             lastResult === "ok"
               ? "border-amber-300 bg-amber-50"
               : lastResult === "missing"
@@ -92,27 +110,39 @@ export function OrderKeypadScreen() {
           }`}
         >
           <p className="text-sm text-[var(--forest-muted)]">Numero ordine</p>
-          <p className="mt-2 font-mono text-6xl font-black tracking-widest text-[var(--forest-ink)]">
+          <p
+            className={`mt-1 font-mono font-black tracking-widest text-[var(--forest-ink)] ${
+              embedded ? "text-4xl" : "text-6xl"
+            }`}
+          >
             {digits || "····"}
           </p>
           {board.highlight ? (
-            <p className="mt-3 text-sm font-semibold text-[var(--forest)]">
-              Ultimo inviato: {board.highlight.orderNumber}
-              {board.highlight.found ? " · in cartina" : " · assente"}
+            <p className="mt-2 text-xs font-semibold text-[var(--forest)]">
+              Ultimo: {board.highlight.orderNumber}
+              {board.highlight.found ? " · ok" : " · assente"}
             </p>
           ) : null}
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className={`grid grid-cols-3 ${embedded ? "gap-1.5" : "gap-3"}`}>
           {keys.map((k) => (
             <button
               key={k}
               type="button"
               disabled={busy}
               onClick={() => press(k)}
-              className="flex h-[4.5rem] items-center justify-center rounded-3xl bg-white text-3xl font-bold text-[var(--forest-ink)] shadow-sm active:scale-95 disabled:opacity-60"
+              className={`flex items-center justify-center bg-white font-bold text-[var(--forest-ink)] shadow-sm active:scale-95 disabled:opacity-60 ${
+                embedded
+                  ? "h-11 rounded-xl text-xl"
+                  : "h-[4.5rem] rounded-3xl text-3xl"
+              }`}
             >
-              {k === "⌫" ? <Delete className="h-7 w-7" /> : k}
+              {k === "⌫" ? (
+                <Delete className={embedded ? "h-5 w-5" : "h-7 w-7"} />
+              ) : (
+                k
+              )}
             </button>
           ))}
         </div>
@@ -121,7 +151,11 @@ export function OrderKeypadScreen() {
           type="button"
           disabled={busy || !digits}
           onClick={() => void submit()}
-          className="mt-4 h-16 rounded-3xl bg-[var(--forest)] text-xl font-bold text-white shadow-md shadow-[var(--forest)]/25 active:scale-[0.99] disabled:opacity-50"
+          className={`mt-3 bg-[var(--forest)] font-bold text-white shadow-md shadow-[var(--forest)]/25 active:scale-[0.99] disabled:opacity-50 ${
+            embedded
+              ? "h-11 rounded-xl text-sm"
+              : "mt-4 h-16 rounded-3xl text-xl"
+          }`}
         >
           Cerca sulla cartina
         </button>
@@ -133,7 +167,9 @@ export function OrderKeypadScreen() {
             void clearOrderHighlight();
             setLastResult(null);
           }}
-          className="mt-3 h-12 rounded-3xl bg-white text-sm font-semibold text-[var(--forest-muted)] disabled:opacity-40"
+          className={`mt-2 bg-white font-semibold text-[var(--forest-muted)] disabled:opacity-40 ${
+            embedded ? "h-9 rounded-xl text-xs" : "mt-3 h-12 rounded-3xl text-sm"
+          }`}
         >
           Togli cerchio
         </button>

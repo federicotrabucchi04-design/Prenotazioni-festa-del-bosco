@@ -15,6 +15,8 @@ Riassunto per modifiche future. Stack: **Next.js App Router + TypeScript + Tailw
 | Mappa operativa | `components/map/TablesMap.tsx`, `ZoneMarksLayer.tsx` |
 | Cartina globale stampa | `components/map/GlobalCartina.tsx`, `lib/cartina.ts`, `lib/cartina-export.ts` |
 | Servizio ordini | `lib/order-board.ts`, `hooks/use-order-board.ts`, `components/order/*` |
+| Profilo computer 4 pannelli | `components/ComputerScreen.tsx` |
+| Backup | `lib/backup.ts`, `components/BackupSettingsSection.tsx` |
 | Impostazioni admin | `components/SettingsPanel.tsx`, `lib/app-settings.ts`, `hooks/use-app-settings.ts` |
 | Serate | `lib/evenings.ts`, `hooks/use-evenings.ts`, `EveningsPanel.tsx` |
 | UI store | `store/ui-store.ts` (view, modal, cartina, settings) |
@@ -24,12 +26,14 @@ Riassunto per modifiche future. Stack: **Next.js App Router + TypeScript + Tailw
 
 ## Ruoli (`UserRole`)
 
-`staff` | `admin` | `orderSetup` | `orderDisplay` | `orderKeypad`
+`staff` | `admin` | `computer` | `orderSetup` | `orderDisplay` | `orderKeypad`
 
 - Staff/admin → shell con header + bottom nav.
+- `computer` → `ComputerScreen` (grid 2×2: display, keypad, staff list, order setup).
 - Order* → early return in `App.tsx` verso schermi dedicati (niente nav prenotazioni).
 - `canEditReservations` = solo admin.
 - PIN effettivi: `getAppSettings().pins` (fallback ai default in `constants`).
+- PIN computer default: `COMPUTER2026`.
 
 ---
 
@@ -43,11 +47,21 @@ Riassunto per modifiche future. Stack: **Next.js App Router + TypeScript + Tailw
 | `archives/{eveningId}` | Solo riepiloghi post-archivio |
 | `orderBoard` | `assignments`, `highlight`, `cartina` |
 | `appSettings` | PIN, highlight, scale, color ranges, capacityOverflow |
+| `dataBackups/{id}` | Snapshot backup (serate + prenotazioni + layout) |
 
 Demo mode: `localStorage` se Firebase non configurato (`isFirebaseConfigured()`).
 
+Backup locale: `fdb-local-backups-v1` (ultime 16). Auto ogni 2 min + debounce 12s dopo CRUD prenotazioni (`startAutoBackup` in `App.tsx`).
+
 ---
 
+## Cartina A4
+
+- Preferenze: `fdb-cartina-prefs-v3`, sync anche in `orderBoard.cartina`.
+- `placeZonesLikeCartina()` / **Stile cartina A4**: BAR + CASSA + packing stile foglio di riferimento.
+- `fillPagePlacements()` / **Riempi foglio**: gap minimo su tutto l’A4.
+- Print CSS: `@page A4 portrait; margin: 0` in `globals.css`.
+- PNG: 2480×3508 in `cartina-export.ts`.
 ## Cartina globale — comportamento atteso
 
 1. Prefs locali `fdb-cartina-prefs-v3` + sync su `orderBoard.cartina` quando si salva/dispone.

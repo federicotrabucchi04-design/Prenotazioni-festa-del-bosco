@@ -19,11 +19,14 @@ import {
   useAuthStore,
   canEditReservations,
   isOrderRole,
+  isComputerRole,
 } from "@/store/auth-store";
 import { useUiStore } from "@/store/ui-store";
 import { useEvenings } from "@/hooks/use-evenings";
 import { EVENT_DATE } from "@/lib/constants";
 import { subscribeAppSettings } from "@/lib/app-settings";
+import { startAutoBackup } from "@/lib/backup";
+import { ComputerScreen } from "@/components/ComputerScreen";
 
 export function App() {
   const role = useAuthStore((s) => s.role);
@@ -50,6 +53,11 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    if (!role) return;
+    return startAutoBackup();
+  }, [role]);
+
+  useEffect(() => {
     if (view === "zones" && !isAdmin) setView("list");
   }, [view, isAdmin, setView]);
 
@@ -63,6 +71,10 @@ export function App() {
 
   if (!role) {
     return <LoginScreen />;
+  }
+
+  if (isComputerRole(role)) {
+    return <ComputerScreen />;
   }
 
   if (isOrderRole(role)) {

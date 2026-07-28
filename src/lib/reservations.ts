@@ -12,6 +12,7 @@ import {
   writeDemoStore,
   resetDemoEvenings,
 } from "@/lib/evenings";
+import { scheduleBackupAfterChange } from "@/lib/backup";
 import { get, onValue, push, ref, remove, set, update } from "firebase/database";
 
 type Listener = (items: Reservation[]) => void;
@@ -245,6 +246,7 @@ export async function upsertReservation(input: ReservationInput) {
       items.push({ ...payload, id: createId() });
     }
     writeDemoReservations(items);
+    scheduleBackupAfterChange();
     return;
   }
 
@@ -260,11 +262,13 @@ export async function upsertReservation(input: ReservationInput) {
     const newRef = push(ref(db, `eveningReservations/${eveningId}`));
     await set(newRef, payload);
   }
+  scheduleBackupAfterChange();
 }
 
 export async function deleteReservation(id: string) {
   if (getDataMode() === "demo") {
     writeDemoReservations(readDemoReservations().filter((r) => r.id !== id));
+    scheduleBackupAfterChange();
     return;
   }
   const db = getFirebaseDb();
@@ -273,6 +277,7 @@ export async function deleteReservation(id: string) {
   const eveningId = cachedActiveEveningId ?? (await getActiveEveningId());
   if (!eveningId) throw new Error("Nessuna serata attiva");
   await remove(ref(db, `eveningReservations/${eveningId}/${id}`));
+  scheduleBackupAfterChange();
 }
 
 export async function setArrived(id: string, arrived: boolean) {
@@ -281,6 +286,7 @@ export async function setArrived(id: string, arrived: boolean) {
       r.id === id ? { ...r, arrived, updatedAt: Date.now() } : r,
     );
     writeDemoReservations(items);
+    scheduleBackupAfterChange();
     return;
   }
   const db = getFirebaseDb();
@@ -292,6 +298,7 @@ export async function setArrived(id: string, arrived: boolean) {
     arrived,
     updatedAt: Date.now(),
   });
+  scheduleBackupAfterChange();
 }
 
 export function resetDemoData() {

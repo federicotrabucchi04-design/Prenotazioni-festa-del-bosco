@@ -15,7 +15,7 @@ import { loadCartinaPrefs } from "@/lib/cartina";
 import { clearOrderHighlightIf } from "@/lib/order-board";
 
 /** Schermo a tutto schermo: cartina edge-to-edge + cerchio da impostazioni */
-export function OrderDisplayScreen() {
+export function OrderDisplayScreen({ embedded = false }: { embedded?: boolean }) {
   const logout = useAuthStore((s) => s.logout);
   const { layout, loading: layoutLoading } = useVenueLayout();
   const { board, loading: boardLoading } = useOrderBoard();
@@ -49,7 +49,11 @@ export function OrderDisplayScreen() {
 
   if (layoutLoading || boardLoading) {
     return (
-      <div className="flex min-h-dvh items-center justify-center bg-white">
+      <div
+        className={`flex items-center justify-center bg-white ${
+          embedded ? "h-full" : "min-h-dvh"
+        }`}
+      >
         <div className="h-10 w-10 animate-pulse rounded-2xl bg-[var(--forest)]/20" />
       </div>
     );
@@ -60,18 +64,25 @@ export function OrderDisplayScreen() {
 
   return (
     <div
-      className="relative h-dvh w-dvw overflow-hidden bg-white"
-      onClick={() => setShowExit((v) => !v)}
+      className={`relative overflow-hidden bg-white ${
+        embedded ? "h-full w-full" : "h-dvh w-dvw"
+      }`}
+      onClick={() => {
+        if (!embedded) setShowExit((v) => !v);
+      }}
     >
-      {/* A4 landscape massimizzata: riempie tutto lo schermo */}
-      <div className="cartina-a4 absolute inset-0">
+      <div className="cartina-a4-portrait absolute inset-0">
         <OrderCartinaView
           layout={layout}
           prefs={prefs}
           assignments={board.assignments}
           highlight={board.highlight}
           highlightColor={highlightColor}
-          numberScale={settings.orderNumberScale}
+          numberScale={
+            embedded
+              ? Math.max(0.55, settings.orderNumberScale * 0.72)
+              : settings.orderNumberScale
+          }
           colorRanges={settings.orderColorRanges}
           variant="display"
           className="h-full w-full"
@@ -80,17 +91,31 @@ export function OrderDisplayScreen() {
 
       {hl ? (
         <div
-          className="pointer-events-none absolute left-1/2 top-2 z-30 -translate-x-1/2 rounded-xl px-4 py-1.5 text-center text-white shadow-lg"
+          className={`pointer-events-none absolute left-1/2 z-30 -translate-x-1/2 rounded-xl text-center text-white shadow-lg ${
+            embedded
+              ? "top-1 px-2 py-0.5"
+              : "top-2 px-4 py-1.5"
+          }`}
           style={{ backgroundColor: showCircle ? highlightColor : "#7f1d1d" }}
         >
-          <p className="text-[10px] font-bold uppercase tracking-wide opacity-90">
+          <p
+            className={`font-bold uppercase tracking-wide opacity-90 ${
+              embedded ? "text-[8px]" : "text-[10px]"
+            }`}
+          >
             {showCircle ? "Ordine" : "Non assegnato"}
           </p>
-          <p className="text-3xl font-black leading-none">{hl.orderNumber}</p>
+          <p
+            className={`font-black leading-none ${
+              embedded ? "text-xl" : "text-3xl"
+            }`}
+          >
+            {hl.orderNumber}
+          </p>
         </div>
       ) : null}
 
-      {showExit ? (
+      {!embedded && showExit ? (
         <button
           type="button"
           onClick={(e) => {

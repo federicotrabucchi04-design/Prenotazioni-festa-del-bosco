@@ -12,6 +12,7 @@ Link tipico: quello del deploy Vercel del progetto.
 |-------|-----------------|-----------|
 | Staff | `STAFF2026` | Lista + Mappa (segna Arrivato) |
 | Admin | `BOSCOADMIN` | Tutto lo staff + Zone + Impostazioni |
+| Computer | `COMPUTER2026` | 4 pannelli insieme (schermo, tastierino, staff, ordini) |
 | Assegna ordini | `ORDINE2026` | Metti i numeri d’ordine sui tavoli |
 | Schermo cartina | `SCHERMO2026` | Cartina a tutto schermo |
 | Tastierino | `TASTO2026` | Solo tastiera numerica |
@@ -27,6 +28,22 @@ I PIN si possono cambiare da **Admin → Impostazioni** (rotella **Set** in alto
 3. Sistema la **Cartina globale** (da Mappa) e sincronizza per lo schermo ordini.
 4. Staff usa **Lista** e **Mappa** per prenotazioni e “Arrivato”.
 5. Per il servizio cucina/sala: un tablet con **ORDINE2026**, uno con **SCHERMO2026**, uno con **TASTO2026**.
+   In alternativa un solo PC con **COMPUTER2026** (tutti e 4 i pannelli insieme).
+
+---
+
+## Profilo Computer (`COMPUTER2026`)
+
+Schermo diviso in **4 angoli**:
+
+| Angolo | Pannello |
+|--------|----------|
+| Alto-sx | Schermo cartina live |
+| Alto-dx | Tastierino ordini |
+| Basso-sx | Lista staff (segna Arrivato) |
+| Basso-dx | Assegna numeri d’ordine |
+
+Utile su un PC fisso in sala: un solo login, tutto sotto controllo.
 
 ---
 
@@ -60,12 +77,14 @@ Apri da **Mappa → Cartina globale**.
 - Tocca una zona dalla lista “da mettere”, poi tocca dove posizionarla.
 - **Sposta** e **ridimensiona** (pallino in basso a destra).
 - Strumenti **Linea / Box / Scritta** + colori.
+- **Stile cartina A4**: disposizione ispirata al foglio CARTINA (fascia BAR, CASSA, zone che riempiono).
+- **Riempi foglio**: espande le zone per usare quasi tutto l’A4.
 - **Auto-disponi** / **Svuota lavagna**.
 - La disposizione si salva e si sincronizza anche verso lo schermo ordini.
 
 ### 2) Anteprima
-- Mostra la cartina in proporzione **A4 verticale**, il più grande possibile.
-- Nomi + persone sui tavoli occupati (niente numeri tavolo).
+- Mostra la cartina in proporzione **A4 verticale**, bordo a bordo.
+- Nomi + persone sui tavoli occupati; numero tavolo debole sulle celle vuote.
 - **Scarica PNG** o **Stampa** (pagina A4 verticale, senza margini inutili).
 
 Suggerimento: in stampa scegli “Adatta alla pagina” / carta A4 verticale.
@@ -113,13 +132,20 @@ Apri con il bottone verde **Set** (header) o la tab **Set** in basso.
 
 | Sezione | Cosa regola |
 |---------|-------------|
-| Password (PIN) | Tutti i PIN di accesso |
+| Password (PIN) | Tutti i PIN di accesso (anche Computer) |
 | Servizio ordini | Durata e colore del cerchio; dimensione numeri; cifre max |
 | Colori per fasce | Es. 1–19 blu, 20–39 rosso… |
 | Capacità | Extra posti senza conferma (capacità + N) |
+| **Backup prenotazioni** | Automatico ogni 2 min + dopo modifiche; JSON/CSV; ripristino |
 | Ripristina | Torna ai valori di fabbrica |
 
 Le impostazioni sono condivise via Firebase (`appSettings`).
+
+### Backup (importante)
+- Parte da solo quando sei loggato (qualsiasi profilo).
+- Salva **locale** (browser) e su Firebase (`dataBackups`).
+- Da Impostazioni: **Backup ora**, scarica **JSON** completo o **CSV** della serata attiva, **Ripristina** un punto precedente.
+- **Archivia serata** NON è un backup: cancella il dettaglio. Usa sempre i backup prima.
 
 ---
 
@@ -130,6 +156,7 @@ In Console → Realtime Database → **Rules**, devono esserci almeno:
 - `venueLayout`, `evenings`, `activeEveningId`, `eveningReservations`, `archives`
 - `orderBoard` (ordini + cartina servizio)
 - `appSettings` (PIN e preferenze)
+- `dataBackups` (copie di sicurezza prenotazioni)
 
 Copia il file del progetto `firebase.rules.json` e premi **Pubblica**.
 

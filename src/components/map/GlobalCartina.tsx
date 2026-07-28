@@ -31,10 +31,12 @@ import {
   DEFAULT_ZONE_W,
   MIN_ZONE_SIZE,
   autoPlaceZones,
+  fillPagePlacements,
   formatTableGuests,
   guestsByTable,
   loadCartinaPrefs,
   normalizePlacement,
+  placeZonesLikeCartina,
   placedZoneIds,
   pointerPercent,
   resolvePlacedZones,
@@ -450,7 +452,7 @@ function CartinaArrangeBoard({
   }
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-3 px-3 py-3 pb-28">
+    <div className="mx-auto flex max-w-4xl flex-col gap-2 px-2 py-2 pb-28 sm:px-3">
       <div className="flex flex-wrap gap-2">
         {(
           [
@@ -529,7 +531,36 @@ function CartinaArrangeBoard({
         </div>
       ) : null}
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            const next = placeZonesLikeCartina(layoutZones);
+            onChange(next);
+            setSelectedZoneId(null);
+            toast.success("Disposizione stile cartina A4 (BAR + CASSA)");
+          }}
+          className="rounded-2xl bg-[var(--forest)] px-3 py-2 text-xs font-semibold text-white"
+        >
+          Stile cartina A4
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            if (prefs.placements.length === 0) {
+              patchPrefs({ placements: autoPlaceZones(layoutZones) });
+            } else {
+              patchPrefs({
+                placements: fillPagePlacements(prefs.placements),
+              });
+            }
+            setSelectedZoneId(null);
+            toast.success("Foglio riempito al massimo");
+          }}
+          className="rounded-2xl bg-[var(--forest)]/10 px-3 py-2 text-xs font-semibold text-[var(--forest)]"
+        >
+          Riempi foglio
+        </button>
         <button
           type="button"
           onClick={() => {
@@ -539,7 +570,7 @@ function CartinaArrangeBoard({
           }}
           className="rounded-2xl bg-[var(--forest)]/10 px-3 py-2 text-xs font-semibold text-[var(--forest)]"
         >
-          Auto-disponi zone
+          Auto-disponi
         </button>
         <button
           type="button"
@@ -554,12 +585,17 @@ function CartinaArrangeBoard({
         </button>
       </div>
 
+      <p className="text-[11px] text-[var(--forest-muted)]">
+        Lavagna = foglio A4 verticale. Usa tutto lo spazio: trascina i bordi delle
+        zone fino ai margini.
+      </p>
+
       <div
         ref={boardRef}
         onPointerDown={onBoardPointerDown}
         onPointerMove={onBoardPointerMove}
         onPointerUp={onBoardPointerUp}
-        className="relative mx-auto aspect-[210/297] w-full max-h-[min(68dvh,820px)] touch-none overflow-hidden rounded-2xl border border-[var(--forest)]/15 bg-[linear-gradient(rgba(45,90,39,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(45,90,39,0.06)_1px,transparent_1px)] bg-size-[20px_20px] bg-white shadow-sm"
+        className="relative mx-auto aspect-[210/297] w-full max-h-[min(72dvh,900px)] touch-none overflow-hidden border border-[var(--forest)]/20 bg-[linear-gradient(rgba(45,90,39,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(45,90,39,0.05)_1px,transparent_1px)] bg-size-[16px_16px] bg-white shadow-sm"
       >
         <ZoneMarksLayer
           marks={visibleMarks}
@@ -584,17 +620,17 @@ function CartinaArrangeBoard({
                 width: `${p.w}%`,
                 height: `${p.h}%`,
               }}
-              className={`absolute z-10 flex flex-col overflow-hidden rounded-xl border-2 bg-white/95 ${
+              className={`absolute z-10 flex flex-col overflow-hidden border-2 bg-white/95 ${
                 selected
                   ? "border-amber-500 shadow-lg"
                   : "border-[var(--forest)]"
               }`}
               onPointerDown={(e) => startZoneDrag(e, p, "move")}
             >
-              <div className="shrink-0 bg-[var(--forest)] px-1 py-0.5 text-center text-[10px] font-bold text-white sm:text-xs">
+              <div className="shrink-0 bg-[var(--forest)] px-0.5 py-0.5 text-center text-[9px] font-bold leading-none text-white sm:text-[10px]">
                 {zone.name}
               </div>
-              <div className="flex min-h-0 flex-1 items-center justify-center bg-[var(--forest)]/5 px-1 text-[9px] text-[var(--forest-muted)]">
+              <div className="flex min-h-0 flex-1 items-center justify-center bg-[var(--forest)]/5 px-0.5 text-[8px] text-[var(--forest-muted)]">
                 {zone.tables.length} tavoli
               </div>
               {selected && tool === "move" ? (
@@ -729,15 +765,14 @@ function CartinaSheet({
   }
 
   return (
-    <div className="cartina-sheet cartina-a4-portrait mx-auto flex h-full min-h-0 w-full max-w-[min(100%,calc((100dvh-10rem)*210/297))] flex-col bg-white pb-24 print:max-w-none print:pb-0 print:h-dvh">
-      {/* Titolo solo a schermo; in stampa sparisce per massimizzare lo spazio */}
+    <div className="cartina-sheet cartina-a4-portrait mx-auto flex h-full min-h-0 w-full max-w-[min(100%,calc((100dvh-8rem)*210/297))] flex-col bg-white print:max-w-none print:h-dvh">
       <div className="no-print shrink-0 px-2 py-1">
         <h3 className="font-[family-name:var(--font-display)] text-sm font-bold text-[var(--forest-ink)]">
           {title}
         </h3>
         <p className="text-xs text-[var(--forest-muted)]">{subtitle}</p>
       </div>
-      <div className="relative min-h-0 flex-1 overflow-hidden bg-white">
+      <div className="relative min-h-0 flex-1 overflow-hidden border border-[var(--forest)]/20 bg-white print:border-0">
         <ZoneMarksLayer marks={marks} />
         {items.map(({ zone, placement }) => {
           const tables = sortedTables(zone);
@@ -754,11 +789,11 @@ function CartinaSheet({
                 height: `${placement.h}%`,
               }}
             >
-              <h4 className="shrink-0 bg-[var(--forest)] px-0.5 py-0.5 text-center text-[9px] font-bold leading-tight text-white">
+              <h4 className="shrink-0 bg-[var(--forest)] px-0.5 py-px text-center text-[8px] font-bold leading-tight text-white print:text-[7pt]">
                 {zone.name}
               </h4>
               <div
-                className="grid min-h-0 flex-1 gap-px bg-[var(--forest)]/15 p-px"
+                className="grid min-h-0 flex-1 gap-px bg-[var(--forest)]/20 p-px"
                 style={{
                   gridTemplateColumns: `repeat(${tCols}, minmax(0, 1fr))`,
                   gridAutoRows: "1fr",
@@ -770,14 +805,19 @@ function CartinaSheet({
                   return (
                     <div
                       key={table.id}
-                      className={`flex items-center justify-center overflow-hidden text-center ${
+                      className={`relative flex items-center justify-center overflow-hidden text-center ${
                         occupied
                           ? "bg-[#f7faf7] text-[var(--forest-ink)]"
                           : "bg-white"
                       }`}
                     >
+                      {!occupied ? (
+                        <span className="pointer-events-none absolute inset-0 flex items-start justify-end p-0.5 text-[6px] font-semibold text-[var(--forest)]/35 print:text-[5pt]">
+                          {table.number}
+                        </span>
+                      ) : null}
                       {occupied ? (
-                        <span className="line-clamp-4 w-full px-0.5 text-[8px] font-bold leading-tight sm:text-[10px]">
+                        <span className="line-clamp-5 w-full px-0.5 text-[7px] font-bold leading-[1.05] sm:text-[9px] print:text-[6.5pt]">
                           {formatTableGuests(tableGuests)}
                         </span>
                       ) : null}

@@ -11,6 +11,7 @@ export interface AppPins {
   orderSetup: string;
   orderDisplay: string;
   orderKeypad: string;
+  computer: string;
 }
 
 export interface OrderColorRange {
@@ -52,6 +53,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     orderSetup: PINS.orderSetup,
     orderDisplay: PINS.orderDisplay,
     orderKeypad: PINS.orderKeypad,
+    computer: PINS.computer,
   },
   orderHighlightSeconds: 8,
   orderHighlightColor: "#dc2626",
@@ -154,6 +156,10 @@ export function normalizeSettings(raw: Partial<AppSettings> | null): AppSettings
       orderKeypad: normalizePin(
         (pinsRaw as AppPins).orderKeypad,
         DEFAULT_SETTINGS.pins.orderKeypad,
+      ),
+      computer: normalizePin(
+        (pinsRaw as AppPins).computer,
+        DEFAULT_SETTINGS.pins.computer,
       ),
     },
     orderHighlightSeconds: clampInt(

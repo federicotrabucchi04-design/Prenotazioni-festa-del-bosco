@@ -9,6 +9,7 @@ import {
   LayoutGrid,
   Monitor,
   Keyboard,
+  Laptop,
 } from "lucide-react";
 import { useAuthStore, orderRoleLabel } from "@/store/auth-store";
 import { subscribeAppSettings } from "@/lib/app-settings";
@@ -96,6 +97,7 @@ export function LoginScreen() {
           <div className="mt-6 grid grid-cols-2 gap-2 text-left text-[11px] text-[var(--forest-muted)]">
             <Hint icon={Users} title="Staff" text="Lista e mappa" />
             <Hint icon={ShieldCheck} title="Admin" text="Modifica tutto" />
+            <Hint icon={Laptop} title="Computer" text="4 pannelli insieme" />
             <Hint icon={LayoutGrid} title="Ordini" text="Assegna numeri" />
             <Hint icon={Monitor} title="Schermo" text="Cartina live" />
             <Hint icon={Keyboard} title="Tastierino" text="Cerca ordine" />

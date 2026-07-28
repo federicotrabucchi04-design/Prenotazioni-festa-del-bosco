@@ -18,6 +18,7 @@ function resolveRoleFromPin(normalized: string): UserRole | null {
   const { pins } = getAppSettings();
   if (normalized === pins.admin) return "admin";
   if (normalized === pins.staff) return "staff";
+  if (normalized === pins.computer) return "computer";
   if (normalized === pins.orderSetup) return "orderSetup";
   if (normalized === pins.orderDisplay) return "orderDisplay";
   if (normalized === pins.orderKeypad) return "orderKeypad";
@@ -61,6 +62,10 @@ export function isOrderRole(role: UserRole | null) {
   );
 }
 
+export function isComputerRole(role: UserRole | null) {
+  return role === "computer";
+}
+
 export function orderRoleLabel(role: UserRole) {
   switch (role) {
     case "orderSetup":
@@ -69,6 +74,8 @@ export function orderRoleLabel(role: UserRole) {
       return "Schermo cartina";
     case "orderKeypad":
       return "Tastierino";
+    case "computer":
+      return "Computer (4 pannelli)";
     case "admin":
       return "Admin";
     case "staff":
