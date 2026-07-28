@@ -9,12 +9,14 @@ export const BACKUPS_PATH = "dataBackups";
 export const LOCAL_BACKUPS_KEY = "fdb-local-backups-v1";
 export const BACKUP_META_KEY = "fdb-backup-meta-v1";
 
-/** Intervallo backup automatico */
-export const AUTO_BACKUP_INTERVAL_MS = 2 * 60 * 1000;
+/** Intervallo backup automatico (salta se identico al precedente) */
+export const AUTO_BACKUP_INTERVAL_MS = 3 * 60 * 1000;
 /** Debounce dopo ogni modifica prenotazioni */
-export const BACKUP_DEBOUNCE_MS = 12_000;
-export const MAX_LOCAL_BACKUPS = 16;
-export const MAX_REMOTE_BACKUPS = 40;
+export const BACKUP_DEBOUNCE_MS = 15_000;
+/** Max copie sul dispositivo (le più vecchie si cancellano) */
+export const MAX_LOCAL_BACKUPS = 10;
+/** Max copie su Firebase */
+export const MAX_REMOTE_BACKUPS = 20;
 
 export type BackupSource = "auto" | "manual" | "change";
 
@@ -36,6 +38,9 @@ export interface BackupMeta {
   lastBackupId: string | null;
   lastSource: BackupSource | null;
   lastError: string | null;
+  /** Ultimo controllo automatico (anche se saltato perché identico) */
+  lastCheckedAt: number;
+  lastSkippedIdentical: boolean;
 }
 
 type MetaListener = (meta: BackupMeta) => void;
@@ -55,7 +60,25 @@ function emptyMeta(): BackupMeta {
     lastBackupId: null,
     lastSource: null,
     lastError: null,
+    lastCheckedAt: 0,
+    lastSkippedIdentical: false,
   };
+}
+
+/** Confronta solo i dati utili (ignora id/data/source del backup). */
+function sameBackupContent(a: BackupSnapshot, b: BackupSnapshot): boolean {
+  if (a.reservationCount !== b.reservationCount) return false;
+  if (a.activeEveningId !== b.activeEveningId) return false;
+  try {
+    return (
+      JSON.stringify(a.eveningReservations) ===
+        JSON.stringify(b.eveningReservations) &&
+      JSON.stringify(a.evenings) === JSON.stringify(b.evenings) &&
+      JSON.stringify(a.venueLayout) === JSON.stringify(b.venueLayout)
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function getBackupMeta(): BackupMeta {
@@ -191,6 +214,18 @@ export async function createBackup(source: BackupSource = "manual") {
   running = true;
   try {
     const snapshot = await collectSnapshot(source);
+    const latest = readLocalBackups()[0];
+
+    // Auto / dopo modifica: non salvare se identico → niente intasamento
+    if (source !== "manual" && latest && sameBackupContent(latest, snapshot)) {
+      writeMeta({
+        ...getBackupMeta(),
+        lastCheckedAt: Date.now(),
+        lastSkippedIdentical: true,
+        lastError: null,
+      });
+      return getBackupMeta();
+    }
 
     // Sempre locale (anche con Firebase)
     const local = readLocalBackups().filter((b) => b.id !== snapshot.id);
@@ -210,6 +245,8 @@ export async function createBackup(source: BackupSource = "manual") {
       lastBackupId: snapshot.id,
       lastSource: source,
       lastError: null,
+      lastCheckedAt: snapshot.createdAt,
+      lastSkippedIdentical: false,
     };
     writeMeta(meta);
     return meta;
@@ -217,6 +254,7 @@ export async function createBackup(source: BackupSource = "manual") {
     const meta: BackupMeta = {
       ...getBackupMeta(),
       lastError: err instanceof Error ? err.message : "Errore backup",
+      lastCheckedAt: Date.now(),
     };
     writeMeta(meta);
     throw err;
