@@ -32,8 +32,10 @@ export const DEFAULT_ZONE_W = 38;
 export const DEFAULT_ZONE_H = 36;
 export const MIN_ZONE_SIZE = 8;
 /** Gap minimo % tra zone sulla lavagna A4 */
-export const CARTINA_GAP = 0.6;
-export const CARTINA_MARGIN = 0.4;
+/** Gap tra zone solo in auto-disponi / riempi (0 = bordo a bordo, disposizione libera) */
+export const CARTINA_GAP = 0;
+/** Margine foglio (0 = zone possono arrivare ai bordi A4) */
+export const CARTINA_MARGIN = 0;
 
 export function defaultCartinaPrefs(layout: VenueLayout): CartinaPrefs {
   return placeZonesLikeCartina(layout.zones);
@@ -321,10 +323,11 @@ export function saveCartinaPrefs(prefs: CartinaPrefs) {
 }
 
 export function normalizePlacement(p: ZoneOnBoard): ZoneOnBoard {
+  // Libero fino ai bordi: niente margine forzato, solo restare nel foglio 0–100
   const w = Math.max(MIN_ZONE_SIZE, Math.min(100, p.w));
   const h = Math.max(MIN_ZONE_SIZE, Math.min(100, p.h));
-  const x = clampPercent(Math.min(p.x, 100 - w));
-  const y = clampPercent(Math.min(p.y, 100 - h));
+  const x = Math.max(0, Math.min(p.x, 100 - w));
+  const y = Math.max(0, Math.min(p.y, 100 - h));
   return { zoneId: p.zoneId, x, y, w, h };
 }
 

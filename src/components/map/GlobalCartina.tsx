@@ -586,8 +586,8 @@ function CartinaArrangeBoard({
       </div>
 
       <p className="text-[11px] text-[var(--forest-muted)]">
-        Lavagna = foglio A4 verticale. Usa tutto lo spazio: trascina i bordi delle
-        zone fino ai margini.
+        Lavagna = foglio A4 verticale. Disposizione libera: trascina e ridimensiona
+        fino ai bordi, senza margini forzati.
       </p>
 
       <div
