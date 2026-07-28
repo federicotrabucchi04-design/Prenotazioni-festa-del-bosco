@@ -8,36 +8,42 @@ import { useOrderBoard } from "@/hooks/use-order-board";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { clearOrderHighlight, setOrderHighlight } from "@/lib/order-board";
 
-/** Terminale minimale: solo tastierino → evidenzia sulla cartina grande */
+/**
+ * Terminale minimale: digita → evidenzia sulla cartina.
+ * Il tastierino resta sempre usabile; solo il cerchio sullo schermo
+ * segue la durata in secondi (impostazioni).
+ */
 export function OrderKeypadScreen({ embedded = false }: { embedded?: boolean }) {
   const logout = useAuthStore((s) => s.logout);
   const { board } = useOrderBoard();
   const { settings } = useAppSettings();
   const [digits, setDigits] = useState("");
-  const [busy, setBusy] = useState(false);
   const [lastResult, setLastResult] = useState<"ok" | "missing" | null>(null);
   const maxDigits = settings.orderMaxDigits;
 
-  async function submit() {
+  function submit() {
     if (!digits) return;
     const n = Number(digits);
     if (!Number.isFinite(n) || n <= 0) {
       toast.error("Numero non valido");
       return;
     }
-    setBusy(true);
-    try {
-      const next = await setOrderHighlight(n);
-      const found = next.highlight?.found ?? false;
-      setLastResult(found ? "ok" : "missing");
-      if (found) toast.success(`Ordine ${n} evidenziato`);
-      else toast.error(`Ordine ${n} non assegnato a nessun tavolo`);
-      setDigits("");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Errore");
-    } finally {
-      setBusy(false);
-    }
+
+    // Libera subito il pad: si può digitare il prossimo ordine senza aspettare
+    const sent = n;
+    setDigits("");
+    setLastResult(null);
+
+    void setOrderHighlight(sent)
+      .then((next) => {
+        const found = next.highlight?.found ?? false;
+        setLastResult(found ? "ok" : "missing");
+        if (found) toast.success(`Ordine ${sent} evidenziato`);
+        else toast.error(`Ordine ${sent} non assegnato a nessun tavolo`);
+      })
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : "Errore");
+      });
   }
 
   function press(key: string) {
@@ -88,7 +94,7 @@ export function OrderKeypadScreen({ embedded = false }: { embedded?: boolean }) 
       ) : (
         <div className="shrink-0 px-2 pb-1 pt-6">
           <p className="text-[10px] font-semibold text-[var(--forest-muted)]">
-            Digita e cerca
+            Digita e cerca · sempre attivo
           </p>
         </div>
       )}
@@ -130,9 +136,8 @@ export function OrderKeypadScreen({ embedded = false }: { embedded?: boolean }) 
             <button
               key={k}
               type="button"
-              disabled={busy}
               onClick={() => press(k)}
-              className={`flex items-center justify-center bg-white font-bold text-[var(--forest-ink)] shadow-sm active:scale-95 disabled:opacity-60 ${
+              className={`flex items-center justify-center bg-white font-bold text-[var(--forest-ink)] shadow-sm active:scale-95 ${
                 embedded
                   ? "h-11 rounded-xl text-xl"
                   : "h-[4.5rem] rounded-3xl text-3xl"
@@ -149,8 +154,8 @@ export function OrderKeypadScreen({ embedded = false }: { embedded?: boolean }) 
 
         <button
           type="button"
-          disabled={busy || !digits}
-          onClick={() => void submit()}
+          disabled={!digits}
+          onClick={() => submit()}
           className={`mt-3 bg-[var(--forest)] font-bold text-white shadow-md shadow-[var(--forest)]/25 active:scale-[0.99] disabled:opacity-50 ${
             embedded
               ? "h-11 rounded-xl text-sm"
@@ -162,7 +167,7 @@ export function OrderKeypadScreen({ embedded = false }: { embedded?: boolean }) 
 
         <button
           type="button"
-          disabled={busy || !board.highlight}
+          disabled={!board.highlight}
           onClick={() => {
             void clearOrderHighlight();
             setLastResult(null);
