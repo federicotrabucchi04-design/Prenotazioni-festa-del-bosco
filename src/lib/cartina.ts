@@ -4,6 +4,9 @@ import { clampPercent } from "@/lib/layout-utils";
 
 export const CARTINA_PREFS_KEY = "fdb-cartina-prefs-v3";
 
+/** Vicini = gap attuale; lontani = doppio */
+export type TableGapMode = "near" | "far";
+
 /** Zona posizionata sulla lavagna (coordinate % 0–100) */
 export interface ZoneOnBoard {
   zoneId: string;
@@ -11,6 +14,10 @@ export interface ZoneOnBoard {
   y: number;
   w: number;
   h: number;
+  /** Spaziatura orizzontale tra tavoli in cartina */
+  tableGapX?: TableGapMode;
+  /** Spaziatura verticale tra tavoli in cartina */
+  tableGapY?: TableGapMode;
 }
 
 export interface CartinaPrefs {
@@ -323,12 +330,18 @@ export function saveCartinaPrefs(prefs: CartinaPrefs) {
 }
 
 export function normalizePlacement(p: ZoneOnBoard): ZoneOnBoard {
-  // Libero fino ai bordi: niente margine forzato, solo restare nel foglio 0–100
   const w = Math.max(MIN_ZONE_SIZE, Math.min(100, p.w));
   const h = Math.max(MIN_ZONE_SIZE, Math.min(100, p.h));
   const x = Math.max(0, Math.min(p.x, 100 - w));
   const y = Math.max(0, Math.min(p.y, 100 - h));
-  return { zoneId: p.zoneId, x, y, w, h };
+  const out: ZoneOnBoard = { zoneId: p.zoneId, x, y, w, h };
+  if (p.tableGapX === "near" || p.tableGapX === "far") {
+    out.tableGapX = p.tableGapX;
+  }
+  if (p.tableGapY === "near" || p.tableGapY === "far") {
+    out.tableGapY = p.tableGapY;
+  }
+  return out;
 }
 
 export function normalizeCartinaMark(m: Partial<MapMark>): MapMark | null {
@@ -436,8 +449,19 @@ export function sortedTables(zone: ZoneLayout) {
 
 export const DEFAULT_ZONE_COLOR = "#2d5a27";
 
-/** Bordo bianco fisso tra i rettangoli tavolo (% area contenuto zona) */
+/** Bordo bianco fisso tra i rettangoli tavolo (% area contenuto zona) — “vicini” */
 export const TABLE_FILL_GAP = 1.4;
+
+export function tableGapPercent(mode: TableGapMode = "near"): number {
+  return mode === "far" ? TABLE_FILL_GAP * 2 : TABLE_FILL_GAP;
+}
+
+export function gapsFromPlacement(p?: Pick<ZoneOnBoard, "tableGapX" | "tableGapY">) {
+  return {
+    gapX: tableGapPercent(p?.tableGapX ?? "near"),
+    gapY: tableGapPercent(p?.tableGapY ?? "near"),
+  };
+}
 
 export function zoneAccentColor(zone: ZoneLayout): string {
   return zone.color || DEFAULT_ZONE_COLOR;
@@ -454,10 +478,12 @@ export interface TableFillRect {
 /**
  * Rispecchia righe/colonne dalla disposizione editor: tutti i tavoli della
  * stessa tenda hanno la stessa larghezza e altezza, con bordo bianco fisso.
+ * gapX / gapY indipendenti (vicini / lontani).
  */
 export function computeTableFillRects(
   tables: TableSpot[],
-  gap = TABLE_FILL_GAP,
+  gapX = TABLE_FILL_GAP,
+  gapY = TABLE_FILL_GAP,
 ): TableFillRect[] {
   if (tables.length === 0) return [];
   if (tables.length === 1) {
@@ -465,10 +491,10 @@ export function computeTableFillRects(
     return [
       {
         table: t,
-        x: gap / 2,
-        y: gap / 2,
-        w: Math.max(1, 100 - gap),
-        h: Math.max(1, 100 - gap),
+        x: gapX / 2,
+        y: gapY / 2,
+        w: Math.max(1, 100 - gapX),
+        h: Math.max(1, 100 - gapY),
       },
     ];
   }
@@ -488,20 +514,18 @@ export function computeTableFillRects(
 
   const nRows = rows.length;
   const nCols = Math.max(...rows.map((r) => r.length));
-  // Celle uguali per tutta la zona (basate sulla griglia più densa)
-  const cellW = (100 - gap * (nCols + 1)) / nCols;
-  const cellH = (100 - gap * (nRows + 1)) / nRows;
+  const cellW = (100 - gapX * (nCols + 1)) / nCols;
+  const cellH = (100 - gapY * (nRows + 1)) / nRows;
 
   const out: TableFillRect[] = [];
   rows.forEach((row, ri) => {
-    const y = gap + ri * (cellH + gap);
-    // Righe più corte: centrate, stesso w/h di tutte le altre
-    const usedW = row.length * cellW + Math.max(0, row.length - 1) * gap;
+    const y = gapY + ri * (cellH + gapY);
+    const usedW = row.length * cellW + Math.max(0, row.length - 1) * gapX;
     const startX = (100 - usedW) / 2;
     row.forEach((t, ti) => {
       out.push({
         table: t,
-        x: startX + ti * (cellW + gap),
+        x: startX + ti * (cellW + gapX),
         y,
         w: cellW,
         h: cellH,

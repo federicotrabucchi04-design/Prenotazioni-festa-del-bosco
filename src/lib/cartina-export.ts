@@ -3,6 +3,7 @@ import type { ZoneOnBoard } from "@/lib/cartina";
 import {
   computeTableFillRects,
   formatTableGuests,
+  gapsFromPlacement,
   guestsByTable,
   zoneAccentColor,
 } from "@/lib/cartina";
@@ -43,6 +44,7 @@ function drawZoneBlock(
   y: number,
   w: number,
   h: number,
+  placement?: ZoneOnBoard,
 ) {
   const accent = zoneAccentColor(zone);
   ctx.strokeStyle = accent;
@@ -65,7 +67,8 @@ function drawZoneBlock(
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(contentX, contentY, contentW, contentH);
 
-  const rects = computeTableFillRects(zone.tables);
+  const { gapX, gapY } = gapsFromPlacement(placement);
+  const rects = computeTableFillRects(zone.tables, gapX, gapY);
   for (const { table, x: rx, y: ry, w: rw, h: rh } of rects) {
     const tx = contentX + (rx / 100) * contentW;
     const ty = contentY + (ry / 100) * contentH;
@@ -208,7 +211,7 @@ export function downloadCartinaPng(opts: {
     const y = areaY + (placement.y / 100) * areaH;
     const w = (placement.w / 100) * areaW;
     const h = (placement.h / 100) * areaH;
-    drawZoneBlock(ctx, zone, reservations, x, y, w, h);
+    drawZoneBlock(ctx, zone, reservations, x, y, w, h, placement);
   }
 
   const link = document.createElement("a");

@@ -27,6 +27,7 @@ import type { MapMark, Reservation, ZoneLayout } from "@/lib/types";
 import { saveLayout } from "@/lib/layout";
 import {
   type CartinaPrefs,
+  type TableGapMode,
   type ZoneOnBoard,
   CARTINA_COLORS,
   DEFAULT_ZONE_H,
@@ -36,6 +37,7 @@ import {
   computeTableFillRects,
   fillPagePlacements,
   formatTableGuests,
+  gapsFromPlacement,
   guestsByTable,
   loadCartinaPrefs,
   normalizePlacement,
@@ -794,18 +796,35 @@ function CartinaArrangeBoard({
       </div>
 
       {selectedPlacement ? (
-        <div className="flex items-center justify-between gap-2 rounded-2xl bg-white px-3 py-2 shadow-sm">
-          <p className="text-sm font-semibold text-[var(--forest-ink)]">
-            {layoutZones.find((z) => z.id === selectedPlacement.zoneId)?.name}
-          </p>
-          <button
-            type="button"
-            onClick={() => removeZone(selectedPlacement.zoneId)}
-            className="inline-flex items-center gap-1 rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-700"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            Togli dalla lavagna
-          </button>
+        <div className="space-y-2 rounded-2xl bg-white px-3 py-3 shadow-sm">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-[var(--forest-ink)]">
+              {layoutZones.find((z) => z.id === selectedPlacement.zoneId)?.name}
+            </p>
+            <button
+              type="button"
+              onClick={() => removeZone(selectedPlacement.zoneId)}
+              className="inline-flex items-center gap-1 rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-700"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Togli dalla lavagna
+            </button>
+          </div>
+
+          <GapModeRow
+            label="Spazio orizzontale tra tavoli"
+            value={selectedPlacement.tableGapX ?? "near"}
+            onChange={(tableGapX) =>
+              upsertPlacement({ ...selectedPlacement, tableGapX })
+            }
+          />
+          <GapModeRow
+            label="Spazio verticale tra tavoli"
+            value={selectedPlacement.tableGapY ?? "near"}
+            onChange={(tableGapY) =>
+              upsertPlacement({ ...selectedPlacement, tableGapY })
+            }
+          />
         </div>
       ) : null}
 
@@ -965,6 +984,43 @@ function CartinaArrangeBoard({
   );
 }
 
+function GapModeRow({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: TableGapMode;
+  onChange: (next: TableGapMode) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="min-w-[10rem] flex-1 text-xs font-semibold text-[var(--forest-muted)]">
+        {label}
+      </span>
+      {(
+        [
+          { id: "near", label: "Vicini" },
+          { id: "far", label: "Lontani" },
+        ] as const
+      ).map((opt) => (
+        <button
+          key={opt.id}
+          type="button"
+          onClick={() => onChange(opt.id)}
+          className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+            value === opt.id
+              ? "bg-[var(--forest)] text-white"
+              : "bg-[var(--forest)]/10 text-[var(--forest)]"
+          }`}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function StepTab({
   active,
   icon: Icon,
@@ -1026,7 +1082,8 @@ function CartinaSheet({
         {items.map(({ zone, placement }) => {
           const guests = guestsByTable(reservations, zone.name);
           const accent = zoneAccentColor(zone);
-          const rects = computeTableFillRects(zone.tables);
+          const { gapX, gapY } = gapsFromPlacement(placement);
+          const rects = computeTableFillRects(zone.tables, gapX, gapY);
           return (
             <section
               key={zone.id}

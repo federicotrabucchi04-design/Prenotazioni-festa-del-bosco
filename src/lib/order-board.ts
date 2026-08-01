@@ -1,5 +1,9 @@
 import { getFirebaseDb, isFirebaseConfigured } from "@/lib/firebase";
-import type { CartinaPrefs, ZoneOnBoard } from "@/lib/cartina";
+import {
+  type CartinaPrefs,
+  type ZoneOnBoard,
+  normalizePlacement,
+} from "@/lib/cartina";
 import type { MapMark } from "@/lib/types";
 import { get, onValue, ref, set, update } from "firebase/database";
 
@@ -58,13 +62,17 @@ function normalizeCartina(raw: unknown): CartinaPrefs | null {
   if (!Array.isArray(c.placements)) return null;
   const placements: ZoneOnBoard[] = c.placements
     .filter((p) => p && typeof p.zoneId === "string")
-    .map((p) => ({
-      zoneId: String(p.zoneId),
-      x: Number(p.x) || 0,
-      y: Number(p.y) || 0,
-      w: Math.max(8, Number(p.w) || 30),
-      h: Math.max(8, Number(p.h) || 28),
-    }));
+    .map((p) =>
+      normalizePlacement({
+        zoneId: String(p.zoneId),
+        x: Number(p.x) || 0,
+        y: Number(p.y) || 0,
+        w: Math.max(8, Number(p.w) || 30),
+        h: Math.max(8, Number(p.h) || 28),
+        tableGapX: p.tableGapX,
+        tableGapY: p.tableGapY,
+      }),
+    );
   const marks: MapMark[] = Array.isArray(c.marks)
     ? (c.marks as MapMark[]).filter((m) => m && m.kind)
     : [];

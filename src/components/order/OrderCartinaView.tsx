@@ -5,6 +5,7 @@ import type { CartinaPrefs, ZoneOnBoard } from "@/lib/cartina";
 import {
   autoPlaceZones,
   computeTableFillRects,
+  gapsFromPlacement,
   zoneAccentColor,
 } from "@/lib/cartina";
 import { ZoneMarksLayer } from "@/components/map/ZoneMarksLayer";
@@ -80,7 +81,8 @@ export function OrderCartinaView({
       <ZoneMarksLayer marks={prefs.marks as MapMark[]} />
       {items.map(({ zone, placement }) => {
         const accent = zoneAccentColor(zone);
-        const rects = computeTableFillRects(zone.tables);
+        const { gapX, gapY } = gapsFromPlacement(placement);
+        const rects = computeTableFillRects(zone.tables, gapX, gapY);
         return (
           <section
             key={zone.id}
