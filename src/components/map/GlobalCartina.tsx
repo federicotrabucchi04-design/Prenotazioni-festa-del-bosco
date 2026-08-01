@@ -46,6 +46,7 @@ import {
 } from "@/lib/cartina";
 import { saveOrderCartina } from "@/lib/order-board";
 import { clampPercent } from "@/lib/layout-utils";
+import { CartinaViewportGuides } from "@/components/map/CartinaViewportGuides";
 
 type Step = "arrange" | "preview";
 type Tool = "move" | "line" | "rect" | "text";
@@ -124,7 +125,7 @@ export function GlobalCartina() {
               {step === "arrange" ? "Lavagna disposizione" : "Anteprima per cassa"}
             </h2>
             <p className="text-sm text-[var(--forest-muted)]">
-              Trascina zone · linee e scritte colorate
+              Disposizione libera · guide TV/A4 tratteggiate · sync allo schermo
             </p>
           </div>
           <button
@@ -241,6 +242,7 @@ function CartinaArrangeBoard({
   const [selectedMarkId, setSelectedMarkId] = useState<string | null>(null);
   const [pendingZoneId, setPendingZoneId] = useState<string | null>(null);
   const [draftMark, setDraftMark] = useState<MapMark | null>(null);
+  const [showGuides, setShowGuides] = useState(true);
   const drawStart = useRef<{ x: number; y: number } | null>(null);
   const drag = useRef<{
     zoneId: string;
@@ -574,6 +576,17 @@ function CartinaArrangeBoard({
         </button>
         <button
           type="button"
+          onClick={() => setShowGuides((v) => !v)}
+          className={`rounded-2xl px-3 py-2 text-xs font-semibold ${
+            showGuides
+              ? "bg-blue-600 text-white"
+              : "bg-[var(--forest)]/10 text-[var(--forest)]"
+          }`}
+        >
+          {showGuides ? "Limiti ON" : "Limiti OFF"}
+        </button>
+        <button
+          type="button"
           onClick={() => {
             patchPrefs({ placements: [], marks: [] });
             setSelectedZoneId(null);
@@ -586,8 +599,10 @@ function CartinaArrangeBoard({
       </div>
 
       <p className="text-[11px] text-[var(--forest-muted)]">
-        Lavagna = foglio A4 verticale. Disposizione libera: trascina e ridimensiona
-        fino ai bordi, senza margini forzati.
+        Lavagna = foglio A4 verticale = ciò che vede lo <strong>Schermo</strong>{" "}
+        (TV in verticale). Tratteggio blu = bordo TV/stampa; ambra = area sicura;
+        rosso = riferimento da evitare (TV orizzontale). Muovi le zone liberamente
+        fino ai bordi.
       </p>
 
       <div
@@ -595,8 +610,10 @@ function CartinaArrangeBoard({
         onPointerDown={onBoardPointerDown}
         onPointerMove={onBoardPointerMove}
         onPointerUp={onBoardPointerUp}
-        className="relative mx-auto aspect-[210/297] w-full max-h-[min(72dvh,900px)] touch-none overflow-hidden border border-[var(--forest)]/20 bg-[linear-gradient(rgba(45,90,39,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(45,90,39,0.05)_1px,transparent_1px)] bg-size-[16px_16px] bg-white shadow-sm"
+        className="relative mx-auto aspect-[210/297] w-full max-h-[min(72dvh,900px)] touch-none overflow-hidden border-2 border-blue-500/40 bg-[linear-gradient(rgba(45,90,39,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(45,90,39,0.05)_1px,transparent_1px)] bg-size-[16px_16px] bg-white shadow-sm"
       >
+        {showGuides ? <CartinaViewportGuides /> : null}
+
         <ZoneMarksLayer
           marks={visibleMarks}
           selectedId={selectedMarkId}
@@ -637,7 +654,7 @@ function CartinaArrangeBoard({
                 <button
                   type="button"
                   aria-label="Ridimensiona"
-                  className="absolute bottom-0 right-0 z-20 h-5 w-5 translate-x-1/4 translate-y-1/4 rounded-full border-2 border-white bg-amber-500"
+                  className="absolute bottom-0 right-0 z-20 h-7 w-7 translate-x-1/3 translate-y-1/3 rounded-full border-2 border-white bg-amber-500 shadow"
                   onPointerDown={(e) => startZoneDrag(e, p, "resize")}
                 />
               ) : null}
@@ -646,7 +663,7 @@ function CartinaArrangeBoard({
         })}
 
         {pendingZoneId ? (
-          <div className="pointer-events-none absolute inset-x-0 bottom-3 text-center text-xs font-semibold text-amber-800">
+          <div className="pointer-events-none absolute inset-x-0 bottom-3 z-20 text-center text-xs font-semibold text-amber-800">
             Tocca dove mettere la zona
           </div>
         ) : null}

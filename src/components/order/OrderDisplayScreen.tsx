@@ -12,12 +12,14 @@ import {
   OrderCartinaView,
   resolveOrderCartina,
 } from "@/components/order/OrderCartinaView";
+import { A4PortraitContain } from "@/components/order/A4PortraitContain";
 import { loadCartinaPrefs } from "@/lib/cartina";
 import { clearOrderHighlightIf } from "@/lib/order-board";
 
 /**
- * Schermo cartina — pensato soprattutto per TV in verticale
- * (lato lungo in verticale): riempie tutto, numeri grandi, cerchio evidente.
+ * Schermo cartina — sempre in proporzione A4 verticale (come in editor).
+ * Su TV orizzontale: barre ai lati, niente stiramento.
+ * Su TV verticale: riempie lo schermo.
  */
 export function OrderDisplayScreen({ embedded = false }: { embedded?: boolean }) {
   const logout = useAuthStore((s) => s.logout);
@@ -37,12 +39,10 @@ export function OrderDisplayScreen({ embedded = false }: { embedded?: boolean })
   const highlightMs = settings.orderHighlightSeconds * 1000;
   const highlightColor = settings.orderHighlightColor;
 
-  /** Scala numeri: più grandi su TV portrait, ridotti nel pannello computer */
   const numberScale = useMemo(() => {
     const base = settings.orderNumberScale;
     if (embedded) return Math.max(0.5, base * 0.68);
     if (viewport.isPortraitDisplay) {
-      // TV / monitor verticale: spinge i numeri
       const boost = Math.min(2.2, 0.95 + viewport.height / 1400);
       return Math.max(base, base * boost);
     }
@@ -68,11 +68,11 @@ export function OrderDisplayScreen({ embedded = false }: { embedded?: boolean })
   if (layoutLoading || boardLoading) {
     return (
       <div
-        className={`flex items-center justify-center bg-white ${
+        className={`flex items-center justify-center bg-neutral-950 ${
           embedded ? "h-full" : "min-h-dvh"
         }`}
       >
-        <div className="h-10 w-10 animate-pulse rounded-2xl bg-[var(--forest)]/20" />
+        <div className="h-10 w-10 animate-pulse rounded-2xl bg-white/20" />
       </div>
     );
   }
@@ -83,15 +83,16 @@ export function OrderDisplayScreen({ embedded = false }: { embedded?: boolean })
 
   return (
     <div
-      className={`order-display-screen relative overflow-hidden bg-white ${
+      className={`order-display-screen relative overflow-hidden ${
         embedded ? "h-full w-full" : "fixed inset-0 h-dvh w-dvw"
       }`}
       onClick={() => {
         if (!embedded) setShowExit((v) => !v);
       }}
     >
-      {/* Cartina a tutto schermo: su TV verticale = foglio pieno */}
-      <div className="absolute inset-0">
+      <A4PortraitContain
+        letterboxClassName={embedded ? "bg-neutral-900" : "bg-neutral-950"}
+      >
         <OrderCartinaView
           layout={layout}
           prefs={prefs}
@@ -103,7 +104,7 @@ export function OrderDisplayScreen({ embedded = false }: { embedded?: boolean })
           variant="display"
           className="h-full w-full"
         />
-      </div>
+      </A4PortraitContain>
 
       {hl ? (
         <div

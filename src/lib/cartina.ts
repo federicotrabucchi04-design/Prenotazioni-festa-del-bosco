@@ -30,7 +30,7 @@ export const CARTINA_COLORS = [
 
 export const DEFAULT_ZONE_W = 38;
 export const DEFAULT_ZONE_H = 36;
-export const MIN_ZONE_SIZE = 8;
+export const MIN_ZONE_SIZE = 4;
 /** Gap minimo % tra zone sulla lavagna A4 */
 /** Gap tra zone solo in auto-disponi / riempi (0 = bordo a bordo, disposizione libera) */
 export const CARTINA_GAP = 0;
