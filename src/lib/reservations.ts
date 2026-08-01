@@ -13,9 +13,12 @@ import {
   resetDemoEvenings,
 } from "@/lib/evenings";
 import { scheduleBackupAfterChange } from "@/lib/backup";
-import { get, onValue, push, ref, remove, set, update } from "firebase/database";
+import { offlineRemove, offlineSet, offlineUpdate } from "@/lib/offline-sync";
+import { get, onValue, ref } from "firebase/database";
 
 type Listener = (items: Reservation[]) => void;
+
+const RES_CACHE_KEY = "fdb-res-cache-v1";
 
 const listeners = new Set<Listener>();
 let cachedLayout: VenueLayout = createDefaultLayout();
@@ -94,14 +97,53 @@ function writeDemoReservations(items: Reservation[]) {
   notify(sortReservations(items));
 }
 
+function readResCache(eveningId: string): Reservation[] | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(RES_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as {
+      eveningId?: string;
+      items?: Partial<Reservation>[];
+    };
+    if (parsed.eveningId !== eveningId || !Array.isArray(parsed.items)) {
+      return null;
+    }
+    return sortReservations(
+      parsed.items
+        .map((v, i) => normalizeRecord(String(v.id || `tmp_${i}`), v))
+        .filter(Boolean) as Reservation[],
+    );
+  } catch {
+    return null;
+  }
+}
+
+function writeResCache(eveningId: string, items: Reservation[]) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(
+      RES_CACHE_KEY,
+      JSON.stringify({ eveningId, items, at: Date.now() }),
+    );
+  } catch {
+    // ignore
+  }
+}
+
 function attachFirebaseReservations(eveningId: string) {
   const db = getFirebaseDb();
   if (!db) {
-    notify([]);
+    notify(readResCache(eveningId) ?? []);
     return;
   }
   firebaseUnsubReservations?.();
   cachedActiveEveningId = eveningId;
+
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    notify(readResCache(eveningId) ?? []);
+  }
+
   const path = `eveningReservations/${eveningId}`;
   firebaseUnsubReservations = onValue(
     ref(db, path),
@@ -114,9 +156,11 @@ function attachFirebaseReservations(eveningId: string) {
           if (normalized) items.push(normalized);
         }
       }
-      notify(sortReservations(items));
+      const sorted = sortReservations(items);
+      writeResCache(eveningId, sorted);
+      notify(sorted);
     },
-    () => notify([]),
+    () => notify(readResCache(eveningId) ?? []),
   );
 }
 
@@ -250,17 +294,25 @@ export async function upsertReservation(input: ReservationInput) {
     return;
   }
 
-  const db = getFirebaseDb();
-  if (!db) throw new Error("Firebase non configurato");
   await ensureEveningsReady();
   const eveningId = cachedActiveEveningId ?? (await getActiveEveningId());
   if (!eveningId) throw new Error("Nessuna serata attiva");
 
+  const id = input.id || createId();
+  const record = { ...payload, id } as Reservation;
+  const cached = readResCache(eveningId) ?? (await loadAllReservations());
+  const next = input.id
+    ? cached.map((r) => (r.id === id ? { ...r, ...record } : r))
+    : [...cached.filter((r) => r.id !== id), record];
+  const sorted = sortReservations(next);
+  writeResCache(eveningId, sorted);
+  notify(sorted);
+
+  const path = `eveningReservations/${eveningId}/${id}`;
   if (input.id) {
-    await update(ref(db, `eveningReservations/${eveningId}/${input.id}`), payload);
+    await offlineUpdate(path, payload);
   } else {
-    const newRef = push(ref(db, `eveningReservations/${eveningId}`));
-    await set(newRef, payload);
+    await offlineSet(path, payload);
   }
   scheduleBackupAfterChange();
 }
@@ -271,12 +323,16 @@ export async function deleteReservation(id: string) {
     scheduleBackupAfterChange();
     return;
   }
-  const db = getFirebaseDb();
-  if (!db) throw new Error("Firebase non configurato");
   await ensureEveningsReady();
   const eveningId = cachedActiveEveningId ?? (await getActiveEveningId());
   if (!eveningId) throw new Error("Nessuna serata attiva");
-  await remove(ref(db, `eveningReservations/${eveningId}/${id}`));
+
+  const cached = readResCache(eveningId) ?? (await loadAllReservations());
+  const sorted = sortReservations(cached.filter((r) => r.id !== id));
+  writeResCache(eveningId, sorted);
+  notify(sorted);
+
+  await offlineRemove(`eveningReservations/${eveningId}/${id}`);
   scheduleBackupAfterChange();
 }
 
@@ -289,15 +345,19 @@ export async function setArrived(id: string, arrived: boolean) {
     scheduleBackupAfterChange();
     return;
   }
-  const db = getFirebaseDb();
-  if (!db) throw new Error("Firebase non configurato");
   await ensureEveningsReady();
   const eveningId = cachedActiveEveningId ?? (await getActiveEveningId());
   if (!eveningId) throw new Error("Nessuna serata attiva");
-  await update(ref(db, `eveningReservations/${eveningId}/${id}`), {
-    arrived,
-    updatedAt: Date.now(),
-  });
+
+  const patch = { arrived, updatedAt: Date.now() };
+  const cached = readResCache(eveningId) ?? (await loadAllReservations());
+  const sorted = sortReservations(
+    cached.map((r) => (r.id === id ? { ...r, ...patch } : r)),
+  );
+  writeResCache(eveningId, sorted);
+  notify(sorted);
+
+  await offlineUpdate(`eveningReservations/${eveningId}/${id}`, patch);
   scheduleBackupAfterChange();
 }
 

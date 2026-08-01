@@ -11,6 +11,7 @@ import {
   resolveOrderCartina,
 } from "@/components/order/OrderCartinaView";
 import { ZoneTabsBar } from "@/components/ZoneTabsBar";
+import { OnlineStatusBadge } from "@/components/OnlineStatusBadge";
 import { getZoneByName } from "@/lib/layout-utils";
 import {
   assignmentKey,
@@ -117,9 +118,12 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
       {!embedded ? (
         <header className="flex shrink-0 items-start justify-between gap-3 border-b border-white/50 bg-white/80 px-4 pb-3 pt-[max(0.85rem,env(safe-area-inset-top))] backdrop-blur-xl md:px-6">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--forest)]">
-              Modalità servizio · tablet
-            </p>
+            <div className="mb-1 flex flex-wrap items-center gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--forest)]">
+                Modalità servizio · tablet
+              </p>
+              <OnlineStatusBadge />
+            </div>
             <h1 className="text-lg font-semibold text-[var(--forest-ink)] md:text-xl">
               {orderRoleLabel(role)}
             </h1>

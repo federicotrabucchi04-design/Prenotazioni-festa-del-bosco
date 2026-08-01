@@ -7,6 +7,7 @@ import { useAuthStore } from "@/store/auth-store";
 import { useOrderBoard } from "@/hooks/use-order-board";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { clearOrderHighlight, setOrderHighlight } from "@/lib/order-board";
+import { OnlineStatusBadge } from "@/components/OnlineStatusBadge";
 
 /**
  * Tastierino — ottimizzato per telefono (tasti grandi, safe-area).
@@ -72,9 +73,12 @@ export function OrderKeypadScreen({ embedded = false }: { embedded?: boolean }) 
       {!embedded ? (
         <header className="flex shrink-0 items-center justify-between px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))]">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--forest)]">
-              Tastierino · telefono
-            </p>
+            <div className="mb-0.5 flex flex-wrap items-center gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--forest)]">
+                Tastierino · telefono
+              </p>
+              <OnlineStatusBadge />
+            </div>
             <h1 className="text-lg font-semibold text-[var(--forest-ink)]">
               Cerca ordine
             </h1>

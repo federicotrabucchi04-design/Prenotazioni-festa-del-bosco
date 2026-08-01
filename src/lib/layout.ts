@@ -1,7 +1,8 @@
 import { createDefaultLayout, LAYOUT_STORAGE_KEY } from "@/lib/layout-utils";
 import { getFirebaseDb, isFirebaseConfigured } from "@/lib/firebase";
 import type { VenueLayout, ZoneLayout, TableSpot, MapMark } from "@/lib/types";
-import { onValue, ref, set } from "firebase/database";
+import { offlineSet } from "@/lib/offline-sync";
+import { onValue, ref } from "firebase/database";
 
 type Listener = (layout: VenueLayout) => void;
 
@@ -147,47 +148,59 @@ function dataMode(): "firebase" | "demo" {
 }
 
 export function subscribeLayout(listener: Listener): () => void {
+  listeners.add(listener);
+
   if (dataMode() === "demo") {
-    listeners.add(listener);
     listener(readDemoLayout());
     return () => listeners.delete(listener);
   }
 
   const db = getFirebaseDb();
   if (!db) {
-    listeners.add(listener);
-    listener(createDefaultLayout());
+    listener(readDemoLayout());
     return () => listeners.delete(listener);
   }
 
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    listener(readDemoLayout());
+  }
+
   const layoutRef = ref(db, "venueLayout");
-  return onValue(
+  const unsub = onValue(
     layoutRef,
     (snap) => {
       if (!snap.exists()) {
         const seeded = serializeLayout(createDefaultLayout());
-        void set(layoutRef, seeded);
-        listener(seeded);
+        void offlineSet("venueLayout", seeded);
+        writeDemoLayout(seeded);
         return;
       }
-      listener(normalizeLayout(snap.val() as Partial<VenueLayout>));
+      const next = normalizeLayout(snap.val() as Partial<VenueLayout>);
+      try {
+        localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // ignore
+      }
+      listener(next);
     },
-    () => listener(createDefaultLayout()),
+    () => listener(readDemoLayout()),
   );
+
+  return () => {
+    listeners.delete(listener);
+    unsub();
+  };
 }
 
 export async function saveLayout(layout: VenueLayout) {
   const next = serializeLayout(layout);
+  writeDemoLayout(next);
 
   if (dataMode() === "demo") {
-    writeDemoLayout(next);
     return next;
   }
 
-  const db = getFirebaseDb();
-  if (!db) throw new Error("Firebase non configurato");
-  await set(ref(db, "venueLayout"), next);
-  notify(next);
+  await offlineSet("venueLayout", next);
   return next;
 }
 

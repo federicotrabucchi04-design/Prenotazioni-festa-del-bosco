@@ -5,7 +5,8 @@ import {
   normalizePlacement,
 } from "@/lib/cartina";
 import type { MapMark } from "@/lib/types";
-import { get, onValue, ref, set, update } from "firebase/database";
+import { offlineSet, offlineUpdate } from "@/lib/offline-sync";
+import { get, onValue, ref } from "firebase/database";
 
 export const ORDER_BOARD_STORAGE_KEY = "fdb-order-board";
 export const ORDER_BOARD_PATH = "orderBoard";
@@ -134,41 +135,56 @@ function dataMode(): "firebase" | "demo" {
 }
 
 export function subscribeOrderBoard(listener: Listener): () => void {
+  listeners.add(listener);
+
   if (dataMode() === "demo") {
-    listeners.add(listener);
     listener(readDemo());
     return () => listeners.delete(listener);
   }
 
   const db = getFirebaseDb();
   if (!db) {
-    listeners.add(listener);
-    listener(emptyBoard());
+    listener(readDemo());
     return () => listeners.delete(listener);
   }
 
-  return onValue(
+  // Seed da cache locale se offline
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    listener(readDemo());
+  }
+
+  const unsub = onValue(
     ref(db, ORDER_BOARD_PATH),
     (snap) => {
-      listener(
-        snap.exists()
-          ? normalizeBoard(snap.val() as Partial<OrderBoardState>)
-          : emptyBoard(),
-      );
+      const state = snap.exists()
+        ? normalizeBoard(snap.val() as Partial<OrderBoardState>)
+        : emptyBoard();
+      try {
+        localStorage.setItem(ORDER_BOARD_STORAGE_KEY, JSON.stringify(state));
+      } catch {
+        // ignore quota
+      }
+      listener(state);
     },
-    () => listener(emptyBoard()),
+    () => listener(readDemo()),
   );
+
+  return () => {
+    listeners.delete(listener);
+    unsub();
+  };
 }
 
 async function persist(state: OrderBoardState) {
   const next = { ...state, updatedAt: Date.now() };
+  // Sempre in memoria locale (sopravvive offline / ricarica)
+  writeDemo(next);
+
   if (dataMode() === "demo") {
-    writeDemo(next);
     return next;
   }
-  const db = getFirebaseDb();
-  if (!db) throw new Error("Firebase non configurato");
-  await set(ref(db, ORDER_BOARD_PATH), next);
+
+  await offlineSet(ORDER_BOARD_PATH, next);
   return next;
 }
 
@@ -178,7 +194,7 @@ export async function setTableOrderNumber(
   orderNumber: number | null,
 ) {
   const key = assignmentKey(zoneId, tableNumber);
-  const current = dataMode() === "demo" ? readDemo() : await fetchBoardOnce();
+  const current = await loadBoardForWrite();
   const assignments = { ...current.assignments };
   if (orderNumber == null || orderNumber <= 0) {
     delete assignments[key];
@@ -193,29 +209,29 @@ export async function setTableOrderNumber(
 }
 
 export async function setOrderHighlight(orderNumber: number | null) {
-  const current = dataMode() === "demo" ? readDemo() : await fetchBoardOnce();
+  const board = await loadBoardForWrite();
   const highlight =
     orderNumber == null || orderNumber <= 0
       ? null
       : {
           orderNumber: Math.floor(orderNumber),
-          found: Object.values(current.assignments).includes(
+          found: Object.values(board.assignments).includes(
             Math.floor(orderNumber),
           ),
           at: Date.now(),
         };
 
   if (dataMode() === "demo") {
-    return persist({ ...current, highlight });
+    return persist({ ...board, highlight });
   }
 
-  const db = getFirebaseDb();
-  if (!db) throw new Error("Firebase non configurato");
-  await update(ref(db, ORDER_BOARD_PATH), {
+  const next = { ...board, highlight, updatedAt: Date.now() };
+  writeDemo(next);
+  await offlineUpdate(ORDER_BOARD_PATH, {
     highlight,
-    updatedAt: Date.now(),
+    updatedAt: next.updatedAt,
   });
-  return fetchBoardOnce();
+  return next;
 }
 
 export async function clearOrderHighlight() {
@@ -224,36 +240,53 @@ export async function clearOrderHighlight() {
 
 /** Pulisce lo highlight solo se è ancora quello partito a `at` (evita race tra device) */
 export async function clearOrderHighlightIf(at: number) {
-  const current = dataMode() === "demo" ? readDemo() : await fetchBoardOnce();
+  const current = await loadBoardForWrite();
   if (!current.highlight || current.highlight.at !== at) return current;
   return clearOrderHighlight();
 }
 
 export async function saveOrderCartina(cartina: CartinaPrefs) {
+  const current = await loadBoardForWrite();
   if (dataMode() === "demo") {
-    const current = readDemo();
     return persist({ ...current, cartina });
   }
-  const db = getFirebaseDb();
-  if (!db) throw new Error("Firebase non configurato");
-  await update(ref(db, ORDER_BOARD_PATH), {
+  const next = { ...current, cartina, updatedAt: Date.now() };
+  writeDemo(next);
+  await offlineUpdate(ORDER_BOARD_PATH, {
     cartina,
-    updatedAt: Date.now(),
+    updatedAt: next.updatedAt,
   });
-  return fetchBoardOnce();
+  return next;
 }
 
 export async function clearAllAssignments() {
-  const current = dataMode() === "demo" ? readDemo() : await fetchBoardOnce();
+  const current = await loadBoardForWrite();
   return persist({ ...current, assignments: {}, highlight: null });
 }
 
 async function fetchBoardOnce(): Promise<OrderBoardState> {
   const db = getFirebaseDb();
-  if (!db) return emptyBoard();
-  const snap = await get(ref(db, ORDER_BOARD_PATH));
-  if (!snap.exists()) return emptyBoard();
-  return normalizeBoard(snap.val() as Partial<OrderBoardState>);
+  if (!db) return readDemo();
+  try {
+    const snap = await get(ref(db, ORDER_BOARD_PATH));
+    if (!snap.exists()) return readDemo();
+    return normalizeBoard(snap.val() as Partial<OrderBoardState>);
+  } catch {
+    return readDemo();
+  }
+}
+
+/** Locale se offline o più recente; altrimenti remoto. */
+async function loadBoardForWrite(): Promise<OrderBoardState> {
+  const local = readDemo();
+  if (dataMode() === "demo") return local;
+  if (typeof navigator !== "undefined" && !navigator.onLine) return local;
+  try {
+    const remote = await fetchBoardOnce();
+    return remote.updatedAt >= local.updatedAt ? remote : local;
+  } catch {
+    return local;
+  }
 }
 
 /** Trova tavolo/i con un certo numero ordine */
@@ -271,16 +304,13 @@ export function findTablesByOrder(
 }
 
 export async function patchOrderBoard(partial: Partial<OrderBoardState>) {
-  if (dataMode() === "demo") {
-    const next = normalizeBoard({ ...readDemo(), ...partial });
-    writeDemo(next);
-    return next;
-  }
-  const db = getFirebaseDb();
-  if (!db) throw new Error("Firebase non configurato");
-  await update(ref(db, ORDER_BOARD_PATH), {
+  const current = await loadBoardForWrite();
+  const next = normalizeBoard({ ...current, ...partial, updatedAt: Date.now() });
+  writeDemo(next);
+  if (dataMode() === "demo") return next;
+  await offlineUpdate(ORDER_BOARD_PATH, {
     ...partial,
-    updatedAt: Date.now(),
+    updatedAt: next.updatedAt,
   });
-  return fetchBoardOnce();
+  return next;
 }

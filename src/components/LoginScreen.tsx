@@ -16,6 +16,7 @@ import { subscribeAppSettings } from "@/lib/app-settings";
 import { motion } from "framer-motion";
 import toast from "react-hot-toast";
 import type { UserRole } from "@/lib/types";
+import { OnlineStatusBadge } from "@/components/OnlineStatusBadge";
 
 export function LoginScreen() {
   const login = useAuthStore((s) => s.login);
@@ -44,6 +45,10 @@ export function LoginScreen() {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(45,90,39,0.18),_transparent_55%),radial-gradient(ellipse_at_bottom_right,_rgba(30,61,26,0.12),_transparent_45%)]" />
       <div className="pointer-events-none absolute -left-16 top-24 h-56 w-56 rounded-full bg-[var(--forest)]/10 blur-3xl" />
       <div className="pointer-events-none absolute -right-10 bottom-28 h-48 w-48 rounded-full bg-emerald-700/10 blur-3xl" />
+
+      <div className="absolute left-4 top-[max(0.85rem,env(safe-area-inset-top))] z-20">
+        <OnlineStatusBadge />
+      </div>
 
       <main className="relative z-10 mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-6 py-10">
         <motion.div

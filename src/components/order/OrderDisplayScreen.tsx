@@ -15,6 +15,7 @@ import {
 import { A4PortraitContain } from "@/components/order/A4PortraitContain";
 import { loadCartinaPrefs } from "@/lib/cartina";
 import { clearOrderHighlightIf } from "@/lib/order-board";
+import { OnlineStatusBadge } from "@/components/OnlineStatusBadge";
 
 /**
  * Schermo cartina — sempre in proporzione A4 verticale (come in editor).
@@ -135,6 +136,12 @@ export function OrderDisplayScreen({ embedded = false }: { embedded?: boolean })
           >
             {hl.orderNumber}
           </p>
+        </div>
+      ) : null}
+
+      {!embedded ? (
+        <div className="pointer-events-none absolute left-[max(0.5rem,env(safe-area-inset-left))] top-[max(0.5rem,env(safe-area-inset-top))] z-40">
+          <OnlineStatusBadge variant="dark" />
         </div>
       ) : null}
 

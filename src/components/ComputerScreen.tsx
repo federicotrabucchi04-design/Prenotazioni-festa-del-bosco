@@ -11,6 +11,7 @@ import { OrderSetupScreen } from "@/components/order/OrderSetupScreen";
 import { ReservationList } from "@/components/reservations/ReservationList";
 import { ReservationModal } from "@/components/reservations/ReservationModal";
 import { AssignTablePicker } from "@/components/reservations/AssignTablePicker";
+import { OnlineStatusBadge } from "@/components/OnlineStatusBadge";
 
 /**
  * Profilo computer: quattro pannelli (PC widescreen).
@@ -57,6 +58,7 @@ export function ComputerScreen() {
           <p className="truncate text-xs font-semibold tracking-wide">
             Computer · Schermo · Tastierino · Staff · Ordini
           </p>
+          <OnlineStatusBadge variant="dark" />
         </div>
         <button
           type="button"

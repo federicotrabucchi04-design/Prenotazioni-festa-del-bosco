@@ -1,6 +1,7 @@
 import { getFirebaseDb, isFirebaseConfigured } from "@/lib/firebase";
 import { PINS, createId } from "@/lib/constants";
-import { onValue, ref, set } from "firebase/database";
+import { offlineSet } from "@/lib/offline-sync";
+import { onValue, ref } from "firebase/database";
 
 export const APP_SETTINGS_PATH = "appSettings";
 export const APP_SETTINGS_STORAGE_KEY = "fdb-app-settings";
@@ -264,10 +265,8 @@ export async function saveAppSettings(partial: Partial<AppSettings>) {
     return next;
   }
 
-  const db = getFirebaseDb();
-  if (!db) throw new Error("Firebase non configurato");
-  await set(ref(db, APP_SETTINGS_PATH), next);
-  notify(next);
+  writeDemo(next);
+  await offlineSet(APP_SETTINGS_PATH, next);
   return next;
 }
 
