@@ -448,8 +448,8 @@ export interface TableFillRect {
 }
 
 /**
- * Rispecchia la disposizione dei tavoli (x/y in editor) espandendoli in
- * rettangoli che riempiono la zona, con solo un piccolo bordo bianco tra loro.
+ * Rispecchia righe/colonne dalla disposizione editor: tutti i tavoli della
+ * stessa tenda hanno la stessa larghezza e altezza, con bordo bianco fisso.
  */
 export function computeTableFillRects(
   tables: TableSpot[],
@@ -482,27 +482,25 @@ export function computeTableFillRects(
   }
   rows.forEach((row) => row.sort((a, b) => a.x - b.x));
 
-  const centers = rows.map(
-    (row) => row.reduce((s, t) => s + t.y, 0) / row.length,
-  );
-  const halfG = gap / 2;
+  const nRows = rows.length;
+  const nCols = Math.max(...rows.map((r) => r.length));
+  // Celle uguali per tutta la zona (basate sulla griglia più densa)
+  const cellW = (100 - gap * (nCols + 1)) / nCols;
+  const cellH = (100 - gap * (nRows + 1)) / nRows;
+
   const out: TableFillRect[] = [];
-
   rows.forEach((row, ri) => {
-    const top = ri === 0 ? 0 : (centers[ri - 1]! + centers[ri]!) / 2;
-    const bottom =
-      ri === rows.length - 1 ? 100 : (centers[ri]! + centers[ri + 1]!) / 2;
-
+    const y = gap + ri * (cellH + gap);
+    // Righe più corte: centrate, stesso w/h di tutte le altre
+    const usedW = row.length * cellW + Math.max(0, row.length - 1) * gap;
+    const startX = (100 - usedW) / 2;
     row.forEach((t, ti) => {
-      const left = ti === 0 ? 0 : (row[ti - 1]!.x + t.x) / 2;
-      const right =
-        ti === row.length - 1 ? 100 : (t.x + row[ti + 1]!.x) / 2;
       out.push({
         table: t,
-        x: left + halfG,
-        y: top + halfG,
-        w: Math.max(0.8, right - left - gap),
-        h: Math.max(0.8, bottom - top - gap),
+        x: startX + ti * (cellW + gap),
+        y,
+        w: cellW,
+        h: cellH,
       });
     });
   });
