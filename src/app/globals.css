@@ -98,6 +98,18 @@ textarea.field-input {
   background-size: 20px 20px;
 }
 
+/* Kiosk TV / tablet: niente overscroll che “rimbalza” */
+.order-display-screen {
+  overscroll-behavior: none;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.order-cartina-view {
+  container-type: size;
+}
+
 /* Cartina massimizzata — proporzione A4 verticale (210×297) */
 .cartina-a4,
 .cartina-a4-portrait {
@@ -105,6 +117,13 @@ textarea.field-input {
   height: 100%;
   max-width: 100%;
   max-height: 100%;
+}
+
+/* Su tablet landscape la cartina operativa può allargarsi */
+@media (min-width: 768px) and (orientation: landscape) {
+  .cartina-a4-portrait {
+    aspect-ratio: auto;
+  }
 }
 
 @media print {

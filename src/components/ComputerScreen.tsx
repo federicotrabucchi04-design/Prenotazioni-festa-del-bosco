@@ -4,6 +4,7 @@ import { LogOut, Monitor } from "lucide-react";
 import type { ReactNode } from "react";
 import toast from "react-hot-toast";
 import { useAuthStore } from "@/store/auth-store";
+import { useViewport } from "@/hooks/use-viewport";
 import { OrderDisplayScreen } from "@/components/order/OrderDisplayScreen";
 import { OrderKeypadScreen } from "@/components/order/OrderKeypadScreen";
 import { OrderSetupScreen } from "@/components/order/OrderSetupScreen";
@@ -12,11 +13,41 @@ import { ReservationModal } from "@/components/reservations/ReservationModal";
 import { AssignTablePicker } from "@/components/reservations/AssignTablePicker";
 
 /**
- * Profilo computer: quattro pannelli contemporanei (angoli dello schermo).
- * Ideale per un PC fisso in sala con un solo login.
+ * Profilo computer: quattro pannelli (PC widescreen).
+ * Su schermi stretti avvisa di usare i PIN dedicati per device.
  */
 export function ComputerScreen() {
   const logout = useAuthStore((s) => s.logout);
+  const { width, isPhone } = useViewport();
+  const cramped = width < 900 || isPhone;
+
+  if (cramped) {
+    return (
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-[var(--forest-bg)] px-6 text-center">
+        <Monitor className="h-10 w-10 text-[var(--forest)]" />
+        <div>
+          <h1 className="text-lg font-semibold text-[var(--forest-ink)]">
+            Profilo Computer
+          </h1>
+          <p className="mt-2 max-w-sm text-sm text-[var(--forest-muted)]">
+            Serve uno schermo largo (PC). Su telefono usa Staff / Tastierino; su
+            tablet Ordini; su TV verticale Schermo.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            logout();
+            toast.success("Disconnesso");
+          }}
+          className="inline-flex h-12 items-center gap-2 rounded-2xl bg-[var(--forest)] px-5 text-sm font-semibold text-white"
+        >
+          <LogOut className="h-4 w-4" />
+          Torna al login
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-dvh w-dvw flex-col overflow-hidden bg-[var(--forest-ink)]">
@@ -24,7 +55,7 @@ export function ComputerScreen() {
         <div className="flex min-w-0 items-center gap-2">
           <Monitor className="h-4 w-4 shrink-0 opacity-90" />
           <p className="truncate text-xs font-semibold tracking-wide">
-            Computer · 4 pannelli · Schermo · Tastierino · Staff · Ordini
+            Computer · Schermo · Tastierino · Staff · Ordini
           </p>
         </div>
         <button
@@ -42,18 +73,18 @@ export function ComputerScreen() {
       </header>
 
       <div className="grid min-h-0 flex-1 grid-cols-2 grid-rows-2 gap-px bg-black/40">
-        <Pane label="Schermo">
+        <Pane label="Schermo (TV)">
           <OrderDisplayScreen embedded />
         </Pane>
-        <Pane label="Tastierino">
+        <Pane label="Tastierino (telefono)">
           <OrderKeypadScreen embedded />
         </Pane>
-        <Pane label="Staff">
+        <Pane label="Staff (prenotazioni)">
           <div className="h-full overflow-y-auto bg-[var(--forest-bg)]">
             <ReservationList compact />
           </div>
         </Pane>
-        <Pane label="Ordini">
+        <Pane label="Ordini (tablet)">
           <OrderSetupScreen embedded />
         </Pane>
       </div>

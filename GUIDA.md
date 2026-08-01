@@ -32,6 +32,19 @@ I PIN si possono cambiare da **Admin → Impostazioni** (rotella **Set** in alto
 
 ---
 
+## Dove usare cosa (device)
+
+| Device | PIN consigliato | Cosa vedi |
+|--------|-----------------|-----------|
+| **Telefono** | Staff / Tastierino | Lista prenotazioni o tastierino grandi tasti |
+| **Tablet** | Ordini (`ORDINE2026`) | Assegna numeri sulla cartina |
+| **TV verticale** | Schermo (`SCHERMO2026`) | Cartina a tutto schermo + cerchio |
+| **PC largo** | Computer / Admin | 4 pannelli oppure gestione completa |
+
+La TV va messa con il **lato lungo in verticale** (portrait): la cartina riempie lo schermo.
+
+---
+
 ## Profilo Computer (`COMPUTER2026`)
 
 Schermo diviso in **4 angoli**:

@@ -67,12 +67,15 @@ export function OrderCartinaView({
     .filter(Boolean) as { zone: ZoneLayout; placement: ZoneOnBoard }[];
 
   const isDisplay = variant === "display";
-  const baseRem = isDisplay ? 1.25 : 0.85;
-  const fontRem = Math.max(0.55, baseRem * numberScale);
+  // Numeri fluidi rispetto al contenitore (TV / tablet / pannello PC)
+  const fontSize = isDisplay
+    ? `clamp(0.75rem, calc(${(3.8 * numberScale).toFixed(2)} * 1cqmin), 4.5rem)`
+    : `clamp(0.65rem, calc(${(2.6 * numberScale).toFixed(2)} * 1cqmin), 2.2rem)`;
 
   return (
     <div
-      className={`relative h-full w-full overflow-hidden bg-white ${className}`}
+      className={`order-cartina-view relative h-full w-full overflow-hidden bg-white ${className}`}
+      style={{ containerType: "size" }}
     >
       <ZoneMarksLayer marks={prefs.marks as MapMark[]} />
       {items.map(({ zone, placement }) => {
@@ -95,7 +98,9 @@ export function OrderCartinaView({
           >
             <h4
               className={`shrink-0 bg-[var(--forest)] text-center font-bold leading-tight text-white ${
-                isDisplay ? "px-0.5 py-0.5 text-[9px] sm:text-[11px]" : "px-1 py-0.5 text-[10px] sm:text-xs"
+                isDisplay
+                  ? "px-0.5 py-[0.15cqmin] text-[clamp(8px,1.6cqmin,18px)]"
+                  : "px-1 py-0.5 text-[10px] sm:text-xs"
               }`}
             >
               {zone.name}
@@ -127,8 +132,8 @@ export function OrderCartinaView({
                           onClick: () => onTableClick?.(zone, table.number),
                         }
                       : {})}
-                    className={`relative flex items-center justify-center overflow-visible text-center transition ${
-                      interactive ? "active:scale-95" : ""
+                    className={`relative flex min-h-0 items-center justify-center overflow-visible text-center transition ${
+                      interactive ? "active:scale-95 touch-manipulation" : ""
                     } ${isHit ? "z-20" : "bg-white"}`}
                     style={
                       isHit
@@ -138,28 +143,31 @@ export function OrderCartinaView({
                   >
                     {isHit ? (
                       <span
-                        className={`pointer-events-none absolute inset-[3%] z-0 animate-order-pulse rounded-full ${
-                          isDisplay ? "border-[5px]" : "border-[3px]"
-                        }`}
+                        className="pointer-events-none absolute z-0 animate-order-pulse rounded-full"
                         style={{
+                          inset: isDisplay ? "2%" : "4%",
+                          borderStyle: "solid",
+                          borderWidth: isDisplay
+                            ? "clamp(3px, 1.1cqmin, 12px)"
+                            : "3px",
                           borderColor: highlightColor,
-                          boxShadow: `0 0 0 5px ${highlightColor}55`,
+                          boxShadow: `0 0 0 clamp(2px, 0.6cqmin, 8px) ${highlightColor}55`,
                         }}
                         aria-hidden
                       />
                     ) : null}
                     {orderNum ? (
                       <span
-                        className="relative z-[1] font-black leading-none"
+                        className="relative z-[1] font-black leading-none tabular-nums"
                         style={{
-                          fontSize: `${fontRem}rem`,
+                          fontSize,
                           color: isHit ? highlightColor : numColor,
                         }}
                       >
                         {orderNum}
                       </span>
                     ) : (
-                      <span className="relative z-[1] text-[7px] text-[var(--forest)]/15">
+                      <span className="relative z-[1] text-[clamp(6px,1.2cqmin,12px)] text-[var(--forest)]/20">
                         ·
                       </span>
                     )}

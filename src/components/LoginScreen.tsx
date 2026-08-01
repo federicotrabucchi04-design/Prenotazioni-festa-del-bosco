@@ -95,12 +95,12 @@ export function LoginScreen() {
           </button>
 
           <div className="mt-6 grid grid-cols-2 gap-2 text-left text-[11px] text-[var(--forest-muted)]">
-            <Hint icon={Users} title="Staff" text="Lista e mappa" />
-            <Hint icon={ShieldCheck} title="Admin" text="Modifica tutto" />
-            <Hint icon={Laptop} title="Computer" text="4 pannelli insieme" />
-            <Hint icon={LayoutGrid} title="Ordini" text="Assegna numeri" />
-            <Hint icon={Monitor} title="Schermo" text="Cartina live" />
-            <Hint icon={Keyboard} title="Tastierino" text="Cerca ordine" />
+            <Hint icon={Users} title="Staff" text="Telefono · lista" />
+            <Hint icon={ShieldCheck} title="Admin" text="PC · tutto" />
+            <Hint icon={Laptop} title="Computer" text="PC · 4 pannelli" />
+            <Hint icon={LayoutGrid} title="Ordini" text="Tablet · numeri" />
+            <Hint icon={Monitor} title="Schermo" text="TV verticale" />
+            <Hint icon={Keyboard} title="Tastierino" text="Telefono · cerca" />
           </div>
         </motion.form>
       </main>

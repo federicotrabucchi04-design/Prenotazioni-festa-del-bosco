@@ -25,7 +25,7 @@ export function AppHeader({
   return (
     <>
       <header className="sticky top-0 z-30 border-b border-white/40 bg-white/70 px-4 pb-3 pt-[max(0.85rem,env(safe-area-inset-top))] backdrop-blur-xl">
-        <div className="mx-auto flex max-w-lg items-start justify-between gap-3">
+        <div className="mx-auto flex max-w-lg items-start justify-between gap-3 md:max-w-2xl">
           <div className="min-w-0">
             <div className="mb-1 flex items-center gap-2">
               <Trees className="h-4 w-4 shrink-0 text-[var(--forest)]" />

@@ -24,8 +24,7 @@ export function BottomNav() {
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/40 bg-white/70 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl">
-      <div
-        className="mx-auto grid max-w-lg gap-2"
+      <div className="mx-auto grid max-w-lg gap-2 md:max-w-2xl"
         style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
       >
         {items.map(({ id, label, icon: Icon }) => {

@@ -31,8 +31,10 @@ export function ReservationList({ compact = false }: { compact?: boolean }) {
 
   return (
     <div
-      className={`relative mx-auto max-w-lg px-4 pt-4 ${
-        compact ? "pb-4 pt-7" : "pb-28"
+      className={`relative mx-auto px-4 pt-4 ${
+        compact
+          ? "max-w-none pb-4 pt-7"
+          : "max-w-lg pb-28 sm:max-w-xl md:max-w-2xl"
       }`}
     >
       <div className={`mb-4 grid grid-cols-3 gap-2 text-center ${compact ? "mb-2" : ""}`}>

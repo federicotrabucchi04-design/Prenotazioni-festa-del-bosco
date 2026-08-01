@@ -111,16 +111,16 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
   return (
     <div
       className={`flex flex-col bg-[var(--forest-bg)] ${
-        embedded ? "h-full overflow-hidden" : "min-h-dvh"
+        embedded ? "h-full overflow-hidden" : "h-dvh max-h-dvh overflow-hidden"
       }`}
     >
       {!embedded ? (
-        <header className="flex items-start justify-between gap-3 border-b border-white/50 bg-white/80 px-4 pb-3 pt-[max(0.85rem,env(safe-area-inset-top))] backdrop-blur-xl">
+        <header className="flex shrink-0 items-start justify-between gap-3 border-b border-white/50 bg-white/80 px-4 pb-3 pt-[max(0.85rem,env(safe-area-inset-top))] backdrop-blur-xl md:px-6">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--forest)]">
-              Modalità servizio
+              Modalità servizio · tablet
             </p>
-            <h1 className="text-lg font-semibold text-[var(--forest-ink)]">
+            <h1 className="text-lg font-semibold text-[var(--forest-ink)] md:text-xl">
               {orderRoleLabel(role)}
             </h1>
             <p className="text-sm text-[var(--forest-muted)]">
@@ -133,7 +133,7 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
               logout();
               toast.success("Disconnesso");
             }}
-            className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--forest)]/8 text-[var(--forest)]"
+            className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--forest)]/8 text-[var(--forest)] touch-manipulation"
             aria-label="Esci"
           >
             <LogOut className="h-5 w-5" />
@@ -147,122 +147,134 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
         </div>
       )}
 
-      <div className={`flex gap-2 ${embedded ? "px-1.5 py-1" : "px-4 py-2"}`}>
-        <button
-          type="button"
-          onClick={() => setMode("global")}
-          className={`flex-1 font-semibold ${
-            embedded ? "rounded-xl py-1.5 text-[11px]" : "rounded-2xl py-2.5 text-sm"
-          } ${
-            mode === "global"
-              ? "bg-[var(--forest)] text-white"
-              : "bg-white text-[var(--forest-ink)]"
-          }`}
-        >
-          Globale
-        </button>
-        <button
-          type="button"
-          onClick={() => setMode("zone")}
-          className={`flex-1 font-semibold ${
-            embedded ? "rounded-xl py-1.5 text-[11px]" : "rounded-2xl py-2.5 text-sm"
-          } ${
-            mode === "zone"
-              ? "bg-[var(--forest)] text-white"
-              : "bg-white text-[var(--forest-ink)]"
-          }`}
-        >
-          Per zona
-        </button>
-      </div>
-
-      {!embedded ? (
-        <div className="flex gap-2 px-4 pb-2">
-          <button
-            type="button"
-            onClick={() => void syncCartinaFromLocal()}
-            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-2xl bg-white px-3 py-2 text-xs font-semibold text-[var(--forest)]"
-          >
-            <MapPinned className="h-3.5 w-3.5" />
-            Sincronizza disposizione
-          </button>
-          <button
-            type="button"
-            onClick={async () => {
-              if (!window.confirm("Cancellare tutti i numeri d’ordine?")) return;
-              await clearAllAssignments();
-              toast.success("Assegnazioni azzerate");
-            }}
-            className="inline-flex items-center gap-1 rounded-2xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-700"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            Azzera
-          </button>
-        </div>
-      ) : null}
-
       <div
-        className={`flex min-h-0 flex-1 flex-col overflow-auto ${
-          embedded ? "px-0.5 pb-1" : "px-1 pb-2"
+        className={`mx-auto flex min-h-0 w-full flex-1 flex-col ${
+          embedded ? "" : "max-w-5xl"
         }`}
       >
-        {mode === "global" ? (
-          <div className="cartina-a4-portrait min-h-0 flex-1 overflow-hidden rounded-xl border border-[var(--forest)]/15 bg-white">
-            <OrderCartinaView
-              layout={layout}
-              prefs={prefs}
-              assignments={board.assignments}
-              highlight={board.highlight}
-              interactive
-              numberScale={
-                embedded
-                  ? Math.max(0.5, settings.orderNumberScale * 0.65)
-                  : settings.orderNumberScale
-              }
-              colorRanges={settings.orderColorRanges}
-              highlightColor={settings.orderHighlightColor}
-              onTableClick={openAssign}
-            />
+        <div className={`flex gap-2 ${embedded ? "px-1.5 py-1" : "px-4 py-2 md:px-6"}`}>
+          <button
+            type="button"
+            onClick={() => setMode("global")}
+            className={`flex-1 font-semibold touch-manipulation ${
+              embedded
+                ? "rounded-xl py-1.5 text-[11px]"
+                : "rounded-2xl py-3 text-sm md:text-base"
+            } ${
+              mode === "global"
+                ? "bg-[var(--forest)] text-white"
+                : "bg-white text-[var(--forest-ink)]"
+            }`}
+          >
+            Cartina globale
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("zone")}
+            className={`flex-1 font-semibold touch-manipulation ${
+              embedded
+                ? "rounded-xl py-1.5 text-[11px]"
+                : "rounded-2xl py-3 text-sm md:text-base"
+            } ${
+              mode === "zone"
+                ? "bg-[var(--forest)] text-white"
+                : "bg-white text-[var(--forest-ink)]"
+            }`}
+          >
+            Per zona
+          </button>
+        </div>
+
+        {!embedded ? (
+          <div className="flex gap-2 px-4 pb-2 md:px-6">
+            <button
+              type="button"
+              onClick={() => void syncCartinaFromLocal()}
+              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-2xl bg-white px-3 py-2.5 text-xs font-semibold text-[var(--forest)] touch-manipulation md:text-sm"
+            >
+              <MapPinned className="h-3.5 w-3.5" />
+              Sincronizza disposizione
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                if (!window.confirm("Cancellare tutti i numeri d’ordine?")) return;
+                await clearAllAssignments();
+                toast.success("Assegnazioni azzerate");
+              }}
+              className="inline-flex items-center gap-1 rounded-2xl bg-red-50 px-3 py-2.5 text-xs font-semibold text-red-700 touch-manipulation md:text-sm"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Azzera
+            </button>
           </div>
-        ) : (
-          <div className="space-y-3">
-            <ZoneTabsBar edgeToEdge={false} className="mb-0">
-              {layout.zones.map((z) => (
-                <button
-                  key={z.id}
-                  type="button"
-                  onClick={() => setZoneName(z.name)}
-                  className={`shrink-0 rounded-full px-4 py-2.5 text-sm font-semibold ${
-                    z.name === zone?.name
-                      ? "bg-[var(--forest)] text-white"
-                      : "bg-white text-[var(--forest-ink)]"
-                  }`}
-                >
-                  {z.name}
-                </button>
-              ))}
-            </ZoneTabsBar>
-            {zone ? (
-              <ZoneOrderGrid
-                zone={zone}
+        ) : null}
+
+        <div
+          className={`flex min-h-0 flex-1 flex-col overflow-auto ${
+            embedded
+              ? "px-0.5 pb-1"
+              : "px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:px-4"
+          }`}
+        >
+          {mode === "global" ? (
+            <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-[var(--forest)]/15 bg-white md:min-h-[min(70dvh,820px)]">
+              <OrderCartinaView
+                layout={layout}
+                prefs={prefs}
                 assignments={board.assignments}
+                highlight={board.highlight}
+                interactive
+                numberScale={
+                  embedded
+                    ? Math.max(0.5, settings.orderNumberScale * 0.65)
+                    : Math.max(1, settings.orderNumberScale * 1.1)
+                }
+                colorRanges={settings.orderColorRanges}
+                highlightColor={settings.orderHighlightColor}
                 onTableClick={openAssign}
               />
-            ) : null}
-          </div>
-        )}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <ZoneTabsBar edgeToEdge={false} className="mb-0">
+                {layout.zones.map((z) => (
+                  <button
+                    key={z.id}
+                    type="button"
+                    onClick={() => setZoneName(z.name)}
+                    className={`shrink-0 rounded-full px-4 py-2.5 text-sm font-semibold touch-manipulation md:px-5 md:py-3 md:text-base ${
+                      z.name === zone?.name
+                        ? "bg-[var(--forest)] text-white"
+                        : "bg-white text-[var(--forest-ink)]"
+                    }`}
+                  >
+                    {z.name}
+                  </button>
+                ))}
+              </ZoneTabsBar>
+              {zone ? (
+                <ZoneOrderGrid
+                  zone={zone}
+                  assignments={board.assignments}
+                  onTableClick={openAssign}
+                />
+              ) : null}
+            </div>
+          )}
+        </div>
       </div>
 
       {pending ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
-          <div className="w-full max-w-sm rounded-3xl bg-white p-4 shadow-xl">
-            <p className="text-sm text-[var(--forest-muted)]">
+          <div className="w-full max-w-md rounded-3xl bg-white p-4 shadow-xl md:p-6">
+            <p className="text-sm text-[var(--forest-muted)] md:text-base">
               {pending.zone.name} · tavolo {pending.tableNumber}
             </p>
-            <p className="mt-1 text-center text-4xl font-black tracking-wider text-[var(--forest-ink)]">
+            <p className="mt-1 text-center text-4xl font-black tracking-wider text-[var(--forest-ink)] tabular-nums md:text-5xl">
               {digits || "—"}
             </p>
-            <div className="mt-4 grid grid-cols-3 gap-2">
+            <div className="mt-4 grid grid-cols-3 gap-2 md:gap-3">
               {["1", "2", "3", "4", "5", "6", "7", "8", "9", "C", "0", "⌫"].map(
                 (k) => (
                   <button
@@ -274,7 +286,7 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                       else if (k === "⌫") setDigits((d) => d.slice(0, -1));
                       else if (digits.length < maxDigits) setDigits((d) => d + k);
                     }}
-                    className="h-14 rounded-2xl bg-[var(--forest)]/8 text-xl font-bold text-[var(--forest-ink)] active:scale-95"
+                    className="h-14 rounded-2xl bg-[var(--forest)]/8 text-xl font-bold text-[var(--forest-ink)] touch-manipulation active:scale-95 md:h-16 md:text-2xl"
                   >
                     {k}
                   </button>
@@ -288,7 +300,7 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                   setPending(null);
                   setDigits("");
                 }}
-                className="flex-1 rounded-2xl bg-[var(--forest)]/10 py-3 text-sm font-semibold text-[var(--forest)]"
+                className="flex-1 rounded-2xl bg-[var(--forest)]/10 py-3.5 text-sm font-semibold text-[var(--forest)] touch-manipulation"
               >
                 Annulla
               </button>
@@ -296,7 +308,7 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                 type="button"
                 disabled={busy}
                 onClick={() => void assign(null)}
-                className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700"
+                className="rounded-2xl bg-red-50 px-4 py-3.5 text-sm font-semibold text-red-700 touch-manipulation"
               >
                 Rimuovi
               </button>
@@ -304,7 +316,7 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                 type="button"
                 disabled={busy || !digits}
                 onClick={() => void assign(Number(digits))}
-                className="flex-1 rounded-2xl bg-[var(--forest)] py-3 text-sm font-bold text-white disabled:opacity-50"
+                className="flex-1 rounded-2xl bg-[var(--forest)] py-3.5 text-sm font-bold text-white touch-manipulation disabled:opacity-50"
               >
                 Salva
               </button>
@@ -329,7 +341,7 @@ function ZoneOrderGrid({
   const cols = tableGridColumns(tables.length);
   return (
     <div
-      className="grid gap-2 rounded-3xl border border-[var(--forest)]/10 bg-white p-3"
+      className="grid gap-2 rounded-3xl border border-[var(--forest)]/10 bg-white p-3 md:gap-3 md:p-4"
       style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
     >
       {tables.map((t) => {
@@ -339,16 +351,16 @@ function ZoneOrderGrid({
             key={t.id}
             type="button"
             onClick={() => onTableClick(zone, t.number)}
-            className={`flex aspect-square flex-col items-center justify-center rounded-2xl border-2 ${
+            className={`flex min-h-[4.5rem] flex-col items-center justify-center rounded-2xl border-2 touch-manipulation active:scale-95 md:min-h-[5.5rem] ${
               n
                 ? "border-[var(--forest)] bg-[var(--forest)]/10"
                 : "border-dashed border-[var(--forest)]/25 bg-[var(--forest)]/5"
             }`}
           >
-            <span className="text-[10px] text-[var(--forest-muted)]">
+            <span className="text-[10px] text-[var(--forest-muted)] md:text-xs">
               T{t.number}
             </span>
-            <span className="text-lg font-black text-[var(--forest-ink)]">
+            <span className="text-lg font-black text-[var(--forest-ink)] md:text-2xl">
               {n ?? "—"}
             </span>
           </button>
