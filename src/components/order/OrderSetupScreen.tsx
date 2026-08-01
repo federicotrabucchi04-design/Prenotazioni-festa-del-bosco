@@ -417,7 +417,7 @@ function ZoneOrderMap({
                 key={table.id}
                 type="button"
                 onClick={() => onTableClick(zone, table.number)}
-                className={`absolute z-10 flex min-h-14 min-w-14 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-2xl border-2 px-1.5 py-1 text-center shadow-sm touch-manipulation active:scale-95 ${
+                className={`absolute z-10 flex min-h-16 min-w-16 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-2xl border-2 px-2 py-1.5 text-center shadow-sm touch-manipulation active:scale-95 ${
                   nums.length ? "bg-white" : "bg-white/95"
                 }`}
                 style={{
@@ -435,14 +435,14 @@ function ZoneOrderMap({
                 </span>
                 {nums.length > 0 ? (
                   <span
-                    className="max-w-[4.5rem] text-center font-black leading-tight tabular-nums"
+                    className="max-w-[5.5rem] px-0.5 text-center font-black leading-tight tabular-nums"
                     style={{
                       fontSize:
                         nums.length > 3
-                          ? "0.7rem"
+                          ? "0.75rem"
                           : nums.length > 1
-                            ? "0.95rem"
-                            : "1.15rem",
+                            ? "1rem"
+                            : "1.2rem",
                       color: colorForOrderNumber(nums[0]!, colorRanges),
                     }}
                   >

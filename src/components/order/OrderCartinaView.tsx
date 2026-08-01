@@ -35,10 +35,11 @@ export function resolveOrderCartina(
 
 function multiLayout(count: number): { cols: number; rows: number } {
   if (count <= 1) return { cols: 1, rows: 1 };
-  if (count === 2) return { cols: 2, rows: 1 };
-  if (count === 3) return { cols: 3, rows: 1 };
+  // 2 numeri: uno sopra l’altro → più larghezza per le cifre (non spariscono)
+  if (count === 2) return { cols: 1, rows: 2 };
+  if (count === 3) return { cols: 1, rows: 3 };
   if (count === 4) return { cols: 2, rows: 2 };
-  if (count <= 6) return { cols: 3, rows: 2 };
+  if (count <= 6) return { cols: 2, rows: 3 };
   if (count <= 9) return { cols: 3, rows: 3 };
   return { cols: 4, rows: Math.ceil(count / 4) };
 }
@@ -78,15 +79,14 @@ export function OrderCartinaView({
     .filter(Boolean) as { zone: ZoneLayout; placement: ZoneOnBoard }[];
 
   const isDisplay = variant === "display";
-  const baseSize = isDisplay
-    ? `calc(${(3.8 * numberScale).toFixed(2)} * 1cqmin)`
-    : `calc(${(2.6 * numberScale).toFixed(2)} * 1cqmin)`;
+  /** Dimensione base rispetto al tavolo (container della cella), non alla cartina intera */
+  const singleMax = isDisplay
+    ? `${(72 * numberScale).toFixed(1)}cqmin`
+    : `${(58 * numberScale).toFixed(1)}cqmin`;
 
   return (
     <div
-      className={`order-cartina-view relative h-full w-full bg-white ${
-        isDisplay ? "overflow-visible" : "overflow-hidden"
-      } ${className}`}
+      className={`order-cartina-view relative h-full w-full overflow-hidden bg-white ${className}`}
       style={{ containerType: "size" }}
     >
       <ZoneMarksLayer marks={prefs.marks as MapMark[]} />
@@ -97,10 +97,10 @@ export function OrderCartinaView({
         return (
           <section
             key={zone.id}
-            className={`absolute flex flex-col bg-white ${
+            className={`absolute flex flex-col overflow-hidden bg-white ${
               isDisplay
-                ? "overflow-visible rounded-none border"
-                : "overflow-hidden rounded-md border-2 shadow-sm"
+                ? "rounded-none border"
+                : "rounded-md border-2 shadow-sm"
             }`}
             style={{
               left: `${placement.x}%`,
@@ -122,11 +122,7 @@ export function OrderCartinaView({
                 {zone.name}
               </h4>
             ) : null}
-            <div
-              className={`relative min-h-0 flex-1 bg-white ${
-                isDisplay ? "overflow-visible" : "overflow-hidden"
-              }`}
-            >
+            <div className="relative min-h-0 flex-1 overflow-hidden bg-white">
               {rects.map(({ table, x, y, w, h }) => {
                 const nums = ordersForTable(assignments, zone.id, table.number);
                 const isHit =
@@ -135,17 +131,6 @@ export function OrderCartinaView({
                   highlight.found &&
                   nums.includes(highlight.orderNumber);
                 const { cols, rows } = multiLayout(nums.length);
-                // Scala così i numeri restano nella cella senza invadere i tavoli vicini
-                const cellScale = Math.min(
-                  1,
-                  1 / Math.max(cols * 0.72, rows * 0.85, Math.sqrt(nums.length || 1) * 0.7),
-                );
-                const fontSize =
-                  nums.length === 0
-                    ? undefined
-                    : `clamp(0.45rem, calc(${baseSize} * ${cellScale.toFixed(3)}), ${
-                        isDisplay ? "4.5rem" : "2.2rem"
-                      })`;
                 const Tag = interactive ? "button" : "div";
                 return (
                   <Tag
@@ -158,7 +143,7 @@ export function OrderCartinaView({
                       : {})}
                     className={`absolute flex items-center justify-center text-center transition ${
                       interactive ? "active:scale-95 touch-manipulation" : ""
-                    } ${isHit ? "z-30 overflow-visible" : "overflow-hidden"}`}
+                    } ${isHit ? "z-30" : "z-[1]"}`}
                     style={{
                       left: `${x}%`,
                       top: `${y}%`,
@@ -166,15 +151,17 @@ export function OrderCartinaView({
                       height: `${h}%`,
                       backgroundColor: "#ffffff",
                       boxShadow: `inset 0 0 0 1px ${accent}44`,
-                      padding: nums.length > 1 ? "2%" : 0,
+                      overflow: isHit ? "visible" : "hidden",
+                      padding: nums.length > 1 ? "3%" : "2%",
                     }}
                   >
                     {nums.length > 0 ? (
                       <span
-                        className="relative z-[1] grid h-full w-full place-items-center gap-[2%]"
+                        className="relative z-[1] grid h-full w-full place-items-center"
                         style={{
                           gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
                           gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
+                          gap: nums.length > 1 ? "4%" : 0,
                         }}
                       >
                         {nums.map((orderNum) => {
@@ -184,42 +171,53 @@ export function OrderCartinaView({
                             orderNum,
                             colorRanges,
                           );
+                          const digits = String(orderNum).length;
+                          // Larghezza ≈ 0.62em per cifra → non tagliare i numeri
+                          const fitW = (88 / Math.max(digits * 0.62, 1)).toFixed(
+                            1,
+                          );
+                          const fontSize = `min(${singleMax}, ${fitW}cqw, 78cqh)`;
                           return (
                             <span
                               key={orderNum}
-                              className={`relative flex min-h-0 min-w-0 items-center justify-center font-black leading-none tabular-nums ${
+                              className={`relative flex h-full w-full min-h-0 min-w-0 items-center justify-center ${
                                 hitThis ? "z-10" : ""
                               }`}
-                              style={{
-                                fontSize,
-                                color: hitThis ? highlightColor : numColor,
-                              }}
+                              style={{ containerType: "size" }}
                             >
                               {hitThis ? (
                                 <span
                                   className="pointer-events-none absolute left-1/2 top-1/2 z-0 aspect-square -translate-x-1/2 -translate-y-1/2 animate-order-pulse rounded-full border-solid"
                                   style={{
-                                    // Solo cerchio sul numero, senza riempire/tagliare il tavolo
                                     width: "1.55em",
                                     height: "1.55em",
                                     minWidth: "1.55em",
                                     minHeight: "1.55em",
                                     borderWidth:
-                                      "clamp(3px, 0.85cqmin, 9px)",
+                                      "clamp(3px, 0.12em, 9px)",
                                     borderColor: highlightColor,
-                                    boxShadow: `0 0 0 clamp(2px, 0.4cqmin, 5px) ${highlightColor}40`,
+                                    boxShadow: `0 0 0 clamp(2px, 0.06em, 5px) ${highlightColor}40`,
                                     backgroundColor: "transparent",
+                                    fontSize,
                                   }}
                                   aria-hidden
                                 />
                               ) : null}
-                              <span className="relative z-[1]">{orderNum}</span>
+                              <span
+                                className="relative z-[1] font-black leading-none tabular-nums"
+                                style={{
+                                  fontSize,
+                                  color: hitThis ? highlightColor : numColor,
+                                }}
+                              >
+                                {orderNum}
+                              </span>
                             </span>
                           );
                         })}
                       </span>
                     ) : (
-                      <span className="relative z-[1] text-[clamp(6px,1.2cqmin,12px)] text-[var(--forest)]/20">
+                      <span className="relative z-[1] text-[clamp(6px,12cqmin,12px)] text-[var(--forest)]/20">
                         ·
                       </span>
                     )}
