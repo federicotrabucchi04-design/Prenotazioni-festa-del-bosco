@@ -19,6 +19,7 @@ import toast from "react-hot-toast";
 import { useVenueLayout } from "@/hooks/use-venue-layout";
 import { useReservations } from "@/hooks/use-reservations";
 import { useEvenings } from "@/hooks/use-evenings";
+import { useOrderBoard } from "@/hooks/use-order-board";
 import { useUiStore } from "@/store/ui-store";
 import { EVENT_DATE, createId } from "@/lib/constants";
 import { downloadCartinaPng } from "@/lib/cartina-export";
@@ -60,14 +61,29 @@ export function GlobalCartina() {
   const { layout } = useVenueLayout();
   const { items } = useReservations();
   const { active } = useEvenings();
+  const { board, loading: boardLoading } = useOrderBoard();
   const [step, setStep] = useState<Step>("arrange");
   const [prefs, setPrefs] = useState<CartinaPrefs | null>(null);
+  const [publishing, setPublishing] = useState(false);
+  const wasOpen = useRef(false);
 
   useEffect(() => {
-    if (!open) return;
-    setPrefs(loadCartinaPrefs(layout));
-    setStep("arrange");
-  }, [open, layout]);
+    if (open && !wasOpen.current) {
+      setStep("arrange");
+      setPrefs(null);
+    }
+    wasOpen.current = open;
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || prefs !== null || boardLoading) return;
+    const remote = board.cartina;
+    setPrefs(
+      remote && remote.placements.length > 0
+        ? remote
+        : loadCartinaPrefs(layout),
+    );
+  }, [open, boardLoading, board.cartina, layout, prefs]);
 
   const eveningLabel = active?.label ?? EVENT_DATE;
   const title = "Feste del Bosco — disposizione tavoli";
@@ -80,10 +96,27 @@ export function GlobalCartina() {
 
   function updatePrefs(next: CartinaPrefs) {
     setPrefs(next);
+    // Bozza locale: la cartina pubblica si aggiorna solo con «Genera cartina»
     saveCartinaPrefs(next);
-    void saveOrderCartina(next).catch(() => {
-      // sync best-effort verso schermo servizio
-    });
+  }
+
+  /** Pubblica la cartina su Ordini / Schermo / Computer e apre anteprima */
+  async function publishAndPreview() {
+    if (activePrefs.placements.length === 0) {
+      toast.error("Posiziona almeno una zona sulla lavagna");
+      return;
+    }
+    setPublishing(true);
+    try {
+      saveCartinaPrefs(activePrefs);
+      await saveOrderCartina(activePrefs);
+      toast.success("Cartina pubblicata ovunque");
+      setStep("preview");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Errore pubblicazione");
+    } finally {
+      setPublishing(false);
+    }
   }
 
   function handleDownload() {
@@ -152,7 +185,7 @@ export function GlobalCartina() {
             active={step === "preview"}
             icon={Eye}
             label="Anteprima"
-            onClick={() => setStep("preview")}
+            onClick={() => void publishAndPreview()}
           />
         </div>
 
@@ -168,7 +201,8 @@ export function GlobalCartina() {
               layoutZones={layout.zones}
               prefs={activePrefs}
               onChange={updatePrefs}
-              onPreview={() => setStep("preview")}
+              onPreview={() => void publishAndPreview()}
+              publishing={publishing}
               onZoneColor={async (zoneId, hex) => {
                 try {
                   await saveLayout({
@@ -236,12 +270,12 @@ export function GlobalCartina() {
             ) : (
               <button
                 type="button"
-                onClick={() => setStep("preview")}
-                disabled={placed.length === 0}
+                onClick={() => void publishAndPreview()}
+                disabled={placed.length === 0 || publishing}
                 className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--forest)] py-3.5 text-sm font-bold text-white disabled:opacity-50"
               >
                 <Eye className="h-4 w-4" />
-                Vai all’anteprima
+                {publishing ? "Pubblicazione…" : "Genera cartina"}
               </button>
             )}
           </div>
@@ -256,12 +290,14 @@ function CartinaArrangeBoard({
   prefs,
   onChange,
   onPreview,
+  publishing = false,
   onZoneColor,
 }: {
   layoutZones: ZoneLayout[];
   prefs: CartinaPrefs;
   onChange: (next: CartinaPrefs) => void;
   onPreview: () => void;
+  publishing?: boolean;
   onZoneColor: (zoneId: string, hex: string) => void | Promise<void>;
 }) {
   const boardRef = useRef<HTMLDivElement>(null);
@@ -996,11 +1032,11 @@ function CartinaArrangeBoard({
       <button
         type="button"
         onClick={onPreview}
-        disabled={prefs.placements.length === 0}
+        disabled={prefs.placements.length === 0 || publishing}
         className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--forest)] py-3.5 text-sm font-bold text-white disabled:opacity-50"
       >
         <Eye className="h-4 w-4" />
-        Genera cartina
+        {publishing ? "Pubblicazione…" : "Genera cartina"}
       </button>
     </div>
   );

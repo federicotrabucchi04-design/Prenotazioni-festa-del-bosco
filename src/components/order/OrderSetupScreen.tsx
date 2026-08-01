@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { LogOut, MapPinned, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { LogOut, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useAuthStore, orderRoleLabel } from "@/store/auth-store";
 import { useVenueLayout } from "@/hooks/use-venue-layout";
@@ -12,22 +12,23 @@ import {
 } from "@/components/order/OrderCartinaView";
 import { ZoneTabsBar } from "@/components/ZoneTabsBar";
 import { OnlineStatusBadge } from "@/components/OnlineStatusBadge";
-import { getZoneByName } from "@/lib/layout-utils";
+import { ZoneMarksLayer } from "@/components/map/ZoneMarksLayer";
+import { getZoneByName, TABLE_GRID_SNAP } from "@/lib/layout-utils";
 import {
   clearAllAssignments,
   ordersForTable,
-  saveOrderCartina,
   setTableOrderNumbers,
   type OrderAssignments,
 } from "@/lib/order-board";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import {
-  autoPlaceZones,
   loadCartinaPrefs,
-  saveCartinaPrefs,
-  sortedTables,
-  tableGridColumns,
+  zoneAccentColor,
 } from "@/lib/cartina";
+import {
+  colorForOrderNumber,
+  type OrderColorRange,
+} from "@/lib/app-settings";
 import type { ZoneLayout } from "@/lib/types";
 
 /** Assegna numeri d’ordine toccando i tavoli (cartina globale + per zona) */
@@ -48,6 +49,10 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
   const [busy, setBusy] = useState(false);
   const maxDigits = settings.orderMaxDigits;
 
+  useEffect(() => {
+    if (!zoneName && layout.zones[0]) setZoneName(layout.zones[0].name);
+  }, [layout.zones, zoneName]);
+
   const prefs = useMemo(() => {
     const remote = board.cartina;
     if (remote?.placements.length) return resolveOrderCartina(layout, remote);
@@ -55,17 +60,6 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
   }, [board.cartina, layout]);
 
   const zone = getZoneByName(layout, zoneName) ?? layout.zones[0] ?? null;
-
-  async function syncCartinaFromLocal() {
-    const local = loadCartinaPrefs(layout);
-    const next =
-      local.placements.length > 0
-        ? local
-        : { placements: autoPlaceZones(layout.zones), marks: [] };
-    saveCartinaPrefs(next);
-    await saveOrderCartina(next);
-    toast.success("Disposizione cartina sincronizzata");
-  }
 
   async function savePending(numsOverride?: number[]) {
     if (!pending) return;
@@ -79,7 +73,6 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
     }
     setBusy(true);
     try {
-      await saveOrderCartina(prefs);
       await setTableOrderNumbers(
         pending.zone.id,
         pending.tableNumber,
@@ -214,14 +207,6 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
           <div className="flex gap-2 px-4 pb-2 md:px-6">
             <button
               type="button"
-              onClick={() => void syncCartinaFromLocal()}
-              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-2xl bg-white px-3 py-2.5 text-xs font-semibold text-[var(--forest)] touch-manipulation md:text-sm"
-            >
-              <MapPinned className="h-3.5 w-3.5" />
-              Sincronizza disposizione
-            </button>
-            <button
-              type="button"
               onClick={async () => {
                 if (!window.confirm("Cancellare tutti i numeri d’ordine?")) return;
                 await clearAllAssignments();
@@ -230,7 +215,7 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
               className="inline-flex items-center gap-1 rounded-2xl bg-red-50 px-3 py-2.5 text-xs font-semibold text-red-700 touch-manipulation md:text-sm"
             >
               <Trash2 className="h-3.5 w-3.5" />
-              Azzera
+              Azzera numeri
             </button>
           </div>
         ) : null}
@@ -260,8 +245,8 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
               />
             </div>
           ) : (
-            <div className="space-y-3">
-              <ZoneTabsBar edgeToEdge={false} className="mb-0">
+            <div className="flex min-h-0 flex-1 flex-col gap-3">
+              <ZoneTabsBar edgeToEdge={false} className="mb-0 shrink-0">
                 {layout.zones.map((z) => (
                   <button
                     key={z.id}
@@ -278,9 +263,10 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                 ))}
               </ZoneTabsBar>
               {zone ? (
-                <ZoneOrderGrid
+                <ZoneOrderMap
                   zone={zone}
                   assignments={board.assignments}
+                  colorRanges={settings.orderColorRanges}
                   onTableClick={openAssign}
                 />
               ) : null}
@@ -392,52 +378,86 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
   );
 }
 
-function ZoneOrderGrid({
+/** Vista zona come in editor tavoli (posizioni x/y), non griglia inventata */
+function ZoneOrderMap({
   zone,
   assignments,
+  colorRanges,
   onTableClick,
 }: {
   zone: ZoneLayout;
   assignments: OrderAssignments;
+  colorRanges: OrderColorRange[];
   onTableClick: (zone: ZoneLayout, tableNumber: number) => void;
 }) {
-  const tables = sortedTables(zone);
-  const cols = tableGridColumns(tables.length);
+  const accent = zoneAccentColor(zone);
+  const marks = zone.marks ?? [];
+
   return (
-    <div
-      className="grid gap-2 rounded-3xl border border-[var(--forest)]/10 bg-white p-3 md:gap-3 md:p-4"
-      style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
-    >
-      {tables.map((t) => {
-        const nums = ordersForTable(assignments, zone.id, t.number);
-        return (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => onTableClick(zone, t.number)}
-            className={`flex min-h-[4.5rem] flex-col items-center justify-center overflow-hidden rounded-2xl border-2 px-1 touch-manipulation active:scale-95 md:min-h-[5.5rem] ${
-              nums.length
-                ? "border-[var(--forest)] bg-[var(--forest)]/10"
-                : "border-dashed border-[var(--forest)]/25 bg-[var(--forest)]/5"
-            }`}
-          >
-            <span className="text-[10px] text-[var(--forest-muted)] md:text-xs">
-              T{t.number}
-            </span>
-            <span
-              className={`font-black leading-tight text-[var(--forest-ink)] ${
-                nums.length > 2
-                  ? "text-sm md:text-base"
-                  : nums.length === 2
-                    ? "text-base md:text-xl"
-                    : "text-lg md:text-2xl"
-              }`}
-            >
-              {nums.length ? nums.join(" · ") : "—"}
-            </span>
-          </button>
-        );
-      })}
+    <div className="mx-auto w-full max-w-lg">
+      <div
+        className="relative aspect-[4/5] w-full overflow-hidden rounded-3xl border-2 bg-[linear-gradient(rgba(45,90,39,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(45,90,39,0.1)_1px,transparent_1px)] bg-white shadow-inner"
+        style={{
+          backgroundSize: `${TABLE_GRID_SNAP}% ${TABLE_GRID_SNAP}%`,
+          borderColor: accent,
+        }}
+      >
+        <div
+          className="absolute inset-x-0 top-0 z-20 px-2 py-1.5 text-center text-sm font-bold text-white"
+          style={{ backgroundColor: accent }}
+        >
+          {zone.name}
+        </div>
+        <div className="absolute inset-0 pt-8">
+          <ZoneMarksLayer marks={marks} />
+          {zone.tables.map((table) => {
+            const nums = ordersForTable(assignments, zone.id, table.number);
+            return (
+              <button
+                key={table.id}
+                type="button"
+                onClick={() => onTableClick(zone, table.number)}
+                className={`absolute z-10 flex min-h-14 min-w-14 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-2xl border-2 px-1.5 py-1 text-center shadow-sm touch-manipulation active:scale-95 ${
+                  nums.length ? "bg-white" : "bg-white/95"
+                }`}
+                style={{
+                  left: `${table.x}%`,
+                  top: `${table.y}%`,
+                  borderColor: nums.length ? accent : `${accent}55`,
+                }}
+                title={`Tavolo ${table.number}`}
+              >
+                <span
+                  className="text-[9px] font-bold uppercase tracking-wide"
+                  style={{ color: accent }}
+                >
+                  T{table.number}
+                </span>
+                {nums.length > 0 ? (
+                  <span
+                    className="max-w-[4.5rem] text-center font-black leading-tight tabular-nums"
+                    style={{
+                      fontSize:
+                        nums.length > 3
+                          ? "0.7rem"
+                          : nums.length > 1
+                            ? "0.95rem"
+                            : "1.15rem",
+                      color: colorForOrderNumber(nums[0]!, colorRanges),
+                    }}
+                  >
+                    {nums.join(" · ")}
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-medium opacity-40" style={{ color: accent }}>
+                    ·
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
