@@ -237,8 +237,8 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                 interactive
                 numberScale={
                   embedded
-                    ? Math.max(0.5, settings.orderNumberScale * 0.65)
-                    : Math.max(1, settings.orderNumberScale * 1.1)
+                    ? Math.max(0.85, settings.orderNumberScale)
+                    : Math.max(1, settings.orderNumberScale)
                 }
                 colorRanges={settings.orderColorRanges}
                 onTableClick={openAssign}

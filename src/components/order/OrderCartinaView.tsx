@@ -82,10 +82,11 @@ export function OrderCartinaView({
     .filter(Boolean) as { zone: ZoneLayout; placement: ZoneOnBoard }[];
 
   const isDisplay = variant === "display";
-  /** Dimensione base rispetto al tavolo (container della cella), non alla cartina intera */
-  const singleMax = isDisplay
-    ? `${(72 * numberScale).toFixed(1)}cqmin`
-    : `${(58 * numberScale).toFixed(1)}cqmin`;
+  // Riempie l’altezza della cella tavolo; numberScale admin regola quanto (cap ~96%)
+  const heightFillPct = Math.min(
+    96,
+    Math.max(70, (isDisplay ? 92 : 88) * numberScale),
+  ).toFixed(1);
 
   return (
     <div
@@ -155,7 +156,7 @@ export function OrderCartinaView({
                       backgroundColor: "#ffffff",
                       boxShadow: `inset 0 0 0 1px ${accent}44`,
                       overflow: isHit ? "visible" : "hidden",
-                      padding: nums.length > 1 ? "3%" : "2%",
+                      padding: nums.length > 1 ? "1.5%" : "1%",
                     }}
                   >
                     {nums.length > 0 ? (
@@ -164,7 +165,7 @@ export function OrderCartinaView({
                         style={{
                           gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
                           gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
-                          gap: nums.length > 1 ? "4%" : 0,
+                          gap: nums.length > 1 ? "2%" : 0,
                         }}
                       >
                         {nums.map((orderNum) => {
@@ -175,11 +176,11 @@ export function OrderCartinaView({
                             colorRanges,
                           );
                           const digits = String(orderNum).length;
-                          // Larghezza ≈ 0.62em per cifra → non tagliare i numeri
-                          const fitW = (88 / Math.max(digits * 0.62, 1)).toFixed(
-                            1,
-                          );
-                          const fontSize = `min(${singleMax}, ${fitW}cqw, 78cqh)`;
+                          // Altezza ≈ tavolo; riduci solo se le cifre non entrano in larghezza
+                          const fitW = (
+                            98 / Math.max(digits * 0.58, 1)
+                          ).toFixed(1);
+                          const fontSize = `min(${heightFillPct}cqh, ${fitW}cqw)`;
                           return (
                             <span
                               key={orderNum}

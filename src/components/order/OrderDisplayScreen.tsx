@@ -43,13 +43,11 @@ export function OrderDisplayScreen({ embedded = false }: { embedded?: boolean })
 
   const numberScale = useMemo(() => {
     const base = settings.orderNumberScale;
-    if (embedded) return Math.max(0.5, base * 0.68);
-    if (viewport.isPortraitDisplay) {
-      const boost = Math.min(2.2, 0.95 + viewport.height / 1400);
-      return Math.max(base, base * boost);
-    }
-    if (viewport.portrait) return Math.max(base, base * 1.15);
-    return base;
+    if (embedded) return Math.max(0.9, base);
+    // Con numeri = altezza tavolo, non serve boost enorme (già capped ~96% cella)
+    if (viewport.isPortraitDisplay) return Math.max(1, base);
+    if (viewport.portrait) return Math.max(1, base);
+    return Math.max(1, base);
   }, [embedded, settings.orderNumberScale, viewport]);
 
   useEffect(() => {
