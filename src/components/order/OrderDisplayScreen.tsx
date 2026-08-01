@@ -139,11 +139,18 @@ export function OrderDisplayScreen({ embedded = false }: { embedded?: boolean })
         </div>
       ) : null}
 
-      {!embedded ? (
-        <div className="pointer-events-none absolute left-[max(0.5rem,env(safe-area-inset-left))] top-[max(0.5rem,env(safe-area-inset-top))] z-40">
-          <OnlineStatusBadge variant="dark" />
-        </div>
-      ) : null}
+      <div
+        className={`pointer-events-none absolute z-50 ${
+          embedded
+            ? "left-1 top-1 scale-90"
+            : "left-[max(0.5rem,env(safe-area-inset-left))] top-[max(0.5rem,env(safe-area-inset-top))]"
+        }`}
+      >
+        <OnlineStatusBadge
+          variant="dark"
+          className="bg-black/65 text-[11px] shadow-md ring-1 ring-white/20"
+        />
+      </div>
 
       {!embedded && showExit ? (
         <button
