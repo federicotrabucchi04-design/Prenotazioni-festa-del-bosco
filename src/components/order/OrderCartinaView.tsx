@@ -53,6 +53,7 @@ export function OrderCartinaView({
   interactive = false,
   variant = "setup",
   highlightColor = "#dc2626",
+  highlightRadius = 1.55,
   numberScale = 1,
   colorRanges = [],
   onTableClick,
@@ -65,6 +66,8 @@ export function OrderCartinaView({
   interactive?: boolean;
   variant?: "setup" | "display";
   highlightColor?: string;
+  /** Diametro cerchio in em rispetto al numero (da impostazioni admin) */
+  highlightRadius?: number;
   numberScale?: number;
   colorRanges?: OrderColorRange[];
   onTableClick?: (zone: ZoneLayout, tableNumber: number) => void;
@@ -189,14 +192,13 @@ export function OrderCartinaView({
                                 <span
                                   className="pointer-events-none absolute left-1/2 top-1/2 z-0 aspect-square -translate-x-1/2 -translate-y-1/2 animate-order-pulse rounded-full border-solid"
                                   style={{
-                                    width: "1.55em",
-                                    height: "1.55em",
-                                    minWidth: "1.55em",
-                                    minHeight: "1.55em",
-                                    borderWidth:
-                                      "clamp(3px, 0.12em, 9px)",
+                                    width: `${highlightRadius}em`,
+                                    height: `${highlightRadius}em`,
+                                    minWidth: `${highlightRadius}em`,
+                                    minHeight: `${highlightRadius}em`,
+                                    borderWidth: `clamp(2px, ${Math.max(0.08, highlightRadius * 0.07)}em, 12px)`,
                                     borderColor: highlightColor,
-                                    boxShadow: `0 0 0 clamp(2px, 0.06em, 5px) ${highlightColor}40`,
+                                    boxShadow: `0 0 0 clamp(1px, ${Math.max(0.04, highlightRadius * 0.04)}em, 6px) ${highlightColor}40`,
                                     backgroundColor: "transparent",
                                     fontSize,
                                   }}

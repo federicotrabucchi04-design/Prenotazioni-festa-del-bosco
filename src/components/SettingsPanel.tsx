@@ -224,6 +224,51 @@ export function SettingsPanel({
 
                   <label className="mt-4 block">
                     <span className="text-xs font-semibold text-[var(--forest-muted)]">
+                      Raggio cerchio sullo schermo
+                    </span>
+                    <div className="mt-2 flex items-center gap-3">
+                      <input
+                        type="range"
+                        min={1}
+                        max={2.8}
+                        step={0.05}
+                        value={draft.orderHighlightRadius}
+                        onChange={(e) =>
+                          setDraft((d) => ({
+                            ...d,
+                            orderHighlightRadius: Number(e.target.value),
+                          }))
+                        }
+                        className="w-full accent-[var(--forest)]"
+                      />
+                      <span className="w-14 text-center text-lg font-bold text-[var(--forest-ink)]">
+                        {draft.orderHighlightRadius.toFixed(2)}×
+                      </span>
+                    </div>
+                    <div className="mt-3 flex items-center justify-center rounded-2xl bg-[var(--forest)]/5 py-4">
+                      <span className="relative inline-flex items-center justify-center">
+                        <span
+                          className="absolute left-1/2 top-1/2 aspect-square -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-solid"
+                          style={{
+                            width: `${draft.orderHighlightRadius}em`,
+                            height: `${draft.orderHighlightRadius}em`,
+                            borderColor: draft.orderHighlightColor,
+                            fontSize: "1.75rem",
+                          }}
+                          aria-hidden
+                        />
+                        <span
+                          className="relative z-[1] text-3xl font-black tabular-nums"
+                          style={{ color: draft.orderHighlightColor }}
+                        >
+                          42
+                        </span>
+                      </span>
+                    </div>
+                  </label>
+
+                  <label className="mt-4 block">
+                    <span className="text-xs font-semibold text-[var(--forest-muted)]">
                       Dimensione numeri sulla cartina
                     </span>
                     <div className="mt-2 flex items-center gap-3">

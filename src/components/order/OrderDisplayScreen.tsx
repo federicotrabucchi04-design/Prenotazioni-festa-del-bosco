@@ -39,6 +39,7 @@ export function OrderDisplayScreen({ embedded = false }: { embedded?: boolean })
 
   const highlightMs = settings.orderHighlightSeconds * 1000;
   const highlightColor = settings.orderHighlightColor;
+  const highlightRadius = settings.orderHighlightRadius;
 
   const numberScale = useMemo(() => {
     const base = settings.orderNumberScale;
@@ -100,6 +101,7 @@ export function OrderDisplayScreen({ embedded = false }: { embedded?: boolean })
           assignments={board.assignments}
           highlight={board.highlight}
           highlightColor={highlightColor}
+          highlightRadius={highlightRadius}
           numberScale={numberScale}
           colorRanges={settings.orderColorRanges}
           variant="display"

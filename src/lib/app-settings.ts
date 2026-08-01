@@ -28,6 +28,8 @@ export interface AppSettings {
   orderHighlightSeconds: number;
   /** Colore cerchio highlight (hex) */
   orderHighlightColor: string;
+  /** Raggio cerchio highlight rispetto al numero (em, tipico 1.0–2.8) */
+  orderHighlightRadius: number;
   /** Scala dimensione numeri ordine (0.6–2.2) */
   orderNumberScale: number;
   /** Colori numeri per fasce (es. 1–19 blu) */
@@ -58,6 +60,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   },
   orderHighlightSeconds: 8,
   orderHighlightColor: "#dc2626",
+  orderHighlightRadius: 1.55,
   orderNumberScale: 1,
   orderColorRanges: DEFAULT_COLOR_RANGES.map((r) => ({ ...r })),
   capacityOverflow: 2,
@@ -172,6 +175,12 @@ export function normalizeSettings(raw: Partial<AppSettings> | null): AppSettings
     orderHighlightColor: normalizeHex(
       raw?.orderHighlightColor,
       DEFAULT_SETTINGS.orderHighlightColor,
+    ),
+    orderHighlightRadius: clampFloat(
+      Number(raw?.orderHighlightRadius),
+      1,
+      2.8,
+      DEFAULT_SETTINGS.orderHighlightRadius,
     ),
     orderNumberScale: clampFloat(
       Number(raw?.orderNumberScale),
