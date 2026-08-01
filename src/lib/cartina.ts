@@ -18,6 +18,8 @@ export interface ZoneOnBoard {
   tableGapX?: TableGapMode;
   /** Spaziatura verticale tra tavoli in cartina */
   tableGapY?: TableGapMode;
+  /** Se true: niente fascia titolo, solo bordo zona */
+  hideTitle?: boolean;
 }
 
 export interface CartinaPrefs {
@@ -341,6 +343,7 @@ export function normalizePlacement(p: ZoneOnBoard): ZoneOnBoard {
   if (p.tableGapY === "near" || p.tableGapY === "far") {
     out.tableGapY = p.tableGapY;
   }
+  if (p.hideTitle === true) out.hideTitle = true;
   return out;
 }
 

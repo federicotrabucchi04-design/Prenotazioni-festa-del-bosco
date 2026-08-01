@@ -97,16 +97,18 @@ export function OrderCartinaView({
               borderColor: accent,
             }}
           >
-            <h4
-              className={`shrink-0 text-center font-bold leading-tight text-white ${
-                isDisplay
-                  ? "px-0.5 py-[0.15cqmin] text-[clamp(8px,1.6cqmin,18px)]"
-                  : "px-1 py-0.5 text-[10px] sm:text-xs"
-              }`}
-              style={{ backgroundColor: accent }}
-            >
-              {zone.name}
-            </h4>
+            {!placement.hideTitle ? (
+              <h4
+                className={`shrink-0 text-center font-bold leading-tight text-white ${
+                  isDisplay
+                    ? "px-0.5 py-[0.15cqmin] text-[clamp(8px,1.6cqmin,18px)]"
+                    : "px-1 py-0.5 text-[10px] sm:text-xs"
+                }`}
+                style={{ backgroundColor: accent }}
+              >
+                {zone.name}
+              </h4>
+            ) : null}
             <div className="relative min-h-0 flex-1 bg-white">
               {rects.map(({ table, x, y, w, h }) => {
                 const key = assignmentKey(zone.id, table.number);

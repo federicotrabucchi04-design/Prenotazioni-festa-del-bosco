@@ -51,12 +51,15 @@ function drawZoneBlock(
   ctx.lineWidth = 3;
   ctx.strokeRect(x, y, w, h);
 
-  const headerH = Math.min(48, h * 0.14);
-  ctx.fillStyle = accent;
-  ctx.fillRect(x, y, w, headerH);
-  ctx.fillStyle = "#ffffff";
-  ctx.font = "bold 26px system-ui, sans-serif";
-  ctx.fillText(zone.name, x + 12, y + Math.min(32, headerH * 0.72));
+  const hideTitle = placement?.hideTitle === true;
+  const headerH = hideTitle ? 0 : Math.min(48, h * 0.14);
+  if (!hideTitle) {
+    ctx.fillStyle = accent;
+    ctx.fillRect(x, y, w, headerH);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 26px system-ui, sans-serif";
+    ctx.fillText(zone.name, x + 12, y + Math.min(32, headerH * 0.72));
+  }
 
   const guests = guestsByTable(reservations, zone.name);
   const contentX = x;

@@ -764,17 +764,22 @@ function CartinaArrangeBoard({
               }`}
               onPointerDown={(e) => startZoneDrag(e, p, "move")}
             >
-              <div
-                className="shrink-0 px-0.5 py-0.5 text-center text-[9px] font-bold leading-none text-white sm:text-[10px]"
-                style={{ backgroundColor: accent }}
-              >
-                {zone.name}
-              </div>
+              {!p.hideTitle ? (
+                <div
+                  className="shrink-0 px-0.5 py-0.5 text-center text-[9px] font-bold leading-none text-white sm:text-[10px]"
+                  style={{ backgroundColor: accent }}
+                >
+                  {zone.name}
+                </div>
+              ) : null}
               <div
                 className="flex min-h-0 flex-1 items-center justify-center px-0.5 text-[8px]"
                 style={{ backgroundColor: `${accent}14`, color: accent }}
               >
                 {zone.tables.length} tavoli
+                {p.hideTitle ? (
+                  <span className="ml-1 opacity-70">· {zone.name}</span>
+                ) : null}
               </div>
               {selected && tool === "move" ? (
                 <button
@@ -825,6 +830,23 @@ function CartinaArrangeBoard({
               upsertPlacement({ ...selectedPlacement, tableGapY })
             }
           />
+
+          <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl bg-[var(--forest)]/5 px-3 py-2.5">
+            <span className="text-xs font-semibold text-[var(--forest-ink)]">
+              Nascondi titolo (solo bordo)
+            </span>
+            <input
+              type="checkbox"
+              checked={selectedPlacement.hideTitle === true}
+              onChange={(e) =>
+                upsertPlacement({
+                  ...selectedPlacement,
+                  hideTitle: e.target.checked ? true : undefined,
+                })
+              }
+              className="h-5 w-5 accent-[var(--forest)]"
+            />
+          </label>
         </div>
       ) : null}
 
@@ -1096,12 +1118,14 @@ function CartinaSheet({
                 borderColor: accent,
               }}
             >
-              <h4
-                className="shrink-0 px-0.5 py-px text-center text-[8px] font-bold leading-tight text-white print:text-[7pt]"
-                style={{ backgroundColor: accent }}
-              >
-                {zone.name}
-              </h4>
+              {!placement.hideTitle ? (
+                <h4
+                  className="shrink-0 px-0.5 py-px text-center text-[8px] font-bold leading-tight text-white print:text-[7pt]"
+                  style={{ backgroundColor: accent }}
+                >
+                  {zone.name}
+                </h4>
+              ) : null}
               <div className="relative min-h-0 flex-1 bg-white">
                 {rects.map(({ table, x, y, w, h }) => {
                   const tableGuests = guests.get(table.number) ?? [];
