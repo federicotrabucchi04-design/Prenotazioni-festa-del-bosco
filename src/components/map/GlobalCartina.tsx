@@ -50,6 +50,7 @@ import {
   zoneAccentColor,
 } from "@/lib/cartina";
 import { saveOrderCartina } from "@/lib/order-board";
+import { snapGrid, TABLE_GRID_SNAP } from "@/lib/layout-utils";
 import { CartinaViewportGuides } from "@/components/map/CartinaViewportGuides";
 
 type Step = "arrange" | "preview";
@@ -362,6 +363,10 @@ function CartinaArrangeBoard({
     return Math.min(100, Math.max(0, v));
   }
 
+  function snapBoard(v: number) {
+    return snapGrid(clampBoard(v));
+  }
+
   function startMarkDrag(
     id: string,
     mode: "move" | "resize",
@@ -395,15 +400,15 @@ function CartinaArrangeBoard({
     if (d.mode === "move") {
       if (s.kind === "line") {
         updateMark(d.markId, {
-          x: clampBoard(s.x + dx),
-          y: clampBoard(s.y + dy),
-          x2: clampBoard((s.x2 ?? s.x) + dx),
-          y2: clampBoard((s.y2 ?? s.y) + dy),
+          x: snapBoard(s.x + dx),
+          y: snapBoard(s.y + dy),
+          x2: snapBoard((s.x2 ?? s.x) + dx),
+          y2: snapBoard((s.y2 ?? s.y) + dy),
         });
       } else {
         updateMark(d.markId, {
-          x: clampBoard(s.x + dx),
-          y: clampBoard(s.y + dy),
+          x: snapBoard(s.x + dx),
+          y: snapBoard(s.y + dy),
         });
       }
       return;
@@ -412,8 +417,8 @@ function CartinaArrangeBoard({
     // resize
     if (s.kind === "rect") {
       updateMark(d.markId, {
-        w: Math.max(MIN_ZONE_SIZE, (s.w ?? 10) + dx),
-        h: Math.max(MIN_ZONE_SIZE, (s.h ?? 10) + dy),
+        w: Math.max(TABLE_GRID_SNAP, snapBoard((s.w ?? 10) + dx)),
+        h: Math.max(TABLE_GRID_SNAP, snapBoard((s.h ?? 10) + dy)),
       });
       return;
     }
@@ -427,7 +432,9 @@ function CartinaArrangeBoard({
 
   function onBoardPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if (!boardRef.current) return;
-    const { x, y } = pointerPercent(e, boardRef.current);
+    const raw = pointerPercent(e, boardRef.current);
+    const x = snapBoard(raw.x);
+    const y = snapBoard(raw.y);
 
     if (pendingZoneId && tool === "move") {
       upsertPlacement({
@@ -483,10 +490,12 @@ function CartinaArrangeBoard({
 
   function onBoardPointerMove(e: React.PointerEvent<HTMLDivElement>) {
     if (!boardRef.current) return;
-    const { x, y } = pointerPercent(e, boardRef.current);
+    const raw = pointerPercent(e, boardRef.current);
+    const x = snapBoard(raw.x);
+    const y = snapBoard(raw.y);
 
     if (markDrag.current) {
-      applyMarkDrag(x, y);
+      applyMarkDrag(raw.x, raw.y);
       return;
     }
 
@@ -495,14 +504,14 @@ function CartinaArrangeBoard({
       if (d.mode === "move") {
         upsertPlacement({
           ...d.start,
-          x: d.start.x + (x - d.ox),
-          y: d.start.y + (y - d.oy),
+          x: d.start.x + (raw.x - d.ox),
+          y: d.start.y + (raw.y - d.oy),
         });
       } else {
         upsertPlacement({
           ...d.start,
-          w: Math.max(MIN_ZONE_SIZE, x - d.start.x),
-          h: Math.max(MIN_ZONE_SIZE, y - d.start.y),
+          w: Math.max(MIN_ZONE_SIZE, raw.x - d.start.x),
+          h: Math.max(MIN_ZONE_SIZE, raw.y - d.start.y),
         });
       }
       return;
@@ -754,8 +763,8 @@ function CartinaArrangeBoard({
       <p className="text-[11px] text-[var(--forest-muted)]">
         Lavagna = foglio A4 verticale = ciò che vede lo <strong>Schermo</strong>{" "}
         (TV in verticale). Tratteggio blu = bordo TV/stampa; ambra = area sicura;
-        rosso = riferimento da evitare (TV orizzontale). Muovi le zone liberamente
-        fino ai bordi.
+        rosso = riferimento da evitare (TV orizzontale). Zone e segni si
+        agganciano alla griglia ogni {TABLE_GRID_SNAP}%.
       </p>
 
       <div
@@ -763,7 +772,8 @@ function CartinaArrangeBoard({
         onPointerDown={onBoardPointerDown}
         onPointerMove={onBoardPointerMove}
         onPointerUp={onBoardPointerUp}
-        className="relative mx-auto aspect-[210/297] w-full max-h-[min(72dvh,900px)] touch-none overflow-hidden border-2 border-blue-500/40 bg-[linear-gradient(rgba(45,90,39,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(45,90,39,0.05)_1px,transparent_1px)] bg-size-[16px_16px] bg-white shadow-sm"
+        className="relative mx-auto aspect-[210/297] w-full max-h-[min(72dvh,900px)] touch-none overflow-hidden border-2 border-blue-500/40 bg-[linear-gradient(rgba(45,90,39,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(45,90,39,0.1)_1px,transparent_1px)] bg-white shadow-sm"
+        style={{ backgroundSize: `${TABLE_GRID_SNAP}% ${TABLE_GRID_SNAP}%` }}
       >
         {showGuides ? <CartinaViewportGuides /> : null}
 

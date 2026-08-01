@@ -118,3 +118,9 @@ export function snapPercent(value: number, step = TABLE_GRID_SNAP) {
   const snapped = Math.round(value / step) * step;
   return clampPercent(snapped);
 }
+
+/** Snap su griglia 0–100 (lavagna cartina / segni) */
+export function snapGrid(value: number, step = TABLE_GRID_SNAP) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(100, Math.max(0, Math.round(value / step) * step));
+}

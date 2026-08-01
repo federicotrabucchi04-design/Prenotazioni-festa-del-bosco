@@ -1,6 +1,6 @@
 import type { MapMark, Reservation, TableSpot, VenueLayout, ZoneLayout } from "@/lib/types";
 import { createId } from "@/lib/constants";
-import { clampPercent } from "@/lib/layout-utils";
+import { clampPercent, snapGrid, TABLE_GRID_SNAP } from "@/lib/layout-utils";
 
 export const CARTINA_PREFS_KEY = "fdb-cartina-prefs-v3";
 
@@ -332,10 +332,19 @@ export function saveCartinaPrefs(prefs: CartinaPrefs) {
 }
 
 export function normalizePlacement(p: ZoneOnBoard): ZoneOnBoard {
-  const w = Math.max(MIN_ZONE_SIZE, Math.min(100, p.w));
-  const h = Math.max(MIN_ZONE_SIZE, Math.min(100, p.h));
-  const x = Math.max(0, Math.min(p.x, 100 - w));
-  const y = Math.max(0, Math.min(p.y, 100 - h));
+  // Snap alla stessa griglia dei tavoli (ogni 5%)
+  let w = Math.max(TABLE_GRID_SNAP, snapGrid(Math.max(MIN_ZONE_SIZE, p.w)));
+  let h = Math.max(TABLE_GRID_SNAP, snapGrid(Math.max(MIN_ZONE_SIZE, p.h)));
+  w = Math.min(100, w);
+  h = Math.min(100, h);
+  let x = snapGrid(p.x);
+  let y = snapGrid(p.y);
+  x = Math.max(0, Math.min(x, 100 - w));
+  y = Math.max(0, Math.min(y, 100 - h));
+  x = snapGrid(x);
+  y = snapGrid(y);
+  if (x + w > 100) x = Math.max(0, 100 - w);
+  if (y + h > 100) y = Math.max(0, 100 - h);
   const out: ZoneOnBoard = { zoneId: p.zoneId, x, y, w, h };
   if (p.tableGapX === "near" || p.tableGapX === "far") {
     out.tableGapX = p.tableGapX;

@@ -20,6 +20,7 @@ import {
   createDefaultLayout,
   nextTableNumber,
   snapPercent,
+  snapGrid,
   TABLE_GRID_SNAP,
 } from "@/lib/layout-utils";
 import { CARTINA_COLORS, zoneAccentColor } from "@/lib/cartina";
@@ -81,6 +82,10 @@ export function ZoneEditor() {
     };
   }
 
+  function snapMark(v: number) {
+    return snapGrid(v);
+  }
+
   function updateZone(mutator: (z: ZoneLayout) => ZoneLayout) {
     setDraft((prev) => {
       const base = prev ?? remoteLayout;
@@ -131,7 +136,13 @@ export function ZoneEditor() {
         ...z,
         marks: [
           ...(z.marks ?? []),
-          { id, kind: "text", x, y, text: label.trim() },
+          {
+            id,
+            kind: "text",
+            x: snapMark(x),
+            y: snapMark(y),
+            text: label.trim(),
+          },
         ],
       }));
       setSelectedMarkId(id);
@@ -141,16 +152,18 @@ export function ZoneEditor() {
     }
 
     if (tool === "line" || tool === "rect") {
-      drawStart.current = { x, y };
+      const sx = snapMark(x);
+      const sy = snapMark(y);
+      drawStart.current = { x: sx, y: sy };
       setSelectedTableId(null);
       setSelectedMarkId(null);
       setDraftShape({
         id: "draft",
         kind: tool,
-        x,
-        y,
-        x2: x,
-        y2: y,
+        x: sx,
+        y: sy,
+        x2: sx,
+        y2: sy,
         w: 0,
         h: 0,
       });
@@ -167,21 +180,23 @@ export function ZoneEditor() {
     if (!drawStart.current || !draftShape) return;
     const { x, y } = pointerPercent(e);
     const start = drawStart.current;
+    const sx = snapMark(x);
+    const sy = snapMark(y);
 
     if (draftShape.kind === "line") {
-      setDraftShape({ ...draftShape, x2: x, y2: y });
+      setDraftShape({ ...draftShape, x2: sx, y2: sy });
       return;
     }
 
     if (draftShape.kind === "rect") {
-      const left = Math.min(start.x, x);
-      const top = Math.min(start.y, y);
+      const left = Math.min(start.x, sx);
+      const top = Math.min(start.y, sy);
       setDraftShape({
         ...draftShape,
         x: left,
         y: top,
-        w: Math.abs(x - start.x),
-        h: Math.abs(y - start.y),
+        w: Math.abs(sx - start.x),
+        h: Math.abs(sy - start.y),
       });
     }
   }
@@ -445,9 +460,8 @@ export function ZoneEditor() {
           Editor zone, tavoli e riferimenti
         </p>
         <p className="mt-1">
-          I <strong>tavoli</strong> sono oggetti operativi (si agganciano alla
-          griglia ogni {TABLE_GRID_SNAP}%). Linee, rettangoli e scritte sono solo
-          punti di riferimento sulla mappa.
+          I <strong>tavoli</strong> e i riferimenti (linee, box, scritte) si
+          agganciano alla griglia ogni {TABLE_GRID_SNAP}%.
         </p>
       </div>
 
