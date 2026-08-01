@@ -5,7 +5,7 @@ import {
   normalizePlacement,
 } from "@/lib/cartina";
 import type { MapMark } from "@/lib/types";
-import { offlineSet, offlineUpdate } from "@/lib/offline-sync";
+import { offlineSet, offlineUpdate, hasPendingWriteForPath } from "@/lib/offline-sync";
 import { get, onValue, ref } from "firebase/database";
 
 export const ORDER_BOARD_STORAGE_KEY = "fdb-order-board";
@@ -156,9 +156,33 @@ export function subscribeOrderBoard(listener: Listener): () => void {
   const unsub = onValue(
     ref(db, ORDER_BOARD_PATH),
     (snap) => {
-      const state = snap.exists()
-        ? normalizeBoard(snap.val() as Partial<OrderBoardState>)
-        : emptyBoard();
+      if (!snap.exists()) {
+        // Non cancellare board locale / coda offline
+        if (
+          hasPendingWriteForPath(ORDER_BOARD_PATH) ||
+          readDemo().updatedAt > 0
+        ) {
+          listener(readDemo());
+          return;
+        }
+        const empty = emptyBoard();
+        try {
+          localStorage.setItem(ORDER_BOARD_STORAGE_KEY, JSON.stringify(empty));
+        } catch {
+          // ignore
+        }
+        listener(empty);
+        return;
+      }
+      const state = normalizeBoard(snap.val() as Partial<OrderBoardState>);
+      if (hasPendingWriteForPath(ORDER_BOARD_PATH)) {
+        const local = readDemo();
+        // Preferisci locale se più recente mentre la coda è in sync
+        if (local.updatedAt >= state.updatedAt) {
+          listener(local);
+          return;
+        }
+      }
       try {
         localStorage.setItem(ORDER_BOARD_STORAGE_KEY, JSON.stringify(state));
       } catch {

@@ -214,16 +214,29 @@ export function subscribeReservations(listener: Listener): () => void {
 async function loadAllReservations(): Promise<Reservation[]> {
   await ensureEveningsReady();
   if (getDataMode() === "demo") return readDemoReservations();
-  const db = getFirebaseDb();
-  if (!db) return [];
   const eveningId = cachedActiveEveningId ?? (await getActiveEveningId());
-  if (!eveningId) return [];
-  const snap = await get(ref(db, `eveningReservations/${eveningId}`));
-  if (!snap.exists()) return [];
-  const rows = snap.val() as Record<string, Partial<Reservation>>;
-  return Object.entries(rows)
-    .map(([id, row]) => normalizeRecord(id, row))
-    .filter((r): r is Reservation => Boolean(r));
+  if (!eveningId) return readResCache("") ?? [];
+
+  const cached = readResCache(eveningId);
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    return cached ?? [];
+  }
+
+  const db = getFirebaseDb();
+  if (!db) return cached ?? [];
+  try {
+    const snap = await get(ref(db, `eveningReservations/${eveningId}`));
+    if (!snap.exists()) return cached ?? [];
+    const rows = snap.val() as Record<string, Partial<Reservation>>;
+    const items = Object.entries(rows)
+      .map(([id, row]) => normalizeRecord(id, row))
+      .filter((r): r is Reservation => Boolean(r));
+    const sorted = sortReservations(items);
+    writeResCache(eveningId, sorted);
+    return sorted;
+  } catch {
+    return cached ?? [];
+  }
 }
 
 function toPayload(input: ReservationInput) {

@@ -63,6 +63,11 @@ export function pendingOfflineWrites(): number {
   return readQueue().length;
 }
 
+/** True se c’è almeno una scrittura in coda per questo path (esatto). */
+export function hasPendingWriteForPath(path: string): boolean {
+  return readQueue().some((q) => q.path === path);
+}
+
 function enqueue(
   entry:
     | { op: "set"; path: string; value: unknown; at?: number }
@@ -71,35 +76,14 @@ function enqueue(
 ) {
   const queue = readQueue();
   const path = entry.path;
+  const prevForPath = queue.filter((q) => q.path === path);
   const kept = queue.filter((q) => q.path !== path);
 
-  if (entry.op === "update") {
-    const updateValue = entry.value;
-    const prevSet = queue.find((q) => q.path === path && q.op === "set");
-    if (
-      prevSet &&
-      prevSet.op === "set" &&
-      prevSet.value &&
-      typeof prevSet.value === "object"
-    ) {
-      kept.push({
-        id: createId(),
-        op: "set",
-        path,
-        value: sanitize({
-          ...(prevSet.value as Record<string, unknown>),
-          ...updateValue,
-        }),
-        at: Date.now(),
-      });
-      writeQueue(kept);
-      return;
-    }
+  if (entry.op === "remove") {
     kept.push({
       id: createId(),
-      op: "update",
+      op: "remove",
       path,
-      value: updateValue,
       at: entry.at ?? Date.now(),
     });
     writeQueue(kept);
@@ -118,10 +102,35 @@ function enqueue(
     return;
   }
 
+  // update: fondi con set/update precedenti sullo stesso path
+  const updateValue = entry.value;
+  const prevSet = prevForPath.find((q) => q.op === "set");
+  if (prevSet && prevSet.op === "set" && prevSet.value && typeof prevSet.value === "object") {
+    kept.push({
+      id: createId(),
+      op: "set",
+      path,
+      value: sanitize({
+        ...(prevSet.value as Record<string, unknown>),
+        ...updateValue,
+      }),
+      at: Date.now(),
+    });
+    writeQueue(kept);
+    return;
+  }
+
+  const prevUpdate = prevForPath.find((q) => q.op === "update");
+  const merged = sanitize({
+    ...(prevUpdate && prevUpdate.op === "update" ? prevUpdate.value : {}),
+    ...updateValue,
+  }) as Record<string, unknown>;
+
   kept.push({
     id: createId(),
-    op: "remove",
+    op: "update",
     path,
+    value: merged,
     at: entry.at ?? Date.now(),
   });
   writeQueue(kept);
@@ -194,6 +203,10 @@ export async function offlineRemove(path: string): Promise<WriteResult> {
   }
 }
 
+/**
+ * Svuota la coda in modo sicuro: dopo ogni await rilegge localStorage,
+ * così enqueue durante il flush non viene sovrascritto.
+ */
 export async function flushOfflineQueue(): Promise<number> {
   if (!getOnline() || flushing) return 0;
   const db = getFirebaseDb();
@@ -202,8 +215,9 @@ export async function flushOfflineQueue(): Promise<number> {
   flushing = true;
   let synced = 0;
   try {
-    let queue = readQueue();
-    while (queue.length > 0) {
+    while (getOnline()) {
+      const queue = readQueue();
+      if (queue.length === 0) break;
       const item = queue[0]!;
       try {
         if (item.op === "set") {
@@ -213,11 +227,16 @@ export async function flushOfflineQueue(): Promise<number> {
         } else {
           await remove(ref(db, item.path));
         }
-        queue = queue.slice(1);
-        writeQueue(queue);
+        // Rileggi: enqueue può aver aggiunto voci nel frattempo
+        const after = readQueue();
+        if (after[0]?.id === item.id) {
+          writeQueue(after.slice(1));
+        } else {
+          // La testa è cambiata (coalesce): rimuovi solo l’id sincronizzato
+          writeQueue(after.filter((q) => q.id !== item.id));
+        }
         synced += 1;
       } catch {
-        // Rete ancora instabile: riprova al prossimo online
         break;
       }
     }
@@ -245,7 +264,6 @@ export function startOfflineSync(onFlushed?: (count: number) => void): () => voi
     started = true;
   }
 
-  // Tentativo iniziale
   void flushOfflineQueue().then((n) => {
     if (n > 0) onFlushed?.(n);
   });

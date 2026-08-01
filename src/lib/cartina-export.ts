@@ -207,8 +207,6 @@ export function downloadCartinaPng(opts: {
   const areaW = W - pad * 2;
   const areaH = H - pad * 2 - headerH;
 
-  drawMarks(ctx, marks, areaX, areaY, areaW, areaH);
-
   for (const { zone, placement } of items) {
     const x = areaX + (placement.x / 100) * areaW;
     const y = areaY + (placement.y / 100) * areaH;
@@ -216,6 +214,9 @@ export function downloadCartinaPng(opts: {
     const h = (placement.h / 100) * areaH;
     drawZoneBlock(ctx, zone, reservations, x, y, w, h, placement);
   }
+
+  // Marks sopra le zone (come in anteprima z-20)
+  drawMarks(ctx, marks, areaX, areaY, areaW, areaH);
 
   const link = document.createElement("a");
   link.download =

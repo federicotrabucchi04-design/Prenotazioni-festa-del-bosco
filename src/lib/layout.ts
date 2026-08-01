@@ -1,7 +1,7 @@
 import { createDefaultLayout, LAYOUT_STORAGE_KEY } from "@/lib/layout-utils";
 import { getFirebaseDb, isFirebaseConfigured } from "@/lib/firebase";
 import type { VenueLayout, ZoneLayout, TableSpot, MapMark } from "@/lib/types";
-import { offlineSet } from "@/lib/offline-sync";
+import { offlineSet, hasPendingWriteForPath } from "@/lib/offline-sync";
 import { onValue, ref } from "firebase/database";
 
 type Listener = (layout: VenueLayout) => void;
@@ -170,9 +170,26 @@ export function subscribeLayout(listener: Listener): () => void {
     layoutRef,
     (snap) => {
       if (!snap.exists()) {
+        // Non sovrascrivere un layout custom ancora in coda offline
+        if (hasPendingWriteForPath("venueLayout")) {
+          listener(readDemoLayout());
+          return;
+        }
+        const local = readDemoLayout();
+        // Se c’è già un layout locale non-vuoto, usalo invece del seed di default
+        if (local.zones.length > 0 && local.updatedAt > 0) {
+          void offlineSet("venueLayout", serializeLayout(local));
+          listener(local);
+          return;
+        }
         const seeded = serializeLayout(createDefaultLayout());
         void offlineSet("venueLayout", seeded);
         writeDemoLayout(seeded);
+        return;
+      }
+      // Se abbiamo modifiche layout ancora da sync, non far sovrascrivere dalla remote vuota/stale
+      if (hasPendingWriteForPath("venueLayout")) {
+        listener(readDemoLayout());
         return;
       }
       const next = normalizeLayout(snap.val() as Partial<VenueLayout>);
