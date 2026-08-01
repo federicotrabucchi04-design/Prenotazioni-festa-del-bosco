@@ -248,7 +248,7 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                 layout={layout}
                 prefs={prefs}
                 assignments={board.assignments}
-                highlight={board.highlight}
+                highlight={null}
                 interactive
                 numberScale={
                   embedded
@@ -256,7 +256,6 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                     : Math.max(1, settings.orderNumberScale * 1.1)
                 }
                 colorRanges={settings.orderColorRanges}
-                highlightColor={settings.orderHighlightColor}
                 onTableClick={openAssign}
               />
             </div>

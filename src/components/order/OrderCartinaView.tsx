@@ -84,7 +84,9 @@ export function OrderCartinaView({
 
   return (
     <div
-      className={`order-cartina-view relative h-full w-full overflow-hidden bg-white ${className}`}
+      className={`order-cartina-view relative h-full w-full bg-white ${
+        isDisplay ? "overflow-visible" : "overflow-hidden"
+      } ${className}`}
       style={{ containerType: "size" }}
     >
       <ZoneMarksLayer marks={prefs.marks as MapMark[]} />
@@ -95,8 +97,10 @@ export function OrderCartinaView({
         return (
           <section
             key={zone.id}
-            className={`absolute flex flex-col overflow-hidden bg-white ${
-              isDisplay ? "rounded-none border" : "rounded-md border-2 shadow-sm"
+            className={`absolute flex flex-col bg-white ${
+              isDisplay
+                ? "overflow-visible rounded-none border"
+                : "overflow-hidden rounded-md border-2 shadow-sm"
             }`}
             style={{
               left: `${placement.x}%`,
@@ -118,10 +122,15 @@ export function OrderCartinaView({
                 {zone.name}
               </h4>
             ) : null}
-            <div className="relative min-h-0 flex-1 overflow-hidden bg-white">
+            <div
+              className={`relative min-h-0 flex-1 bg-white ${
+                isDisplay ? "overflow-visible" : "overflow-hidden"
+              }`}
+            >
               {rects.map(({ table, x, y, w, h }) => {
                 const nums = ordersForTable(assignments, zone.id, table.number);
                 const isHit =
+                  isDisplay &&
                   highlight != null &&
                   highlight.found &&
                   nums.includes(highlight.orderNumber);
@@ -147,36 +156,19 @@ export function OrderCartinaView({
                           onClick: () => onTableClick?.(zone, table.number),
                         }
                       : {})}
-                    className={`absolute flex items-center justify-center overflow-hidden text-center transition ${
+                    className={`absolute flex items-center justify-center text-center transition ${
                       interactive ? "active:scale-95 touch-manipulation" : ""
-                    } ${isHit ? "z-20" : ""}`}
+                    } ${isHit ? "z-30 overflow-visible" : "overflow-hidden"}`}
                     style={{
                       left: `${x}%`,
                       top: `${y}%`,
                       width: `${w}%`,
                       height: `${h}%`,
-                      backgroundColor: isHit
-                        ? `${highlightColor}18`
-                        : "#ffffff",
+                      backgroundColor: "#ffffff",
                       boxShadow: `inset 0 0 0 1px ${accent}44`,
                       padding: nums.length > 1 ? "2%" : 0,
                     }}
                   >
-                    {isHit ? (
-                      <span
-                        className="pointer-events-none absolute z-0 animate-order-pulse rounded-full"
-                        style={{
-                          inset: isDisplay ? "2%" : "4%",
-                          borderStyle: "solid",
-                          borderWidth: isDisplay
-                            ? "clamp(3px, 1.1cqmin, 12px)"
-                            : "3px",
-                          borderColor: highlightColor,
-                          boxShadow: `0 0 0 clamp(2px, 0.6cqmin, 8px) ${highlightColor}55`,
-                        }}
-                        aria-hidden
-                      />
-                    ) : null}
                     {nums.length > 0 ? (
                       <span
                         className="relative z-[1] grid h-full w-full place-items-center gap-[2%]"
@@ -195,13 +187,33 @@ export function OrderCartinaView({
                           return (
                             <span
                               key={orderNum}
-                              className="flex min-h-0 min-w-0 items-center justify-center font-black leading-none tabular-nums"
+                              className={`relative flex min-h-0 min-w-0 items-center justify-center font-black leading-none tabular-nums ${
+                                hitThis ? "z-10" : ""
+                              }`}
                               style={{
                                 fontSize,
                                 color: hitThis ? highlightColor : numColor,
                               }}
                             >
-                              {orderNum}
+                              {hitThis ? (
+                                <span
+                                  className="pointer-events-none absolute left-1/2 top-1/2 z-0 aspect-square -translate-x-1/2 -translate-y-1/2 animate-order-pulse rounded-full border-solid"
+                                  style={{
+                                    // Solo cerchio sul numero, senza riempire/tagliare il tavolo
+                                    width: "1.55em",
+                                    height: "1.55em",
+                                    minWidth: "1.55em",
+                                    minHeight: "1.55em",
+                                    borderWidth:
+                                      "clamp(3px, 0.85cqmin, 9px)",
+                                    borderColor: highlightColor,
+                                    boxShadow: `0 0 0 clamp(2px, 0.4cqmin, 5px) ${highlightColor}40`,
+                                    backgroundColor: "transparent",
+                                  }}
+                                  aria-hidden
+                                />
+                              ) : null}
+                              <span className="relative z-[1]">{orderNum}</span>
                             </span>
                           );
                         })}
