@@ -14,10 +14,11 @@ import { ZoneTabsBar } from "@/components/ZoneTabsBar";
 import { OnlineStatusBadge } from "@/components/OnlineStatusBadge";
 import { getZoneByName } from "@/lib/layout-utils";
 import {
-  assignmentKey,
   clearAllAssignments,
+  ordersForTable,
   saveOrderCartina,
-  setTableOrderNumber,
+  setTableOrderNumbers,
+  type OrderAssignments,
 } from "@/lib/order-board";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import {
@@ -42,6 +43,7 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
     zone: ZoneLayout;
     tableNumber: number;
   } | null>(null);
+  const [pendingNums, setPendingNums] = useState<number[]>([]);
   const [digits, setDigits] = useState("");
   const [busy, setBusy] = useState(false);
   const maxDigits = settings.orderMaxDigits;
@@ -65,23 +67,31 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
     toast.success("Disposizione cartina sincronizzata");
   }
 
-  async function assign(orderNumber: number | null) {
+  async function savePending(numsOverride?: number[]) {
     if (!pending) return;
+    let nums = numsOverride ?? pendingNums;
+    if (numsOverride == null && digits) {
+      const n = Number(digits);
+      if (Number.isFinite(n) && n > 0) {
+        const f = Math.floor(n);
+        if (!nums.includes(f)) nums = [...nums, f];
+      }
+    }
     setBusy(true);
     try {
-      // Sempre sincronizza la cartina così lo schermo la vede
       await saveOrderCartina(prefs);
-      await setTableOrderNumber(
+      await setTableOrderNumbers(
         pending.zone.id,
         pending.tableNumber,
-        orderNumber,
+        nums,
       );
       toast.success(
-        orderNumber
-          ? `Tavolo ${pending.tableNumber} → ordine ${orderNumber}`
-          : "Numero rimosso",
+        nums.length
+          ? `Tavolo ${pending.tableNumber} → ${nums.join(", ")}`
+          : "Numeri rimossi",
       );
       setPending(null);
+      setPendingNums([]);
       setDigits("");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Errore");
@@ -90,11 +100,22 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
     }
   }
 
+  function addDigitNumber() {
+    if (!digits) return;
+    const n = Number(digits);
+    if (!Number.isFinite(n) || n <= 0) {
+      toast.error("Numero non valido");
+      return;
+    }
+    const f = Math.floor(n);
+    setPendingNums((cur) => (cur.includes(f) ? cur : [...cur, f]));
+    setDigits("");
+  }
+
   function openAssign(zone: ZoneLayout, tableNumber: number) {
-    const key = assignmentKey(zone.id, tableNumber);
-    const current = board.assignments[key];
     setPending({ zone, tableNumber });
-    setDigits(current ? String(current) : "");
+    setPendingNums(ordersForTable(board.assignments, zone.id, tableNumber));
+    setDigits("");
   }
 
   if (layoutLoading || boardLoading) {
@@ -275,7 +296,35 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
             <p className="text-sm text-[var(--forest-muted)] md:text-base">
               {pending.zone.name} · tavolo {pending.tableNumber}
             </p>
-            <p className="mt-1 text-center text-4xl font-black tracking-wider text-[var(--forest-ink)] tabular-nums md:text-5xl">
+            <p className="mt-1 text-xs text-[var(--forest-muted)]">
+              Puoi mettere più numeri sullo stesso tavolo
+            </p>
+
+            {pendingNums.length > 0 ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {pendingNums.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    disabled={busy}
+                    onClick={() =>
+                      setPendingNums((cur) => cur.filter((x) => x !== n))
+                    }
+                    className="inline-flex items-center gap-1.5 rounded-full bg-[var(--forest)] px-3 py-1.5 text-sm font-bold text-white"
+                    title="Togli numero"
+                  >
+                    {n}
+                    <span className="text-xs opacity-80">×</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-3 text-center text-sm text-[var(--forest-muted)]">
+                Nessun numero ancora
+              </p>
+            )}
+
+            <p className="mt-3 text-center text-4xl font-black tracking-wider text-[var(--forest-ink)] tabular-nums md:text-5xl">
               {digits || "—"}
             </p>
             <div className="mt-4 grid grid-cols-3 gap-2 md:gap-3">
@@ -297,11 +346,20 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                 ),
               )}
             </div>
+            <button
+              type="button"
+              disabled={busy || !digits}
+              onClick={addDigitNumber}
+              className="mt-3 w-full rounded-2xl bg-[var(--forest)]/10 py-3 text-sm font-bold text-[var(--forest)] touch-manipulation disabled:opacity-50"
+            >
+              Aggiungi numero
+            </button>
             <div className="mt-3 flex gap-2">
               <button
                 type="button"
                 onClick={() => {
                   setPending(null);
+                  setPendingNums([]);
                   setDigits("");
                 }}
                 className="flex-1 rounded-2xl bg-[var(--forest)]/10 py-3.5 text-sm font-semibold text-[var(--forest)] touch-manipulation"
@@ -311,15 +369,18 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => void assign(null)}
+                onClick={() => {
+                  setPendingNums([]);
+                  setDigits("");
+                }}
                 className="rounded-2xl bg-red-50 px-4 py-3.5 text-sm font-semibold text-red-700 touch-manipulation"
               >
-                Rimuovi
+                Svuota
               </button>
               <button
                 type="button"
-                disabled={busy || !digits}
-                onClick={() => void assign(Number(digits))}
+                disabled={busy}
+                onClick={() => void savePending()}
                 className="flex-1 rounded-2xl bg-[var(--forest)] py-3.5 text-sm font-bold text-white touch-manipulation disabled:opacity-50"
               >
                 Salva
@@ -338,7 +399,7 @@ function ZoneOrderGrid({
   onTableClick,
 }: {
   zone: ZoneLayout;
-  assignments: Record<string, number>;
+  assignments: OrderAssignments;
   onTableClick: (zone: ZoneLayout, tableNumber: number) => void;
 }) {
   const tables = sortedTables(zone);
@@ -349,14 +410,14 @@ function ZoneOrderGrid({
       style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
     >
       {tables.map((t) => {
-        const n = assignments[assignmentKey(zone.id, t.number)];
+        const nums = ordersForTable(assignments, zone.id, t.number);
         return (
           <button
             key={t.id}
             type="button"
             onClick={() => onTableClick(zone, t.number)}
-            className={`flex min-h-[4.5rem] flex-col items-center justify-center rounded-2xl border-2 touch-manipulation active:scale-95 md:min-h-[5.5rem] ${
-              n
+            className={`flex min-h-[4.5rem] flex-col items-center justify-center overflow-hidden rounded-2xl border-2 px-1 touch-manipulation active:scale-95 md:min-h-[5.5rem] ${
+              nums.length
                 ? "border-[var(--forest)] bg-[var(--forest)]/10"
                 : "border-dashed border-[var(--forest)]/25 bg-[var(--forest)]/5"
             }`}
@@ -364,8 +425,16 @@ function ZoneOrderGrid({
             <span className="text-[10px] text-[var(--forest-muted)] md:text-xs">
               T{t.number}
             </span>
-            <span className="text-lg font-black text-[var(--forest-ink)] md:text-2xl">
-              {n ?? "—"}
+            <span
+              className={`font-black leading-tight text-[var(--forest-ink)] ${
+                nums.length > 2
+                  ? "text-sm md:text-base"
+                  : nums.length === 2
+                    ? "text-base md:text-xl"
+                    : "text-lg md:text-2xl"
+              }`}
+            >
+              {nums.length ? nums.join(" · ") : "—"}
             </span>
           </button>
         );

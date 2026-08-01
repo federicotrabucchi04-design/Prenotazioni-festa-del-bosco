@@ -11,7 +11,7 @@ import { get, onValue, ref } from "firebase/database";
 export const ORDER_BOARD_STORAGE_KEY = "fdb-order-board";
 export const ORDER_BOARD_PATH = "orderBoard";
 
-export type OrderAssignments = Record<string, number>;
+export type OrderAssignments = Record<string, number[]>;
 
 export interface OrderHighlight {
   orderNumber: number;
@@ -20,7 +20,7 @@ export interface OrderHighlight {
 }
 
 export interface OrderBoardState {
-  /** chiave: `${zoneId}_${tableNumber}` → numero ordine */
+  /** chiave: `${zoneId}_${tableNumber}` → uno o più numeri ordine */
   assignments: OrderAssignments;
   highlight: OrderHighlight | null;
   /** Disposizione cartina condivisa tra i terminali */
@@ -57,6 +57,57 @@ export function parseAssignmentKey(key: string): {
   return { zoneId, tableNumber };
 }
 
+/** Compat: vecchio formato singolo numero → array */
+export function normalizeOrderList(raw: unknown): number[] {
+  if (raw == null) return [];
+  if (typeof raw === "number") {
+    return Number.isFinite(raw) && raw > 0 ? [Math.floor(raw)] : [];
+  }
+  if (Array.isArray(raw)) {
+    const out: number[] = [];
+    for (const v of raw) {
+      const n = Number(v);
+      if (Number.isFinite(n) && n > 0) {
+        const f = Math.floor(n);
+        if (!out.includes(f)) out.push(f);
+      }
+    }
+    return out;
+  }
+  // Firebase a volte serializza array sparsi come oggetto { "0": 1, "1": 2 }
+  if (typeof raw === "object") {
+    const out: number[] = [];
+    for (const v of Object.values(raw as Record<string, unknown>)) {
+      const n = Number(v);
+      if (Number.isFinite(n) && n > 0) {
+        const f = Math.floor(n);
+        if (!out.includes(f)) out.push(f);
+      }
+    }
+    return out;
+  }
+  return [];
+}
+
+export function ordersForTable(
+  assignments: OrderAssignments,
+  zoneId: string,
+  tableNumber: number,
+): number[] {
+  return assignments[assignmentKey(zoneId, tableNumber)] ?? [];
+}
+
+export function assignmentHasOrder(
+  assignments: OrderAssignments,
+  orderNumber: number,
+): boolean {
+  const n = Math.floor(orderNumber);
+  for (const list of Object.values(assignments)) {
+    if (list.includes(n)) return true;
+  }
+  return false;
+}
+
 function normalizeCartina(raw: unknown): CartinaPrefs | null {
   if (!raw || typeof raw !== "object") return null;
   const c = raw as Partial<CartinaPrefs>;
@@ -86,8 +137,8 @@ function normalizeBoard(raw: Partial<OrderBoardState> | null): OrderBoardState {
   const assignments: OrderAssignments = {};
   if (raw.assignments && typeof raw.assignments === "object") {
     for (const [k, v] of Object.entries(raw.assignments)) {
-      const n = Number(v);
-      if (Number.isFinite(n) && n > 0) assignments[k] = Math.floor(n);
+      const list = normalizeOrderList(v);
+      if (list.length > 0) assignments[k] = list;
     }
   }
   let highlight: OrderHighlight | null = null;
@@ -212,24 +263,50 @@ async function persist(state: OrderBoardState) {
   return next;
 }
 
+/** Imposta l’elenco completo dei numeri su un tavolo (vuoto = rimuovi). */
+export async function setTableOrderNumbers(
+  zoneId: string,
+  tableNumber: number,
+  orderNumbers: number[],
+) {
+  const key = assignmentKey(zoneId, tableNumber);
+  const current = await loadBoardForWrite();
+  const assignments: OrderAssignments = { ...current.assignments };
+  const cleaned = normalizeOrderList(orderNumbers);
+
+  // Ogni numero ordine può stare su un solo tavolo
+  for (const n of cleaned) {
+    for (const [k, list] of Object.entries(assignments)) {
+      if (k === key) continue;
+      const filtered = list.filter((x) => x !== n);
+      if (filtered.length === 0) delete assignments[k];
+      else if (filtered.length !== list.length) assignments[k] = filtered;
+    }
+  }
+
+  if (cleaned.length === 0) delete assignments[key];
+  else assignments[key] = cleaned;
+
+  return persist({ ...current, assignments });
+}
+
+/** Aggiunge o sostituisce un singolo numero (compat). null = svuota tavolo. */
 export async function setTableOrderNumber(
   zoneId: string,
   tableNumber: number,
   orderNumber: number | null,
 ) {
-  const key = assignmentKey(zoneId, tableNumber);
-  const current = await loadBoardForWrite();
-  const assignments = { ...current.assignments };
   if (orderNumber == null || orderNumber <= 0) {
-    delete assignments[key];
-  } else {
-    // Un numero ordine = un solo tavolo
-    for (const [k, v] of Object.entries(assignments)) {
-      if (v === orderNumber && k !== key) delete assignments[k];
-    }
-    assignments[key] = Math.floor(orderNumber);
+    return setTableOrderNumbers(zoneId, tableNumber, []);
   }
-  return persist({ ...current, assignments });
+  const current = await loadBoardForWrite();
+  const key = assignmentKey(zoneId, tableNumber);
+  const existing = current.assignments[key] ?? [];
+  const n = Math.floor(orderNumber);
+  if (existing.includes(n)) {
+    return setTableOrderNumbers(zoneId, tableNumber, existing);
+  }
+  return setTableOrderNumbers(zoneId, tableNumber, [...existing, n]);
 }
 
 export async function setOrderHighlight(orderNumber: number | null) {
@@ -239,9 +316,7 @@ export async function setOrderHighlight(orderNumber: number | null) {
       ? null
       : {
           orderNumber: Math.floor(orderNumber),
-          found: Object.values(board.assignments).includes(
-            Math.floor(orderNumber),
-          ),
+          found: assignmentHasOrder(board.assignments, Math.floor(orderNumber)),
           at: Date.now(),
         };
 
@@ -319,8 +394,9 @@ export function findTablesByOrder(
   orderNumber: number,
 ): { zoneId: string; tableNumber: number }[] {
   const out: { zoneId: string; tableNumber: number }[] = [];
-  for (const [k, v] of Object.entries(assignments)) {
-    if (v !== orderNumber) continue;
+  const n = Math.floor(orderNumber);
+  for (const [k, list] of Object.entries(assignments)) {
+    if (!list.includes(n)) continue;
     const parsed = parseAssignmentKey(k);
     if (parsed) out.push(parsed);
   }
