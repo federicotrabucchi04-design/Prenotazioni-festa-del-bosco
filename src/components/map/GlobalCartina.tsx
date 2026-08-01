@@ -23,6 +23,7 @@ import { EVENT_DATE, createId } from "@/lib/constants";
 import { downloadCartinaPng } from "@/lib/cartina-export";
 import { ZoneMarksLayer } from "@/components/map/ZoneMarksLayer";
 import type { MapMark, Reservation, ZoneLayout } from "@/lib/types";
+import { saveLayout } from "@/lib/layout";
 import {
   type CartinaPrefs,
   type ZoneOnBoard,
@@ -31,6 +32,7 @@ import {
   DEFAULT_ZONE_W,
   MIN_ZONE_SIZE,
   autoPlaceZones,
+  computeTableFillRects,
   fillPagePlacements,
   formatTableGuests,
   guestsByTable,
@@ -41,11 +43,9 @@ import {
   pointerPercent,
   resolvePlacedZones,
   saveCartinaPrefs,
-  sortedTables,
-  tableGridColumns,
+  zoneAccentColor,
 } from "@/lib/cartina";
 import { saveOrderCartina } from "@/lib/order-board";
-import { clampPercent } from "@/lib/layout-utils";
 import { CartinaViewportGuides } from "@/components/map/CartinaViewportGuides";
 
 type Step = "arrange" | "preview";
@@ -166,6 +166,22 @@ export function GlobalCartina() {
               prefs={activePrefs}
               onChange={updatePrefs}
               onPreview={() => setStep("preview")}
+              onZoneColor={async (zoneId, hex) => {
+                try {
+                  await saveLayout({
+                    ...layout,
+                    zones: layout.zones.map((z) =>
+                      z.id === zoneId ? { ...z, color: hex } : z,
+                    ),
+                    updatedAt: Date.now(),
+                  });
+                  toast.success("Colore zona salvato");
+                } catch (err) {
+                  toast.error(
+                    err instanceof Error ? err.message : "Errore colore zona",
+                  );
+                }
+              }}
             />
           ) : (
             <div className="mx-auto w-full max-w-lg px-3 pb-28 pt-3 print:max-w-none print:p-0">
@@ -237,11 +253,13 @@ function CartinaArrangeBoard({
   prefs,
   onChange,
   onPreview,
+  onZoneColor,
 }: {
   layoutZones: ZoneLayout[];
   prefs: CartinaPrefs;
   onChange: (next: CartinaPrefs) => void;
   onPreview: () => void;
+  onZoneColor: (zoneId: string, hex: string) => void | Promise<void>;
 }) {
   const boardRef = useRef<HTMLDivElement>(null);
   const [tool, setTool] = useState<Tool>("move");
@@ -301,8 +319,8 @@ function CartinaArrangeBoard({
     if (pendingZoneId && tool === "move") {
       upsertPlacement({
         zoneId: pendingZoneId,
-        x: clampPercent(x - DEFAULT_ZONE_W / 2),
-        y: clampPercent(y - DEFAULT_ZONE_H / 2),
+        x: x - DEFAULT_ZONE_W / 2,
+        y: y - DEFAULT_ZONE_H / 2,
         w: DEFAULT_ZONE_W,
         h: DEFAULT_ZONE_H,
       });
@@ -359,8 +377,8 @@ function CartinaArrangeBoard({
       if (d.mode === "move") {
         upsertPlacement({
           ...d.start,
-          x: clampPercent(d.start.x + (x - d.ox)),
-          y: clampPercent(d.start.y + (y - d.oy)),
+          x: d.start.x + (x - d.ox),
+          y: d.start.y + (y - d.oy),
         });
       } else {
         upsertPlacement({
@@ -493,7 +511,11 @@ function CartinaArrangeBoard({
 
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-semibold text-[var(--forest-muted)]">
-          Colore
+          {selectedZoneId
+            ? "Colore zona"
+            : selectedMarkId
+              ? "Colore segno"
+              : "Colore"}
         </span>
         {CARTINA_COLORS.map((c) => (
           <button
@@ -502,7 +524,11 @@ function CartinaArrangeBoard({
             title={c.label}
             onClick={() => {
               setColor(c.hex);
-              if (selectedMarkId) updateMark(selectedMarkId, { color: c.hex });
+              if (selectedMarkId) {
+                updateMark(selectedMarkId, { color: c.hex });
+              } else if (selectedZoneId) {
+                void onZoneColor(selectedZoneId, c.hex);
+              }
             }}
             className={`h-8 w-8 rounded-full border-2 ${
               color === c.hex ? "border-[var(--forest-ink)] scale-110" : "border-white"
@@ -636,6 +662,7 @@ function CartinaArrangeBoard({
           const zone = layoutZones.find((z) => z.id === p.zoneId);
           if (!zone) return null;
           const selected = p.zoneId === selectedZoneId;
+          const accent = zoneAccentColor(zone);
           return (
             <div
               key={p.zoneId}
@@ -644,18 +671,23 @@ function CartinaArrangeBoard({
                 top: `${p.y}%`,
                 width: `${p.w}%`,
                 height: `${p.h}%`,
+                borderColor: selected ? undefined : accent,
               }}
               className={`absolute z-10 flex flex-col overflow-hidden border-2 bg-white/95 ${
-                selected
-                  ? "border-amber-500 shadow-lg"
-                  : "border-[var(--forest)]"
+                selected ? "border-amber-500 shadow-lg" : ""
               }`}
               onPointerDown={(e) => startZoneDrag(e, p, "move")}
             >
-              <div className="shrink-0 bg-[var(--forest)] px-0.5 py-0.5 text-center text-[9px] font-bold leading-none text-white sm:text-[10px]">
+              <div
+                className="shrink-0 px-0.5 py-0.5 text-center text-[9px] font-bold leading-none text-white sm:text-[10px]"
+                style={{ backgroundColor: accent }}
+              >
                 {zone.name}
               </div>
-              <div className="flex min-h-0 flex-1 items-center justify-center bg-[var(--forest)]/5 px-0.5 text-[8px] text-[var(--forest-muted)]">
+              <div
+                className="flex min-h-0 flex-1 items-center justify-center px-0.5 text-[8px]"
+                style={{ backgroundColor: `${accent}14`, color: accent }}
+              >
                 {zone.tables.length} tavoli
               </div>
               {selected && tool === "move" ? (
@@ -800,49 +832,54 @@ function CartinaSheet({
       <div className="relative min-h-0 flex-1 overflow-hidden border border-[var(--forest)]/20 bg-white print:border-0">
         <ZoneMarksLayer marks={marks} />
         {items.map(({ zone, placement }) => {
-          const tables = sortedTables(zone);
           const guests = guestsByTable(reservations, zone.name);
-          const tCols = tableGridColumns(tables.length);
+          const accent = zoneAccentColor(zone);
+          const rects = computeTableFillRects(zone.tables);
           return (
             <section
               key={zone.id}
-              className="absolute flex flex-col overflow-hidden border border-[var(--forest)] bg-white"
+              className="absolute flex flex-col overflow-hidden border bg-white"
               style={{
                 left: `${placement.x}%`,
                 top: `${placement.y}%`,
                 width: `${placement.w}%`,
                 height: `${placement.h}%`,
+                borderColor: accent,
               }}
             >
-              <h4 className="shrink-0 bg-[var(--forest)] px-0.5 py-px text-center text-[8px] font-bold leading-tight text-white print:text-[7pt]">
+              <h4
+                className="shrink-0 px-0.5 py-px text-center text-[8px] font-bold leading-tight text-white print:text-[7pt]"
+                style={{ backgroundColor: accent }}
+              >
                 {zone.name}
               </h4>
-              <div
-                className="grid min-h-0 flex-1 gap-px bg-[var(--forest)]/20 p-px"
-                style={{
-                  gridTemplateColumns: `repeat(${tCols}, minmax(0, 1fr))`,
-                  gridAutoRows: "1fr",
-                }}
-              >
-                {tables.map((table) => {
+              <div className="relative min-h-0 flex-1 bg-white">
+                {rects.map(({ table, x, y, w, h }) => {
                   const tableGuests = guests.get(table.number) ?? [];
                   const occupied = tableGuests.length > 0;
                   return (
                     <div
                       key={table.id}
-                      className={`relative flex items-center justify-center overflow-hidden text-center ${
-                        occupied
-                          ? "bg-[#f7faf7] text-[var(--forest-ink)]"
-                          : "bg-white"
-                      }`}
+                      className="absolute flex items-center justify-center overflow-hidden text-center"
+                      style={{
+                        left: `${x}%`,
+                        top: `${y}%`,
+                        width: `${w}%`,
+                        height: `${h}%`,
+                        backgroundColor: occupied ? `${accent}18` : "#ffffff",
+                        boxShadow: `inset 0 0 0 1px ${occupied ? accent : `${accent}55`}`,
+                      }}
                     >
                       {!occupied ? (
-                        <span className="pointer-events-none absolute inset-0 flex items-start justify-end p-0.5 text-[6px] font-semibold text-[var(--forest)]/35 print:text-[5pt]">
+                        <span
+                          className="pointer-events-none absolute inset-0 flex items-start justify-end p-0.5 text-[6px] font-semibold print:text-[5pt]"
+                          style={{ color: `${accent}66` }}
+                        >
                           {table.number}
                         </span>
                       ) : null}
                       {occupied ? (
-                        <span className="line-clamp-5 w-full px-0.5 text-[7px] font-bold leading-[1.05] sm:text-[9px] print:text-[6.5pt]">
+                        <span className="line-clamp-5 w-full px-0.5 text-[7px] font-bold leading-[1.05] text-[var(--forest-ink)] sm:text-[9px] print:text-[6.5pt]">
                           {formatTableGuests(tableGuests)}
                         </span>
                       ) : null}

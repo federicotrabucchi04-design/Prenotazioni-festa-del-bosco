@@ -4,8 +4,8 @@ import type { MapMark, VenueLayout, ZoneLayout } from "@/lib/types";
 import type { CartinaPrefs, ZoneOnBoard } from "@/lib/cartina";
 import {
   autoPlaceZones,
-  sortedTables,
-  tableGridColumns,
+  computeTableFillRects,
+  zoneAccentColor,
 } from "@/lib/cartina";
 import { ZoneMarksLayer } from "@/components/map/ZoneMarksLayer";
 import {
@@ -79,40 +79,34 @@ export function OrderCartinaView({
     >
       <ZoneMarksLayer marks={prefs.marks as MapMark[]} />
       {items.map(({ zone, placement }) => {
-        const tables = sortedTables(zone);
-        const tCols = tableGridColumns(tables.length);
+        const accent = zoneAccentColor(zone);
+        const rects = computeTableFillRects(zone.tables);
         return (
           <section
             key={zone.id}
             className={`absolute flex flex-col overflow-hidden bg-white ${
-              isDisplay
-                ? "rounded-none border border-[var(--forest)]"
-                : "rounded-md border-2 border-[var(--forest)] shadow-sm"
+              isDisplay ? "rounded-none border" : "rounded-md border-2 shadow-sm"
             }`}
             style={{
               left: `${placement.x}%`,
               top: `${placement.y}%`,
               width: `${placement.w}%`,
               height: `${placement.h}%`,
+              borderColor: accent,
             }}
           >
             <h4
-              className={`shrink-0 bg-[var(--forest)] text-center font-bold leading-tight text-white ${
+              className={`shrink-0 text-center font-bold leading-tight text-white ${
                 isDisplay
                   ? "px-0.5 py-[0.15cqmin] text-[clamp(8px,1.6cqmin,18px)]"
                   : "px-1 py-0.5 text-[10px] sm:text-xs"
               }`}
+              style={{ backgroundColor: accent }}
             >
               {zone.name}
             </h4>
-            <div
-              className="grid min-h-0 flex-1 gap-px bg-[var(--forest)]/15 p-px"
-              style={{
-                gridTemplateColumns: `repeat(${tCols}, minmax(0, 1fr))`,
-                gridAutoRows: "1fr",
-              }}
-            >
-              {tables.map((table) => {
+            <div className="relative min-h-0 flex-1 bg-white">
+              {rects.map(({ table, x, y, w, h }) => {
                 const key = assignmentKey(zone.id, table.number);
                 const orderNum = assignments[key];
                 const isHit =
@@ -132,14 +126,19 @@ export function OrderCartinaView({
                           onClick: () => onTableClick?.(zone, table.number),
                         }
                       : {})}
-                    className={`relative flex min-h-0 items-center justify-center overflow-visible text-center transition ${
+                    className={`absolute flex items-center justify-center overflow-visible text-center transition ${
                       interactive ? "active:scale-95 touch-manipulation" : ""
-                    } ${isHit ? "z-20" : "bg-white"}`}
-                    style={
-                      isHit
-                        ? { backgroundColor: `${highlightColor}18` }
-                        : undefined
-                    }
+                    } ${isHit ? "z-20" : ""}`}
+                    style={{
+                      left: `${x}%`,
+                      top: `${y}%`,
+                      width: `${w}%`,
+                      height: `${h}%`,
+                      backgroundColor: isHit
+                        ? `${highlightColor}18`
+                        : "#ffffff",
+                      boxShadow: `inset 0 0 0 1px ${accent}44`,
+                    }}
                   >
                     {isHit ? (
                       <span

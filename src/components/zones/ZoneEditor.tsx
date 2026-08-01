@@ -12,6 +12,7 @@ import {
   Square,
   Type,
   MousePointer2,
+  Copy,
 } from "lucide-react";
 import { useVenueLayout } from "@/hooks/use-venue-layout";
 import { saveLayout } from "@/lib/layout";
@@ -21,6 +22,7 @@ import {
   snapPercent,
   TABLE_GRID_SNAP,
 } from "@/lib/layout-utils";
+import { CARTINA_COLORS, zoneAccentColor } from "@/lib/cartina";
 import { createId } from "@/lib/constants";
 import type {
   MapMark,
@@ -323,6 +325,39 @@ export function ZoneEditor() {
     setSelectedZone(next.name);
   }
 
+  function duplicateZone() {
+    const suggested = `${zone.name} (copia)`;
+    const name = window.prompt("Nome zona duplicata", suggested);
+    if (!name?.trim()) return;
+    let finalName = name.trim();
+    const existing = new Set(layout.zones.map((z) => z.name));
+    if (existing.has(finalName)) {
+      let n = 2;
+      while (existing.has(`${finalName} ${n}`)) n += 1;
+      finalName = `${finalName} ${n}`;
+    }
+    const next: ZoneLayout = {
+      id: createId(),
+      name: finalName,
+      tables: zone.tables.map((t) => ({ ...t, id: createId() })),
+      marks: (zone.marks ?? []).map((m) => ({ ...m, id: createId() })),
+      ...(zone.color ? { color: zone.color } : {}),
+    };
+    setDraft({
+      ...layout,
+      zones: [...layout.zones, next],
+      updatedAt: Date.now(),
+    });
+    setSelectedZone(next.name);
+    setSelectedTableId(null);
+    setSelectedMarkId(null);
+    toast.success(`Zona duplicata: ${next.name}`);
+  }
+
+  function setZoneColor(hex: string) {
+    updateZone((z) => ({ ...z, color: hex }));
+  }
+
   function renameZone() {
     const name = window.prompt("Rinomina zona", zone.name);
     if (!name?.trim()) return;
@@ -457,11 +492,41 @@ export function ZoneEditor() {
         </button>
         <button
           type="button"
+          onClick={duplicateZone}
+          className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-white text-sm font-semibold text-[var(--forest)]"
+          title="Duplica zona (tavoli e riferimenti)"
+        >
+          <Copy className="h-4 w-4" />
+          Duplica
+        </button>
+        <button
+          type="button"
           onClick={deleteZone}
           className="flex h-11 items-center justify-center gap-2 rounded-xl bg-red-50 px-4 text-sm font-semibold text-red-700"
         >
           <Trash2 className="h-4 w-4" />
         </button>
+      </div>
+
+      <div className="mb-3 flex flex-wrap items-center gap-2 rounded-2xl bg-white px-3 py-2">
+        <span className="text-xs font-semibold text-[var(--forest-muted)]">
+          Colore zona
+        </span>
+        {CARTINA_COLORS.map((c) => {
+          const active = zoneAccentColor(zone) === c.hex;
+          return (
+            <button
+              key={c.id}
+              type="button"
+              title={c.label}
+              onClick={() => setZoneColor(c.hex)}
+              className={`h-8 w-8 rounded-full border-2 ${
+                active ? "border-[var(--forest-ink)] scale-110" : "border-white"
+              }`}
+              style={{ backgroundColor: c.hex }}
+            />
+          );
+        })}
       </div>
 
       <div className="mb-3 grid grid-cols-5 gap-1.5">

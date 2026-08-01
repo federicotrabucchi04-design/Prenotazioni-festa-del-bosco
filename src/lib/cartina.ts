@@ -1,4 +1,4 @@
-import type { MapMark, Reservation, VenueLayout, ZoneLayout } from "@/lib/types";
+import type { MapMark, Reservation, TableSpot, VenueLayout, ZoneLayout } from "@/lib/types";
 import { createId } from "@/lib/constants";
 import { clampPercent } from "@/lib/layout-utils";
 
@@ -430,6 +430,86 @@ export function sortedTables(zone: ZoneLayout) {
   return [...zone.tables].sort((a, b) => a.number - b.number);
 }
 
+export const DEFAULT_ZONE_COLOR = "#2d5a27";
+
+/** Bordo bianco fisso tra i rettangoli tavolo (% area contenuto zona) */
+export const TABLE_FILL_GAP = 1.4;
+
+export function zoneAccentColor(zone: ZoneLayout): string {
+  return zone.color || DEFAULT_ZONE_COLOR;
+}
+
+export interface TableFillRect {
+  table: TableSpot;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * Rispecchia la disposizione dei tavoli (x/y in editor) espandendoli in
+ * rettangoli che riempiono la zona, con solo un piccolo bordo bianco tra loro.
+ */
+export function computeTableFillRects(
+  tables: TableSpot[],
+  gap = TABLE_FILL_GAP,
+): TableFillRect[] {
+  if (tables.length === 0) return [];
+  if (tables.length === 1) {
+    const t = tables[0]!;
+    return [
+      {
+        table: t,
+        x: gap / 2,
+        y: gap / 2,
+        w: Math.max(1, 100 - gap),
+        h: Math.max(1, 100 - gap),
+      },
+    ];
+  }
+
+  const sorted = [...tables].sort((a, b) => a.y - b.y || a.x - b.x);
+  const rowTol = 7;
+  const rows: TableSpot[][] = [];
+  for (const t of sorted) {
+    const last = rows[rows.length - 1];
+    if (last && Math.abs(last[0]!.y - t.y) <= rowTol) {
+      last.push(t);
+    } else {
+      rows.push([t]);
+    }
+  }
+  rows.forEach((row) => row.sort((a, b) => a.x - b.x));
+
+  const centers = rows.map(
+    (row) => row.reduce((s, t) => s + t.y, 0) / row.length,
+  );
+  const halfG = gap / 2;
+  const out: TableFillRect[] = [];
+
+  rows.forEach((row, ri) => {
+    const top = ri === 0 ? 0 : (centers[ri - 1]! + centers[ri]!) / 2;
+    const bottom =
+      ri === rows.length - 1 ? 100 : (centers[ri]! + centers[ri + 1]!) / 2;
+
+    row.forEach((t, ti) => {
+      const left = ti === 0 ? 0 : (row[ti - 1]!.x + t.x) / 2;
+      const right =
+        ti === row.length - 1 ? 100 : (t.x + row[ti + 1]!.x) / 2;
+      out.push({
+        table: t,
+        x: left + halfG,
+        y: top + halfG,
+        w: Math.max(0.8, right - left - gap),
+        h: Math.max(0.8, bottom - top - gap),
+      });
+    });
+  });
+
+  return out;
+}
+
 export function pointerPercent(
   e: { clientX: number; clientY: number },
   el: HTMLElement,
@@ -437,5 +517,9 @@ export function pointerPercent(
   const rect = el.getBoundingClientRect();
   const x = ((e.clientX - rect.left) / rect.width) * 100;
   const y = ((e.clientY - rect.top) / rect.height) * 100;
-  return { x: clampPercent(x), y: clampPercent(y) };
+  // Lavagna A4: 0–100 (niente margine 8% dei tavoli in editor zona)
+  return {
+    x: Math.min(100, Math.max(0, x)),
+    y: Math.min(100, Math.max(0, y)),
+  };
 }

@@ -47,6 +47,8 @@ export interface ZoneLayout {
   tables: TableSpot[];
   /** Linee, rettangoli e scritte di riferimento */
   marks: MapMark[];
+  /** Colore zona in cartina (hex), default verde bosco */
+  color?: string;
 }
 
 export interface VenueLayout {

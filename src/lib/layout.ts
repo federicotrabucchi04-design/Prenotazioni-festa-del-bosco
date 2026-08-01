@@ -79,24 +79,32 @@ function normalizeLayout(raw: Partial<VenueLayout> | null): VenueLayout {
     return createDefaultLayout();
   }
 
-  const zones: ZoneLayout[] = raw.zones.map((z, zi) => ({
-    id: String(z.id || `zone_${zi}`),
-    name: String(z.name || `Zona ${zi + 1}`),
-    tables: Array.isArray(z.tables)
-      ? z.tables.map((t: Partial<TableSpot>, ti: number) => ({
-          id: String(t.id || `t_${zi}_${ti}`),
-          number: Number(t.number ?? ti + 1),
-          x: Number(t.x ?? 20),
-          y: Number(t.y ?? 20),
-          capacity: Math.max(1, Number(t.capacity ?? 8)),
-        }))
-      : [],
-    marks: Array.isArray(z.marks)
-      ? z.marks
-          .map((m: Partial<MapMark>, mi: number) => normalizeMark(m, mi))
-          .filter((m): m is MapMark => Boolean(m))
-      : [],
-  }));
+  const zones: ZoneLayout[] = raw.zones.map((z, zi) => {
+    const color =
+      typeof z.color === "string" && /^#[0-9a-fA-F]{3,8}$/.test(z.color)
+        ? z.color
+        : undefined;
+    const zone: ZoneLayout = {
+      id: String(z.id || `zone_${zi}`),
+      name: String(z.name || `Zona ${zi + 1}`),
+      tables: Array.isArray(z.tables)
+        ? z.tables.map((t: Partial<TableSpot>, ti: number) => ({
+            id: String(t.id || `t_${zi}_${ti}`),
+            number: Number(t.number ?? ti + 1),
+            x: Number(t.x ?? 20),
+            y: Number(t.y ?? 20),
+            capacity: Math.max(1, Number(t.capacity ?? 8)),
+          }))
+        : [],
+      marks: Array.isArray(z.marks)
+        ? z.marks
+            .map((m: Partial<MapMark>, mi: number) => normalizeMark(m, mi))
+            .filter((m): m is MapMark => Boolean(m))
+        : [],
+    };
+    if (color) zone.color = color;
+    return zone;
+  });
 
   return { zones, updatedAt: Number(raw.updatedAt ?? Date.now()) };
 }

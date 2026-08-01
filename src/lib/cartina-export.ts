@@ -1,10 +1,10 @@
 import type { MapMark, Reservation, ZoneLayout } from "@/lib/types";
 import type { ZoneOnBoard } from "@/lib/cartina";
 import {
+  computeTableFillRects,
   formatTableGuests,
   guestsByTable,
-  sortedTables,
-  tableGridColumns,
+  zoneAccentColor,
 } from "@/lib/cartina";
 
 function wrapText(
@@ -44,42 +44,52 @@ function drawZoneBlock(
   w: number,
   h: number,
 ) {
-  ctx.strokeStyle = "#2d5a27";
+  const accent = zoneAccentColor(zone);
+  ctx.strokeStyle = accent;
   ctx.lineWidth = 3;
   ctx.strokeRect(x, y, w, h);
-  ctx.fillStyle = "#e2efe1";
-  ctx.fillRect(x, y, w, Math.min(44, h * 0.14));
-  ctx.fillStyle = "#2d5a27";
+
+  const headerH = Math.min(48, h * 0.14);
+  ctx.fillStyle = accent;
+  ctx.fillRect(x, y, w, headerH);
+  ctx.fillStyle = "#ffffff";
   ctx.font = "bold 26px system-ui, sans-serif";
-  ctx.fillText(zone.name, x + 12, y + Math.min(32, h * 0.1));
+  ctx.fillText(zone.name, x + 12, y + Math.min(32, headerH * 0.72));
 
-  const headerH = Math.min(48, h * 0.16);
-  const tables = sortedTables(zone);
   const guests = guestsByTable(reservations, zone.name);
-  const tCols = tableGridColumns(tables.length);
-  const tRows = Math.max(1, Math.ceil(tables.length / tCols));
-  const innerX = x + 8;
-  const innerY = y + headerH;
-  const innerW = w - 16;
-  const innerH = h - headerH - 8;
-  const tw = innerW / tCols;
-  const th = innerH / tRows;
+  const contentX = x;
+  const contentY = y + headerH;
+  const contentW = w;
+  const contentH = Math.max(1, h - headerH);
 
-  tables.forEach((table, ti) => {
-    const tc = ti % tCols;
-    const tr = Math.floor(ti / tCols);
-    const tx = innerX + tc * tw;
-    const ty = innerY + tr * th;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(contentX, contentY, contentW, contentH);
+
+  const rects = computeTableFillRects(zone.tables);
+  for (const { table, x: rx, y: ry, w: rw, h: rh } of rects) {
+    const tx = contentX + (rx / 100) * contentW;
+    const ty = contentY + (ry / 100) * contentH;
+    const tw = (rw / 100) * contentW;
+    const th = (rh / 100) * contentH;
     const tableGuests = guests.get(table.number) ?? [];
     const occupied = tableGuests.length > 0;
 
-    ctx.fillStyle = occupied ? "#f7faf7" : "#ffffff";
-    ctx.fillRect(tx + 2, ty + 2, tw - 4, th - 4);
-    ctx.strokeStyle = occupied ? "#2d5a27" : "#c5d4c6";
+    ctx.fillStyle = occupied ? `${accent}22` : "#ffffff";
+    ctx.fillRect(tx, ty, tw, th);
+    ctx.strokeStyle = occupied ? accent : `${accent}66`;
     ctx.lineWidth = occupied ? 2 : 1.2;
-    ctx.strokeRect(tx + 2, ty + 2, tw - 4, th - 4);
+    ctx.strokeRect(tx, ty, tw, th);
 
-    if (!occupied) return;
+    if (!occupied) {
+      ctx.fillStyle = `${accent}55`;
+      ctx.font = "bold 14px system-ui, sans-serif";
+      ctx.textAlign = "right";
+      ctx.textBaseline = "top";
+      ctx.fillText(String(table.number), tx + tw - 6, ty + 4);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+      continue;
+    }
 
     const label = formatTableGuests(tableGuests);
     const fontSize = Math.max(11, Math.min(24, Math.floor(Math.min(tw, th) / 4.5)));
@@ -100,7 +110,7 @@ function drawZoneBlock(
     });
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
-  });
+  }
 }
 
 function drawMarks(
@@ -129,14 +139,14 @@ function drawMarks(
     }
 
     if (mark.kind === "rect") {
-      const x = px(mark.x);
-      const y = py(mark.y);
-      const w = ((mark.w ?? 10) / 100) * areaW;
-      const h = ((mark.h ?? 10) / 100) * areaH;
+      const mx = px(mark.x);
+      const my = py(mark.y);
+      const mw = ((mark.w ?? 10) / 100) * areaW;
+      const mh = ((mark.h ?? 10) / 100) * areaH;
       ctx.strokeStyle = color;
       ctx.lineWidth = 3;
       ctx.setLineDash([8, 6]);
-      ctx.strokeRect(x, y, w, h);
+      ctx.strokeRect(mx, my, mw, mh);
       ctx.setLineDash([]);
       continue;
     }
