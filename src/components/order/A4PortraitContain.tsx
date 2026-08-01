@@ -53,10 +53,17 @@ export function A4PortraitContain({
     >
       <div
         className="relative overflow-hidden bg-white"
-        style={{
-          width: box.w || "100%",
-          height: box.h || "100%",
-        }}
+        style={
+          box.w > 0 && box.h > 0
+            ? { width: box.w, height: box.h }
+            : {
+                // fallback primo frame (prima del ResizeObserver)
+                width: "min(100%, calc(100% * 210 / 297))",
+                height: "100%",
+                maxHeight: "100%",
+                aspectRatio: "210 / 297",
+              }
+        }
       >
         {children}
       </div>

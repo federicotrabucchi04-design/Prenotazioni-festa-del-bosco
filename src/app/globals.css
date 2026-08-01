@@ -119,11 +119,9 @@ textarea.field-input {
   max-height: 100%;
 }
 
-/* Su tablet landscape la cartina operativa può allargarsi */
-@media (min-width: 768px) and (orientation: landscape) {
-  .cartina-a4-portrait {
-    aspect-ratio: auto;
-  }
+/* Anteprima cartina: foglio A4 scrollabile a schermo */
+.cartina-sheet {
+  min-height: 0;
 }
 
 @media print {
@@ -140,6 +138,7 @@ textarea.field-input {
     padding: 0 !important;
     height: 100% !important;
     width: 100% !important;
+    overflow: hidden !important;
   }
 
   body * {
@@ -164,16 +163,19 @@ textarea.field-input {
     overflow: hidden !important;
     background: white !important;
     z-index: 9999 !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: none !important;
   }
 
-  .cartina-sheet,
-  .cartina-a4-portrait {
-    width: 100vw !important;
-    height: 100vh !important;
+  .cartina-sheet {
+    width: 100% !important;
+    height: 100% !important;
     max-width: none !important;
     max-height: none !important;
     margin: 0 !important;
     padding: 0 !important;
+    aspect-ratio: auto !important;
     break-inside: avoid;
   }
 }

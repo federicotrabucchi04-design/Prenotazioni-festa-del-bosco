@@ -155,7 +155,9 @@ export function GlobalCartina() {
 
         <div
           className={`min-h-0 flex-1 print:overflow-visible ${
-            step === "preview" ? "overflow-hidden" : "overflow-y-auto"
+            step === "preview"
+              ? "overflow-y-auto overflow-x-hidden overscroll-contain"
+              : "overflow-y-auto"
           }`}
         >
           {step === "arrange" ? (
@@ -166,14 +168,20 @@ export function GlobalCartina() {
               onPreview={() => setStep("preview")}
             />
           ) : (
-            <div className="cartina-print-root flex h-full min-h-0 w-full items-stretch justify-center print:block">
-              <CartinaSheet
-                items={placed}
-                marks={activePrefs.marks}
-                reservations={items}
-                title={title}
-                subtitle={subtitle}
-              />
+            <div className="mx-auto w-full max-w-lg px-3 pb-28 pt-3 print:max-w-none print:p-0">
+              <p className="no-print mb-2 text-center text-[11px] text-[var(--forest-muted)]">
+                Anteprima A4 verticale (come sullo Schermo TV). Scorri se non
+                entra tutta.
+              </p>
+              <div className="cartina-print-root mx-auto w-full">
+                <CartinaSheet
+                  items={placed}
+                  marks={activePrefs.marks}
+                  reservations={items}
+                  title={title}
+                  subtitle={subtitle}
+                />
+              </div>
             </div>
           )}
         </div>
@@ -782,7 +790,7 @@ function CartinaSheet({
   }
 
   return (
-    <div className="cartina-sheet cartina-a4-portrait mx-auto flex h-full min-h-0 w-full max-w-[min(100%,calc((100dvh-8rem)*210/297))] flex-col bg-white print:max-w-none print:h-dvh">
+    <div className="cartina-sheet mx-auto flex w-full flex-col bg-white shadow-sm aspect-[210/297] print:aspect-auto print:h-dvh print:max-w-none print:shadow-none">
       <div className="no-print shrink-0 px-2 py-1">
         <h3 className="font-[family-name:var(--font-display)] text-sm font-bold text-[var(--forest-ink)]">
           {title}
