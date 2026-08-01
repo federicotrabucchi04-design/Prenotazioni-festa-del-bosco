@@ -1,5 +1,6 @@
 "use client";
 
+import { useLayoutEffect, useRef, useState } from "react";
 import type { MapMark, VenueLayout, ZoneLayout } from "@/lib/types";
 import type { CartinaPrefs, ZoneOnBoard } from "@/lib/cartina";
 import {
@@ -33,14 +34,42 @@ export function resolveOrderCartina(
   return { placements: autoPlaceZones(layout.zones), marks: [] };
 }
 
-/** Unità di larghezza approssimative (cifre + trattini) per fit orizzontale */
-function horizontalWidthUnits(nums: number[]) {
-  let units = 0;
+/** Larghezza stimata in em (cifre tabular-nums + eventuali "-") */
+function contentWidthEm(nums: number[], withDashes: boolean) {
+  let em = 0;
   nums.forEach((n, i) => {
-    if (i > 0) units += 0.42; // "-"
-    units += String(n).length * 0.58;
+    if (withDashes && i > 0) em += 0.38;
+    em += String(n).length * 0.52;
   });
-  return Math.max(units, 1);
+  return Math.max(em, 0.5);
+}
+
+/**
+ * Font in px: priorità altezza tavolo (~92%).
+ * Riduce solo se la riga non entra in larghezza.
+ */
+function fontPxForCell(
+  cellW: number,
+  cellH: number,
+  nums: number[],
+  stackVertical: boolean,
+  heightRatio: number,
+): number {
+  if (cellW < 2 || cellH < 2 || nums.length === 0) return 10;
+
+  if (stackVertical) {
+    const lineH = cellH / nums.length;
+    const byH = lineH * heightRatio;
+    const maxDigits = Math.max(...nums.map((n) => String(n).length));
+    const byW = cellW / (maxDigits * 0.52);
+    return Math.max(10, Math.min(byH, byW));
+  }
+
+  // Orizzontale (1 numero o più con trattino): quasi tutta l’altezza
+  const byH = cellH * heightRatio;
+  const needEm = contentWidthEm(nums, nums.length > 1);
+  const byW = (cellW * 0.98) / needEm;
+  return Math.max(10, Math.min(byH, byW));
 }
 
 /** Cartina con numeri d’ordine sui tavoli + cerchio highlight */
@@ -65,7 +94,6 @@ export function OrderCartinaView({
   interactive?: boolean;
   variant?: "setup" | "display";
   highlightColor?: string;
-  /** Diametro cerchio in em rispetto al numero (da impostazioni admin) */
   highlightRadius?: number;
   numberScale?: number;
   colorRanges?: OrderColorRange[];
@@ -81,15 +109,14 @@ export function OrderCartinaView({
     .filter(Boolean) as { zone: ZoneLayout; placement: ZoneOnBoard }[];
 
   const isDisplay = variant === "display";
-  const heightFillPct = Math.min(
-    96,
-    Math.max(70, (isDisplay ? 92 : 88) * numberScale),
-  ).toFixed(1);
+  const heightRatio = Math.min(
+    0.96,
+    Math.max(0.82, (isDisplay ? 0.94 : 0.9) * numberScale),
+  );
 
   return (
     <div
       className={`order-cartina-view relative h-full w-full overflow-hidden bg-white ${className}`}
-      style={{ containerType: "size" }}
     >
       <ZoneMarksLayer marks={prefs.marks as MapMark[]} />
       {items.map(({ zone, placement }) => {
@@ -132,13 +159,8 @@ export function OrderCartinaView({
                   highlight != null &&
                   highlight.found &&
                   nums.includes(highlight.orderNumber);
-                // Più alto che largo → a capo senza trattino; altrimenti riga con "-"
                 const stackVertical = nums.length > 1 && h > w;
                 const Tag = interactive ? "button" : "div";
-
-                const rowFontSize = `min(${heightFillPct}cqh, ${(
-                  98 / horizontalWidthUnits(nums)
-                ).toFixed(1)}cqw)`;
 
                 return (
                   <Tag
@@ -149,7 +171,7 @@ export function OrderCartinaView({
                           onClick: () => onTableClick?.(zone, table.number),
                         }
                       : {})}
-                    className={`absolute flex items-center justify-center text-center transition ${
+                    className={`absolute p-0 text-center transition ${
                       interactive ? "active:scale-95 touch-manipulation" : ""
                     } ${isHit ? "z-30" : "z-[1]"}`}
                     style={{
@@ -160,91 +182,23 @@ export function OrderCartinaView({
                       backgroundColor: "#ffffff",
                       boxShadow: `inset 0 0 0 1px ${accent}44`,
                       overflow: isHit ? "visible" : "hidden",
-                      padding: "1%",
-                      containerType: "size",
                     }}
                   >
                     {nums.length > 0 ? (
-                      stackVertical ? (
-                        <span className="relative z-[1] flex h-full w-full flex-col items-stretch justify-center">
-                          {nums.map((orderNum) => {
-                            const hitThis =
-                              isHit && orderNum === highlight?.orderNumber;
-                            const digits = String(orderNum).length;
-                            const fontSize = `min(${(
-                              90 / nums.length
-                            ).toFixed(1)}cqh, ${(
-                              96 / Math.max(digits * 0.58, 1)
-                            ).toFixed(1)}cqw)`;
-                            return (
-                              <span
-                                key={orderNum}
-                                className="flex min-h-0 flex-1 items-center justify-center"
-                              >
-                                <OrderNumGlyph
-                                  orderNum={orderNum}
-                                  fontSize={fontSize}
-                                  color={
-                                    hitThis
-                                      ? highlightColor
-                                      : colorForOrderNumber(
-                                          orderNum,
-                                          colorRanges,
-                                        )
-                                  }
-                                  hit={hitThis}
-                                  highlightColor={highlightColor}
-                                  highlightRadius={highlightRadius}
-                                />
-                              </span>
-                            );
-                          })}
-                        </span>
-                      ) : (
-                        <span className="relative z-[1] flex h-full w-full flex-row flex-nowrap items-center justify-center">
-                          {nums.map((orderNum, i) => {
-                            const hitThis =
-                              isHit && orderNum === highlight?.orderNumber;
-                            return (
-                              <span
-                                key={orderNum}
-                                className="inline-flex items-center"
-                              >
-                                {i > 0 ? (
-                                  <span
-                                    className="font-black leading-none tabular-nums"
-                                    style={{
-                                      fontSize: rowFontSize,
-                                      color: accent,
-                                      padding: "0 0.06em",
-                                    }}
-                                    aria-hidden
-                                  >
-                                    -
-                                  </span>
-                                ) : null}
-                                <OrderNumGlyph
-                                  orderNum={orderNum}
-                                  fontSize={rowFontSize}
-                                  color={
-                                    hitThis
-                                      ? highlightColor
-                                      : colorForOrderNumber(
-                                          orderNum,
-                                          colorRanges,
-                                        )
-                                  }
-                                  hit={hitThis}
-                                  highlightColor={highlightColor}
-                                  highlightRadius={highlightRadius}
-                                />
-                              </span>
-                            );
-                          })}
-                        </span>
-                      )
+                      <TableOrderNums
+                        nums={nums}
+                        stackVertical={stackVertical}
+                        heightRatio={heightRatio}
+                        accent={accent}
+                        colorRanges={colorRanges}
+                        highlightOrder={
+                          isHit ? highlight!.orderNumber : null
+                        }
+                        highlightColor={highlightColor}
+                        highlightRadius={highlightRadius}
+                      />
                     ) : (
-                      <span className="relative z-[1] text-[clamp(6px,12cqmin,12px)] text-[var(--forest)]/20">
+                      <span className="flex h-full w-full items-center justify-center text-[10px] text-[var(--forest)]/20">
                         ·
                       </span>
                     )}
@@ -256,6 +210,119 @@ export function OrderCartinaView({
         );
       })}
     </div>
+  );
+}
+
+function TableOrderNums({
+  nums,
+  stackVertical,
+  heightRatio,
+  accent,
+  colorRanges,
+  highlightOrder,
+  highlightColor,
+  highlightRadius,
+}: {
+  nums: number[];
+  stackVertical: boolean;
+  heightRatio: number;
+  accent: string;
+  colorRanges: OrderColorRange[];
+  highlightOrder: number | null;
+  highlightColor: string;
+  highlightRadius: number;
+}) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [fontPx, setFontPx] = useState(16);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const measure = () => {
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      setFontPx(fontPxForCell(w, h, nums, stackVertical, heightRatio));
+    };
+
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [nums, stackVertical, heightRatio]);
+
+  const fontSize = `${fontPx}px`;
+
+  if (stackVertical) {
+    return (
+      <span
+        ref={ref}
+        className="relative z-[1] flex h-full w-full flex-col items-stretch justify-center"
+      >
+        {nums.map((orderNum) => {
+          const hit = highlightOrder === orderNum;
+          return (
+            <span
+              key={orderNum}
+              className="flex min-h-0 flex-1 items-center justify-center"
+            >
+              <OrderNumGlyph
+                orderNum={orderNum}
+                fontSize={fontSize}
+                color={
+                  hit
+                    ? highlightColor
+                    : colorForOrderNumber(orderNum, colorRanges)
+                }
+                hit={hit}
+                highlightColor={highlightColor}
+                highlightRadius={highlightRadius}
+              />
+            </span>
+          );
+        })}
+      </span>
+    );
+  }
+
+  return (
+    <span
+      ref={ref}
+      className="relative z-[1] flex h-full w-full flex-row flex-nowrap items-center justify-center"
+    >
+      {nums.map((orderNum, i) => {
+        const hit = highlightOrder === orderNum;
+        return (
+          <span key={orderNum} className="inline-flex items-center">
+            {i > 0 ? (
+              <span
+                className="font-black leading-none tabular-nums"
+                style={{
+                  fontSize,
+                  color: accent,
+                  padding: "0 0.05em",
+                }}
+                aria-hidden
+              >
+                -
+              </span>
+            ) : null}
+            <OrderNumGlyph
+              orderNum={orderNum}
+              fontSize={fontSize}
+              color={
+                hit
+                  ? highlightColor
+                  : colorForOrderNumber(orderNum, colorRanges)
+              }
+              hit={hit}
+              highlightColor={highlightColor}
+              highlightRadius={highlightRadius}
+            />
+          </span>
+        );
+      })}
+    </span>
   );
 }
 
