@@ -109,3 +109,12 @@ export function nextTableNumber(zone: ZoneLayout) {
 export function clampPercent(value: number) {
   return Math.min(92, Math.max(8, value));
 }
+
+/** Passo griglia % per agganciare i tavoli (ordine visivo) */
+export const TABLE_GRID_SNAP = 5;
+
+export function snapPercent(value: number, step = TABLE_GRID_SNAP) {
+  if (!Number.isFinite(value)) return clampPercent(50);
+  const snapped = Math.round(value / step) * step;
+  return clampPercent(snapped);
+}

@@ -16,9 +16,10 @@ import {
 import { useVenueLayout } from "@/hooks/use-venue-layout";
 import { saveLayout } from "@/lib/layout";
 import {
-  clampPercent,
   createDefaultLayout,
   nextTableNumber,
+  snapPercent,
+  TABLE_GRID_SNAP,
 } from "@/lib/layout-utils";
 import { createId } from "@/lib/constants";
 import type {
@@ -97,8 +98,8 @@ export function ZoneEditor() {
         {
           id,
           number: nextTableNumber(z),
-          x: clampPercent(x),
-          y: clampPercent(y),
+          x: snapPercent(x),
+          y: snapPercent(y),
           capacity: 8,
         },
       ],
@@ -264,12 +265,26 @@ export function ZoneEditor() {
     updateZone((z) => ({
       ...z,
       tables: z.tables.map((t) =>
-        t.id === id ? { ...t, x: clampPercent(x), y: clampPercent(y) } : t,
+        t.id === id
+          ? { ...t, x: snapPercent(x), y: snapPercent(y) }
+          : t,
       ),
     }));
   }
 
   function onTablePointerUp(e: React.PointerEvent<HTMLButtonElement>) {
+    if (dragId.current && boardRef.current) {
+      const id = dragId.current;
+      const { x, y } = pointerPercent(e);
+      updateZone((z) => ({
+        ...z,
+        tables: z.tables.map((t) =>
+          t.id === id
+            ? { ...t, x: snapPercent(x), y: snapPercent(y) }
+            : t,
+        ),
+      }));
+    }
     dragId.current = null;
     try {
       e.currentTarget.releasePointerCapture(e.pointerId);
@@ -395,8 +410,9 @@ export function ZoneEditor() {
           Editor zone, tavoli e riferimenti
         </p>
         <p className="mt-1">
-          I <strong>tavoli</strong> sono oggetti operativi. Linee, rettangoli e
-          scritte sono solo punti di riferimento sulla mappa.
+          I <strong>tavoli</strong> sono oggetti operativi (si agganciano alla
+          griglia ogni {TABLE_GRID_SNAP}%). Linee, rettangoli e scritte sono solo
+          punti di riferimento sulla mappa.
         </p>
       </div>
 
@@ -475,7 +491,8 @@ export function ZoneEditor() {
         onPointerMove={onBoardPointerMove}
         onPointerUp={onBoardPointerUp}
         onPointerCancel={onBoardPointerUp}
-        className="relative aspect-[4/5] w-full touch-none overflow-hidden rounded-3xl border border-[var(--forest)]/15 bg-[linear-gradient(rgba(45,90,39,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(45,90,39,0.06)_1px,transparent_1px)] bg-size-[24px_24px] bg-white shadow-inner"
+        className="relative aspect-[4/5] w-full touch-none overflow-hidden rounded-3xl border border-[var(--forest)]/15 bg-[linear-gradient(rgba(45,90,39,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(45,90,39,0.1)_1px,transparent_1px)] bg-white shadow-inner"
+        style={{ backgroundSize: `${TABLE_GRID_SNAP}% ${TABLE_GRID_SNAP}%` }}
       >
         <ZoneMarksLayer
           marks={visibleMarks}

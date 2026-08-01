@@ -338,35 +338,38 @@ export function normalizeCartinaMark(m: Partial<MapMark>): MapMark | null {
   const y = clampPercent(Number(m.y) || 0);
   const color = typeof m.color === "string" ? m.color : undefined;
   if (m.kind === "line") {
-    return {
+    const mark: MapMark = {
       id,
       kind: "line",
       x,
       y,
       x2: clampPercent(Number(m.x2) || x),
       y2: clampPercent(Number(m.y2) || y),
-      color,
     };
+    if (color) mark.color = color;
+    return mark;
   }
   if (m.kind === "rect") {
-    return {
+    const mark: MapMark = {
       id,
       kind: "rect",
       x,
       y,
       w: Math.max(1, Number(m.w) || 10),
       h: Math.max(1, Number(m.h) || 10),
-      color,
     };
+    if (color) mark.color = color;
+    return mark;
   }
-  return {
+  const mark: MapMark = {
     id,
     kind: "text",
     x,
     y,
     text: String(m.text ?? "Etichetta"),
-    color,
   };
+  if (color) mark.color = color;
+  return mark;
 }
 
 export function placedZoneIds(prefs: CartinaPrefs): Set<string> {

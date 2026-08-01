@@ -11,21 +11,67 @@ function notify(layout: VenueLayout) {
   listeners.forEach((l) => l(layout));
 }
 
+/**
+ * Firebase RTDB rifiuta `undefined` in qualsiasi proprietà.
+ * Costruiamo solo i campi validi per tipo di mark.
+ */
 function normalizeMark(m: Partial<MapMark>, mi: number): MapMark | null {
   const kind = m.kind;
   if (kind !== "line" && kind !== "rect" && kind !== "text") return null;
-  return {
-    id: String(m.id || `mark_${mi}`),
-    kind,
-    x: Number(m.x ?? 10),
-    y: Number(m.y ?? 10),
-    x2: m.x2 != null ? Number(m.x2) : undefined,
-    y2: m.y2 != null ? Number(m.y2) : undefined,
-    w: m.w != null ? Number(m.w) : undefined,
-    h: m.h != null ? Number(m.h) : undefined,
-    text: m.text != null ? String(m.text) : undefined,
-    color: m.color != null ? String(m.color) : undefined,
+  const id = String(m.id || `mark_${mi}`);
+  const x = Number(m.x ?? 10);
+  const y = Number(m.y ?? 10);
+  const color = typeof m.color === "string" ? m.color : undefined;
+
+  if (kind === "line") {
+    const mark: MapMark = {
+      id,
+      kind: "line",
+      x,
+      y,
+      x2: Number(m.x2 ?? x),
+      y2: Number(m.y2 ?? y),
+    };
+    if (color) mark.color = color;
+    return mark;
+  }
+
+  if (kind === "rect") {
+    const mark: MapMark = {
+      id,
+      kind: "rect",
+      x,
+      y,
+      w: Math.max(1, Number(m.w ?? 10)),
+      h: Math.max(1, Number(m.h ?? 10)),
+    };
+    if (color) mark.color = color;
+    return mark;
+  }
+
+  const mark: MapMark = {
+    id,
+    kind: "text",
+    x,
+    y,
+    text: String(m.text ?? "Etichetta"),
   };
+  if (color) mark.color = color;
+  return mark;
+}
+
+/** Rimuove undefined ricorsivamente (Firebase-safe). */
+function stripUndefined<T>(value: T): T {
+  if (value === null || typeof value !== "object") return value;
+  if (Array.isArray(value)) {
+    return value.map((item) => stripUndefined(item)) as T;
+  }
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (v === undefined) continue;
+    out[k] = stripUndefined(v);
+  }
+  return out as T;
 }
 
 function normalizeLayout(raw: Partial<VenueLayout> | null): VenueLayout {
@@ -53,6 +99,15 @@ function normalizeLayout(raw: Partial<VenueLayout> | null): VenueLayout {
   }));
 
   return { zones, updatedAt: Number(raw.updatedAt ?? Date.now()) };
+}
+
+/** Layout pronto per `set()` Firebase: niente undefined. */
+export function serializeLayout(layout: VenueLayout): VenueLayout {
+  const normalized = normalizeLayout(layout);
+  return stripUndefined({
+    ...normalized,
+    updatedAt: Date.now(),
+  });
 }
 
 function readDemoLayout(): VenueLayout {
@@ -98,7 +153,7 @@ export function subscribeLayout(listener: Listener): () => void {
     layoutRef,
     (snap) => {
       if (!snap.exists()) {
-        const seeded = createDefaultLayout();
+        const seeded = serializeLayout(createDefaultLayout());
         void set(layoutRef, seeded);
         listener(seeded);
         return;
@@ -110,7 +165,7 @@ export function subscribeLayout(listener: Listener): () => void {
 }
 
 export async function saveLayout(layout: VenueLayout) {
-  const next = { ...layout, updatedAt: Date.now() };
+  const next = serializeLayout(layout);
 
   if (dataMode() === "demo") {
     writeDemoLayout(next);
@@ -120,6 +175,7 @@ export async function saveLayout(layout: VenueLayout) {
   const db = getFirebaseDb();
   if (!db) throw new Error("Firebase non configurato");
   await set(ref(db, "venueLayout"), next);
+  notify(next);
   return next;
 }
 
