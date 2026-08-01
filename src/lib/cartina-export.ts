@@ -152,7 +152,11 @@ function drawMarks(
     }
 
     ctx.fillStyle = color;
-    ctx.font = "bold 36px system-ui, sans-serif";
+    const fontPx = Math.max(
+      14,
+      Math.round(((mark.fontSize ?? 3.2) / 100) * areaH * 1.15),
+    );
+    ctx.font = `bold ${fontPx}px system-ui, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(mark.text || "Etichetta", px(mark.x), py(mark.y));

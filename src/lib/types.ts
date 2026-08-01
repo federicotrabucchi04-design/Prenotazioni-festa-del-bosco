@@ -37,6 +37,8 @@ export interface MapMark {
   h?: number;
   /** Testo etichetta */
   text?: string;
+  /** Dimensione testo in unità viewBox (default ~3.2) */
+  fontSize?: number;
   /** Colore opzionale (hex), default tema bosco */
   color?: string;
 }

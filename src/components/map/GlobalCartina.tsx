@@ -6,6 +6,7 @@ import {
   Eye,
   Minus,
   MousePointer2,
+  Plus,
   Printer,
   Settings2,
   Square,
@@ -21,7 +22,7 @@ import { useEvenings } from "@/hooks/use-evenings";
 import { useUiStore } from "@/store/ui-store";
 import { EVENT_DATE, createId } from "@/lib/constants";
 import { downloadCartinaPng } from "@/lib/cartina-export";
-import { ZoneMarksLayer } from "@/components/map/ZoneMarksLayer";
+import { ZoneMarksLayer, DEFAULT_MARK_FONT_SIZE } from "@/components/map/ZoneMarksLayer";
 import type { MapMark, Reservation, ZoneLayout } from "@/lib/types";
 import { saveLayout } from "@/lib/layout";
 import {
@@ -277,6 +278,13 @@ function CartinaArrangeBoard({
     oy: number;
     start: ZoneOnBoard;
   } | null>(null);
+  const markDrag = useRef<{
+    markId: string;
+    mode: "move" | "resize";
+    ox: number;
+    oy: number;
+    start: MapMark;
+  } | null>(null);
 
   const placedIds = placedZoneIds(prefs);
   const unplaced = layoutZones.filter((z) => !placedIds.has(z.id));
@@ -310,6 +318,73 @@ function CartinaArrangeBoard({
     patchPrefs({
       marks: prefs.marks.map((m) => (m.id === id ? { ...m, ...patch } : m)),
     });
+  }
+
+  function clampBoard(v: number) {
+    return Math.min(100, Math.max(0, v));
+  }
+
+  function startMarkDrag(
+    id: string,
+    mode: "move" | "resize",
+    e: React.PointerEvent,
+  ) {
+    if (tool !== "move" || !boardRef.current) return;
+    e.stopPropagation();
+    const mark = prefs.marks.find((m) => m.id === id);
+    if (!mark) return;
+    const { x, y } = pointerPercent(e, boardRef.current);
+    setSelectedMarkId(id);
+    setSelectedZoneId(null);
+    if (mark.color) setColor(mark.color);
+    markDrag.current = {
+      markId: id,
+      mode,
+      ox: x,
+      oy: y,
+      start: { ...mark },
+    };
+    boardRef.current.setPointerCapture(e.pointerId);
+  }
+
+  function applyMarkDrag(x: number, y: number) {
+    const d = markDrag.current;
+    if (!d) return;
+    const dx = x - d.ox;
+    const dy = y - d.oy;
+    const s = d.start;
+
+    if (d.mode === "move") {
+      if (s.kind === "line") {
+        updateMark(d.markId, {
+          x: clampBoard(s.x + dx),
+          y: clampBoard(s.y + dy),
+          x2: clampBoard((s.x2 ?? s.x) + dx),
+          y2: clampBoard((s.y2 ?? s.y) + dy),
+        });
+      } else {
+        updateMark(d.markId, {
+          x: clampBoard(s.x + dx),
+          y: clampBoard(s.y + dy),
+        });
+      }
+      return;
+    }
+
+    // resize
+    if (s.kind === "rect") {
+      updateMark(d.markId, {
+        w: Math.max(MIN_ZONE_SIZE, (s.w ?? 10) + dx),
+        h: Math.max(MIN_ZONE_SIZE, (s.h ?? 10) + dy),
+      });
+      return;
+    }
+
+    if (s.kind === "text") {
+      const base = s.fontSize ?? DEFAULT_MARK_FONT_SIZE;
+      const next = Math.min(14, Math.max(1.4, base + dy * 0.18 - dx * 0.05));
+      updateMark(d.markId, { fontSize: Math.round(next * 10) / 10 });
+    }
   }
 
   function onBoardPointerDown(e: React.PointerEvent<HTMLDivElement>) {
@@ -372,6 +447,11 @@ function CartinaArrangeBoard({
     if (!boardRef.current) return;
     const { x, y } = pointerPercent(e, boardRef.current);
 
+    if (markDrag.current) {
+      applyMarkDrag(x, y);
+      return;
+    }
+
     if (drag.current) {
       const d = drag.current;
       if (d.mode === "move") {
@@ -409,6 +489,7 @@ function CartinaArrangeBoard({
 
   function onBoardPointerUp(e: React.PointerEvent<HTMLDivElement>) {
     drag.current = null;
+    markDrag.current = null;
     try {
       boardRef.current?.releasePointerCapture(e.pointerId);
     } catch {
@@ -655,7 +736,10 @@ function CartinaArrangeBoard({
           onSelect={(id) => {
             setSelectedMarkId(id);
             setSelectedZoneId(null);
+            const m = prefs.marks.find((mark) => mark.id === id);
+            if (m?.color) setColor(m.color);
           }}
+          onDragStart={startMarkDrag}
         />
 
         {prefs.placements.map((p) => {
@@ -734,6 +818,9 @@ function CartinaArrangeBoard({
                 : selectedMark.kind === "line"
                   ? "Linea"
                   : "Rettangolo"}
+              <span className="ml-2 text-xs font-normal text-[var(--forest-muted)]">
+                trascina per spostare
+              </span>
             </p>
             <button
               type="button"
@@ -744,19 +831,124 @@ function CartinaArrangeBoard({
               Elimina
             </button>
           </div>
+
           {selectedMark.kind === "text" ? (
-            <button
-              type="button"
-              onClick={() => {
-                const text = window.prompt("Modifica testo", selectedMark.text || "");
-                if (text == null) return;
-                updateMark(selectedMark.id, { text: text.trim() || "Etichetta" });
-              }}
-              className="w-full rounded-xl bg-[var(--forest)]/10 py-2 text-sm font-semibold text-[var(--forest)]"
-            >
-              Modifica testo: “{selectedMark.text}”
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  const text = window.prompt(
+                    "Modifica testo",
+                    selectedMark.text || "",
+                  );
+                  if (text == null) return;
+                  updateMark(selectedMark.id, {
+                    text: text.trim() || "Etichetta",
+                  });
+                }}
+                className="w-full rounded-xl bg-[var(--forest)]/10 py-2 text-sm font-semibold text-[var(--forest)]"
+              >
+                Modifica testo: “{selectedMark.text}”
+              </button>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-[var(--forest-muted)]">
+                  Dimensione
+                </span>
+                <button
+                  type="button"
+                  aria-label="Rimpicciolisci"
+                  onClick={() => {
+                    const cur =
+                      selectedMark.fontSize ?? DEFAULT_MARK_FONT_SIZE;
+                    updateMark(selectedMark.id, {
+                      fontSize: Math.max(1.4, Math.round((cur - 0.4) * 10) / 10),
+                    });
+                  }}
+                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--forest)]/10 text-[var(--forest)]"
+                >
+                  <Minus className="h-4 w-4" />
+                </button>
+                <span className="min-w-[3rem] text-center text-sm font-bold tabular-nums text-[var(--forest-ink)]">
+                  {(selectedMark.fontSize ?? DEFAULT_MARK_FONT_SIZE).toFixed(1)}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Ingrandisci"
+                  onClick={() => {
+                    const cur =
+                      selectedMark.fontSize ?? DEFAULT_MARK_FONT_SIZE;
+                    updateMark(selectedMark.id, {
+                      fontSize: Math.min(14, Math.round((cur + 0.4) * 10) / 10),
+                    });
+                  }}
+                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--forest)]/10 text-[var(--forest)]"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+                <span className="text-[11px] text-[var(--forest-muted)]">
+                  o maniglia ambra
+                </span>
+              </div>
+            </>
           ) : null}
+
+          {selectedMark.kind === "rect" ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold text-[var(--forest-muted)]">
+                Dimensione
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  const w = Math.max(4, (selectedMark.w ?? 10) - 2);
+                  const h = Math.max(4, (selectedMark.h ?? 10) - 2);
+                  updateMark(selectedMark.id, { w, h });
+                }}
+                className="flex h-10 items-center gap-1 rounded-xl bg-[var(--forest)]/10 px-3 text-sm font-semibold text-[var(--forest)]"
+              >
+                <Minus className="h-4 w-4" />
+                Più piccolo
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const w = Math.min(98, (selectedMark.w ?? 10) + 2);
+                  const h = Math.min(98, (selectedMark.h ?? 10) + 2);
+                  updateMark(selectedMark.id, { w, h });
+                }}
+                className="flex h-10 items-center gap-1 rounded-xl bg-[var(--forest)]/10 px-3 text-sm font-semibold text-[var(--forest)]"
+              >
+                <Plus className="h-4 w-4" />
+                Più grande
+              </button>
+              <span className="text-[11px] text-[var(--forest-muted)]">
+                o maniglia in basso a destra
+              </span>
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold text-[var(--forest-muted)]">
+              Colore
+            </span>
+            {CARTINA_COLORS.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                title={c.label}
+                onClick={() => {
+                  setColor(c.hex);
+                  updateMark(selectedMark.id, { color: c.hex });
+                }}
+                className={`h-8 w-8 rounded-full border-2 ${
+                  (selectedMark.color || CARTINA_COLORS[0]!.hex) === c.hex
+                    ? "scale-110 border-[var(--forest-ink)]"
+                    : "border-white"
+                }`}
+                style={{ backgroundColor: c.hex }}
+              />
+            ))}
+          </div>
         </div>
       ) : null}
 

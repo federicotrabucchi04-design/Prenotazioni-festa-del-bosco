@@ -2,25 +2,31 @@
 
 import type { MapMark } from "@/lib/types";
 
+export const DEFAULT_MARK_FONT_SIZE = 3.2;
+
 /** Layer di riferimenti (linee, rettangoli, scritte) — non sono tavoli */
 export function ZoneMarksLayer({
   marks,
   selectedId,
   interactive = false,
   onSelect,
+  onDragStart,
 }: {
   marks: MapMark[];
   selectedId?: string | null;
   interactive?: boolean;
   onSelect?: (id: string) => void;
+  onDragStart?: (
+    id: string,
+    mode: "move" | "resize",
+    e: React.PointerEvent,
+  ) => void;
 }) {
   if (!marks.length) return null;
 
   return (
     <svg
-      className={`absolute inset-0 h-full w-full ${
-        interactive ? "pointer-events-auto" : "pointer-events-none"
-      }`}
+      className="pointer-events-none absolute inset-0 z-20 h-full w-full"
       viewBox="0 0 100 100"
       preserveAspectRatio="none"
       aria-hidden={!interactive}
@@ -43,12 +49,13 @@ export function ZoneMarksLayer({
                   x2={mark.x2 ?? mark.x}
                   y2={mark.y2 ?? mark.y}
                   stroke="transparent"
-                  strokeWidth={4}
+                  strokeWidth={5}
                   strokeLinecap="round"
-                  className="cursor-pointer"
+                  className="pointer-events-auto cursor-grab"
                   onPointerDown={(e) => {
                     e.stopPropagation();
                     onSelect?.(mark.id);
+                    onDragStart?.(mark.id, "move", e);
                   }}
                 />
               ) : null}
@@ -62,7 +69,6 @@ export function ZoneMarksLayer({
                 strokeLinecap="round"
                 strokeDasharray={selected ? undefined : "2 1.2"}
                 vectorEffect="non-scaling-stroke"
-                className={interactive ? "pointer-events-none" : undefined}
               />
             </g>
           );
@@ -72,54 +78,97 @@ export function ZoneMarksLayer({
           const w = Math.max(1, mark.w ?? 10);
           const h = Math.max(1, mark.h ?? 10);
           return (
-            <rect
-              key={mark.id}
+            <g key={mark.id}>
+              <rect
+                x={mark.x}
+                y={mark.y}
+                width={w}
+                height={h}
+                fill={fill}
+                stroke={stroke}
+                strokeWidth={selected ? 1.1 : 0.65}
+                strokeDasharray={selected ? undefined : "2 1.2"}
+                rx={1.2}
+                vectorEffect="non-scaling-stroke"
+                className={
+                  interactive ? "pointer-events-auto cursor-grab" : undefined
+                }
+                onPointerDown={
+                  interactive
+                    ? (e) => {
+                        e.stopPropagation();
+                        onSelect?.(mark.id);
+                        onDragStart?.(mark.id, "move", e);
+                      }
+                    : undefined
+                }
+              />
+              {interactive && selected ? (
+                <circle
+                  cx={mark.x + w}
+                  cy={mark.y + h}
+                  r={1.8}
+                  fill="#f59e0b"
+                  stroke="#fff"
+                  strokeWidth={0.4}
+                  className="pointer-events-auto cursor-nwse-resize"
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    onSelect?.(mark.id);
+                    onDragStart?.(mark.id, "resize", e);
+                  }}
+                />
+              ) : null}
+            </g>
+          );
+        }
+
+        const fontSize = mark.fontSize ?? DEFAULT_MARK_FONT_SIZE;
+        const handleX = mark.x + fontSize * 1.6;
+        const handleY = mark.y + fontSize * 0.85;
+        return (
+          <g key={mark.id}>
+            <text
               x={mark.x}
               y={mark.y}
-              width={w}
-              height={h}
-              fill={fill}
-              stroke={stroke}
-              strokeWidth={selected ? 1.1 : 0.65}
-              strokeDasharray={selected ? undefined : "2 1.2"}
-              rx={1.2}
-              vectorEffect="non-scaling-stroke"
-              className={interactive ? "cursor-pointer" : undefined}
+              fill={stroke}
+              fontSize={fontSize}
+              fontWeight={700}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              className={
+                interactive ? "pointer-events-auto cursor-grab" : undefined
+              }
+              style={{ userSelect: "none" }}
               onPointerDown={
                 interactive
                   ? (e) => {
                       e.stopPropagation();
                       onSelect?.(mark.id);
+                      onDragStart?.(mark.id, "move", e);
                     }
                   : undefined
               }
-            />
-          );
-        }
-
-        return (
-          <text
-            key={mark.id}
-            x={mark.x}
-            y={mark.y}
-            fill={stroke}
-            fontSize={3.2}
-            fontWeight={700}
-            textAnchor="middle"
-            dominantBaseline="middle"
-            className={interactive ? "cursor-pointer" : undefined}
-            style={{ userSelect: "none" }}
-            onPointerDown={
-              interactive
-                ? (e) => {
-                    e.stopPropagation();
-                    onSelect?.(mark.id);
-                  }
-                : undefined
-            }
-          >
-            {mark.text || "Etichetta"}
-          </text>
+            >
+              {mark.text || "Etichetta"}
+            </text>
+            {interactive && selected ? (
+              <circle
+                cx={handleX}
+                cy={handleY}
+                r={1.8}
+                fill="#f59e0b"
+                stroke="#fff"
+                strokeWidth={0.4}
+                className="pointer-events-auto cursor-nwse-resize"
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  onSelect?.(mark.id);
+                  onDragStart?.(mark.id, "resize", e);
+                }}
+              />
+            ) : null}
+          </g>
         );
       })}
     </svg>

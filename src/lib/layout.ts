@@ -57,6 +57,10 @@ function normalizeMark(m: Partial<MapMark>, mi: number): MapMark | null {
     text: String(m.text ?? "Etichetta"),
   };
   if (color) mark.color = color;
+  const fontSize = Number(m.fontSize);
+  if (Number.isFinite(fontSize) && fontSize > 0) {
+    mark.fontSize = Math.min(16, Math.max(1.2, fontSize));
+  }
   return mark;
 }
 
