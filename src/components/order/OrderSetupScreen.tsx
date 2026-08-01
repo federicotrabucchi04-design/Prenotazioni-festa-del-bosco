@@ -446,7 +446,7 @@ function ZoneOrderMap({
                       color: colorForOrderNumber(nums[0]!, colorRanges),
                     }}
                   >
-                    {nums.join(" · ")}
+                    {nums.join("-")}
                   </span>
                 ) : (
                   <span className="text-[10px] font-medium opacity-40" style={{ color: accent }}>

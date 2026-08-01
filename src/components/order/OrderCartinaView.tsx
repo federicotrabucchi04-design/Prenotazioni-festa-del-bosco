@@ -33,15 +33,14 @@ export function resolveOrderCartina(
   return { placements: autoPlaceZones(layout.zones), marks: [] };
 }
 
-function multiLayout(count: number): { cols: number; rows: number } {
-  if (count <= 1) return { cols: 1, rows: 1 };
-  // 2 numeri: uno sopra l’altro → più larghezza per le cifre (non spariscono)
-  if (count === 2) return { cols: 1, rows: 2 };
-  if (count === 3) return { cols: 1, rows: 3 };
-  if (count === 4) return { cols: 2, rows: 2 };
-  if (count <= 6) return { cols: 2, rows: 3 };
-  if (count <= 9) return { cols: 3, rows: 3 };
-  return { cols: 4, rows: Math.ceil(count / 4) };
+/** Unità di larghezza approssimative (cifre + trattini) per fit orizzontale */
+function horizontalWidthUnits(nums: number[]) {
+  let units = 0;
+  nums.forEach((n, i) => {
+    if (i > 0) units += 0.42; // "-"
+    units += String(n).length * 0.58;
+  });
+  return Math.max(units, 1);
 }
 
 /** Cartina con numeri d’ordine sui tavoli + cerchio highlight */
@@ -82,7 +81,6 @@ export function OrderCartinaView({
     .filter(Boolean) as { zone: ZoneLayout; placement: ZoneOnBoard }[];
 
   const isDisplay = variant === "display";
-  // Riempie l’altezza della cella tavolo; numberScale admin regola quanto (cap ~96%)
   const heightFillPct = Math.min(
     96,
     Math.max(70, (isDisplay ? 92 : 88) * numberScale),
@@ -134,8 +132,14 @@ export function OrderCartinaView({
                   highlight != null &&
                   highlight.found &&
                   nums.includes(highlight.orderNumber);
-                const { cols, rows } = multiLayout(nums.length);
+                // Più alto che largo → a capo senza trattino; altrimenti riga con "-"
+                const stackVertical = nums.length > 1 && h > w;
                 const Tag = interactive ? "button" : "div";
+
+                const rowFontSize = `min(${heightFillPct}cqh, ${(
+                  98 / horizontalWidthUnits(nums)
+                ).toFixed(1)}cqw)`;
+
                 return (
                   <Tag
                     key={table.id}
@@ -156,69 +160,89 @@ export function OrderCartinaView({
                       backgroundColor: "#ffffff",
                       boxShadow: `inset 0 0 0 1px ${accent}44`,
                       overflow: isHit ? "visible" : "hidden",
-                      padding: nums.length > 1 ? "1.5%" : "1%",
+                      padding: "1%",
+                      containerType: "size",
                     }}
                   >
                     {nums.length > 0 ? (
-                      <span
-                        className="relative z-[1] grid h-full w-full place-items-center"
-                        style={{
-                          gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
-                          gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
-                          gap: nums.length > 1 ? "2%" : 0,
-                        }}
-                      >
-                        {nums.map((orderNum) => {
-                          const hitThis =
-                            isHit && orderNum === highlight?.orderNumber;
-                          const numColor = colorForOrderNumber(
-                            orderNum,
-                            colorRanges,
-                          );
-                          const digits = String(orderNum).length;
-                          // Altezza ≈ tavolo; riduci solo se le cifre non entrano in larghezza
-                          const fitW = (
-                            98 / Math.max(digits * 0.58, 1)
-                          ).toFixed(1);
-                          const fontSize = `min(${heightFillPct}cqh, ${fitW}cqw)`;
-                          return (
-                            <span
-                              key={orderNum}
-                              className={`relative flex h-full w-full min-h-0 min-w-0 items-center justify-center ${
-                                hitThis ? "z-10" : ""
-                              }`}
-                              style={{ containerType: "size" }}
-                            >
-                              {hitThis ? (
-                                <span
-                                  className="pointer-events-none absolute left-1/2 top-1/2 z-0 aspect-square -translate-x-1/2 -translate-y-1/2 animate-order-pulse rounded-full border-solid"
-                                  style={{
-                                    width: `${highlightRadius}em`,
-                                    height: `${highlightRadius}em`,
-                                    minWidth: `${highlightRadius}em`,
-                                    minHeight: `${highlightRadius}em`,
-                                    borderWidth: `clamp(2px, ${Math.max(0.08, highlightRadius * 0.07)}em, 12px)`,
-                                    borderColor: highlightColor,
-                                    boxShadow: `0 0 0 clamp(1px, ${Math.max(0.04, highlightRadius * 0.04)}em, 6px) ${highlightColor}40`,
-                                    backgroundColor: "transparent",
-                                    fontSize,
-                                  }}
-                                  aria-hidden
-                                />
-                              ) : null}
+                      stackVertical ? (
+                        <span className="relative z-[1] flex h-full w-full flex-col items-stretch justify-center">
+                          {nums.map((orderNum) => {
+                            const hitThis =
+                              isHit && orderNum === highlight?.orderNumber;
+                            const digits = String(orderNum).length;
+                            const fontSize = `min(${(
+                              90 / nums.length
+                            ).toFixed(1)}cqh, ${(
+                              96 / Math.max(digits * 0.58, 1)
+                            ).toFixed(1)}cqw)`;
+                            return (
                               <span
-                                className="relative z-[1] font-black leading-none tabular-nums"
-                                style={{
-                                  fontSize,
-                                  color: hitThis ? highlightColor : numColor,
-                                }}
+                                key={orderNum}
+                                className="flex min-h-0 flex-1 items-center justify-center"
                               >
-                                {orderNum}
+                                <OrderNumGlyph
+                                  orderNum={orderNum}
+                                  fontSize={fontSize}
+                                  color={
+                                    hitThis
+                                      ? highlightColor
+                                      : colorForOrderNumber(
+                                          orderNum,
+                                          colorRanges,
+                                        )
+                                  }
+                                  hit={hitThis}
+                                  highlightColor={highlightColor}
+                                  highlightRadius={highlightRadius}
+                                />
                               </span>
-                            </span>
-                          );
-                        })}
-                      </span>
+                            );
+                          })}
+                        </span>
+                      ) : (
+                        <span className="relative z-[1] flex h-full w-full flex-row flex-nowrap items-center justify-center">
+                          {nums.map((orderNum, i) => {
+                            const hitThis =
+                              isHit && orderNum === highlight?.orderNumber;
+                            return (
+                              <span
+                                key={orderNum}
+                                className="inline-flex items-center"
+                              >
+                                {i > 0 ? (
+                                  <span
+                                    className="font-black leading-none tabular-nums"
+                                    style={{
+                                      fontSize: rowFontSize,
+                                      color: accent,
+                                      padding: "0 0.06em",
+                                    }}
+                                    aria-hidden
+                                  >
+                                    -
+                                  </span>
+                                ) : null}
+                                <OrderNumGlyph
+                                  orderNum={orderNum}
+                                  fontSize={rowFontSize}
+                                  color={
+                                    hitThis
+                                      ? highlightColor
+                                      : colorForOrderNumber(
+                                          orderNum,
+                                          colorRanges,
+                                        )
+                                  }
+                                  hit={hitThis}
+                                  highlightColor={highlightColor}
+                                  highlightRadius={highlightRadius}
+                                />
+                              </span>
+                            );
+                          })}
+                        </span>
+                      )
                     ) : (
                       <span className="relative z-[1] text-[clamp(6px,12cqmin,12px)] text-[var(--forest)]/20">
                         ·
@@ -232,5 +256,53 @@ export function OrderCartinaView({
         );
       })}
     </div>
+  );
+}
+
+function OrderNumGlyph({
+  orderNum,
+  fontSize,
+  color,
+  hit,
+  highlightColor,
+  highlightRadius,
+}: {
+  orderNum: number;
+  fontSize: string;
+  color: string;
+  hit: boolean;
+  highlightColor: string;
+  highlightRadius: number;
+}) {
+  return (
+    <span
+      className={`relative inline-flex items-center justify-center ${
+        hit ? "z-10" : ""
+      }`}
+    >
+      {hit ? (
+        <span
+          className="pointer-events-none absolute left-1/2 top-1/2 z-0 aspect-square -translate-x-1/2 -translate-y-1/2 animate-order-pulse rounded-full border-solid"
+          style={{
+            width: `${highlightRadius}em`,
+            height: `${highlightRadius}em`,
+            minWidth: `${highlightRadius}em`,
+            minHeight: `${highlightRadius}em`,
+            borderWidth: `clamp(2px, ${Math.max(0.08, highlightRadius * 0.07)}em, 12px)`,
+            borderColor: highlightColor,
+            boxShadow: `0 0 0 clamp(1px, ${Math.max(0.04, highlightRadius * 0.04)}em, 6px) ${highlightColor}40`,
+            backgroundColor: "transparent",
+            fontSize,
+          }}
+          aria-hidden
+        />
+      ) : null}
+      <span
+        className="relative z-[1] font-black leading-none tabular-nums"
+        style={{ fontSize, color }}
+      >
+        {orderNum}
+      </span>
+    </span>
   );
 }
