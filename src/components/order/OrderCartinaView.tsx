@@ -182,7 +182,7 @@ function pointerInEl(
   };
 }
 
-const EXTRA_ACCENT = "#b45309";
+const EXTRA_TABLE_ACCENT = "#2d5a27";
 
 /** Cartina con numeri d’ordine sui tavoli + cerchio highlight */
 export function OrderCartinaView({
@@ -197,6 +197,7 @@ export function OrderCartinaView({
   numberScale = 1,
   colorRanges = [],
   drawTableMode = false,
+  deleteTableMode = false,
   onTableClick,
   onDrawTable,
   onDeleteExtraTable,
@@ -215,6 +216,8 @@ export function OrderCartinaView({
   colorRanges?: OrderColorRange[];
   /** Modalità: disegna rettangolo ovunque sulla cartina */
   drawTableMode?: boolean;
+  /** Modalità: tap su tavolo extra per eliminarlo */
+  deleteTableMode?: boolean;
   onTableClick?: (zone: ZoneLayout, tableNumber: number) => void;
   onDrawTable?: (rect: {
     x: number;
@@ -264,13 +267,17 @@ export function OrderCartinaView({
   }
 
   const draftRect = draft ? normRect(draft) : null;
-  const canManageExtras = interactive && !isDisplay;
+  const toolActive = drawTableMode || deleteTableMode;
 
   return (
     <div
       ref={boardRef}
       className={`order-cartina-view relative h-full w-full overflow-hidden bg-white ${className} ${
-        drawTableMode ? "cursor-crosshair touch-none" : ""
+        drawTableMode
+          ? "cursor-crosshair touch-none"
+          : deleteTableMode
+            ? "cursor-pointer"
+            : ""
       }`}
       style={
         drawTableMode
@@ -323,8 +330,6 @@ export function OrderCartinaView({
       {items.map(({ zone, placement }) => {
         const accent = zoneAccentColor(zone);
         const { gapX, gapY } = gapsFromPlacement(placement);
-        // Solo tavoli griglia: gli occasional di zona legacy restano nel fill,
-        // ma i nuovi extra sono a livello foglio.
         const rects = computeTableFillRects(zone.tables, gapX, gapY);
 
         return (
@@ -368,65 +373,46 @@ export function OrderCartinaView({
                   highlight.found &&
                   nums.includes(highlight.orderNumber);
                 const stackVertical = shouldStackVertical(w, h, nums.length);
-                const canClick = interactive && !drawTableMode;
-                const Tag = canClick ? "button" : "div";
                 const occasional = Boolean(table.occasional);
+                const canDelete =
+                  deleteTableMode && occasional && Boolean(onDeleteZoneOccasional);
+                const canAssign =
+                  interactive && !toolActive;
+                const Tag = canAssign || canDelete ? "button" : "div";
 
                 return (
                   <Tag
                     key={table.id}
-                    {...(canClick
+                    {...(canAssign
                       ? {
                           type: "button" as const,
                           onClick: () => onTableClick?.(zone, table.number),
                         }
-                      : {})}
+                      : canDelete
+                        ? {
+                            type: "button" as const,
+                            onClick: () =>
+                              onDeleteZoneOccasional?.(zone, table.id),
+                          }
+                        : {})}
                     className={`absolute p-0 text-center transition ${
-                      canClick ? "active:scale-95 touch-manipulation" : ""
-                    } ${isHit ? "z-30" : "z-[1]"}`}
+                      canAssign || canDelete
+                        ? "active:scale-95 touch-manipulation"
+                        : ""
+                    } ${isHit ? "z-30" : "z-[1]"} ${
+                      canDelete ? "ring-2 ring-red-500 ring-inset" : ""
+                    }`}
                     style={{
                       left: `${x}%`,
                       top: `${y}%`,
                       width: `${w}%`,
                       height: `${h}%`,
-                      backgroundColor: occasional
-                        ? "rgba(245, 158, 11, 0.12)"
-                        : "#ffffff",
-                      boxShadow: occasional
-                        ? `inset 0 0 0 2px ${accent}`
-                        : `inset 0 0 0 1px ${accent}44`,
-                      outline: occasional
-                        ? `1px dashed ${accent}`
-                        : undefined,
-                      outlineOffset: occasional ? -3 : undefined,
+                      backgroundColor: "#ffffff",
+                      boxShadow: `inset 0 0 0 1px ${accent}44`,
                       overflow: isHit ? "visible" : "hidden",
                     }}
-                    title={
-                      occasional
-                        ? `Tavolo extra ${table.number}`
-                        : `Tavolo ${table.number}`
-                    }
+                    title={`Tavolo ${table.number}`}
                   >
-                    {canManageExtras &&
-                    occasional &&
-                    onDeleteZoneOccasional ? (
-                      <span
-                        data-extra-ui
-                        className="absolute right-0 top-0 z-20"
-                      >
-                        <button
-                          type="button"
-                          className="flex h-5 w-5 items-center justify-center rounded-bl bg-red-600 text-[10px] font-bold text-white"
-                          aria-label={`Elimina tavolo ${table.number}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onDeleteZoneOccasional(zone, table.id);
-                          }}
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ) : null}
                     {nums.length > 0 ? (
                       <TableOrderNums
                         nums={nums}
@@ -441,14 +427,8 @@ export function OrderCartinaView({
                         highlightRadius={highlightRadius}
                       />
                     ) : (
-                      <span
-                        className={`flex h-full w-full items-center justify-center text-[10px] ${
-                          occasional
-                            ? "font-bold text-amber-700/70"
-                            : "text-[var(--forest)]/20"
-                        }`}
-                      >
-                        {occasional ? `T${table.number}` : "·"}
+                      <span className="flex h-full w-full items-center justify-center text-[10px] text-[var(--forest)]/20">
+                        ·
                       </span>
                     )}
                   </Tag>
@@ -476,71 +456,59 @@ export function OrderCartinaView({
           table.h,
           nums.length,
         );
-        const canClick = interactive && !drawTableMode;
-        const Tag = canClick ? "button" : "div";
+        const canDelete =
+          deleteTableMode && Boolean(onDeleteExtraTable);
+        const canAssign = interactive && !toolActive;
+        const Tag = canAssign || canDelete ? "button" : "div";
 
         return (
           <Tag
             key={table.id}
             data-extra-ui
-            {...(canClick
+            {...(canAssign
               ? {
                   type: "button" as const,
                   onClick: () =>
                     onTableClick?.(extraTablesZone(), table.number),
                 }
-              : {})}
+              : canDelete
+                ? {
+                    type: "button" as const,
+                    onClick: () => onDeleteExtraTable?.(table),
+                  }
+                : {})}
             className={`absolute z-20 p-0 text-center transition ${
-              canClick ? "active:scale-95 touch-manipulation" : ""
+              canAssign || canDelete
+                ? "active:scale-95 touch-manipulation"
+                : ""
             } ${isHit ? "z-30" : ""} ${
               drawTableMode ? "pointer-events-auto" : ""
-            }`}
+            } ${canDelete ? "ring-2 ring-red-500 ring-inset" : ""}`}
             style={{
               left: `${table.x}%`,
               top: `${table.y}%`,
               width: `${table.w}%`,
               height: `${table.h}%`,
-              backgroundColor: "rgba(245, 158, 11, 0.18)",
-              boxShadow: `inset 0 0 0 2px ${EXTRA_ACCENT}`,
-              outline: `1px dashed ${EXTRA_ACCENT}`,
-              outlineOffset: -3,
+              backgroundColor: "#ffffff",
+              boxShadow: `inset 0 0 0 1px ${EXTRA_TABLE_ACCENT}44`,
               overflow: isHit ? "visible" : "hidden",
             }}
-            title={`Tavolo extra ${table.number}`}
+            title={`Tavolo ${table.number}`}
           >
-            {canManageExtras && onDeleteExtraTable ? (
-              <span
-                data-extra-ui
-                className="absolute right-0 top-0 z-20"
-              >
-                <button
-                  type="button"
-                  className="flex h-5 w-5 items-center justify-center rounded-bl bg-red-600 text-[10px] font-bold text-white touch-manipulation"
-                  aria-label={`Elimina tavolo extra ${table.number}`}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDeleteExtraTable(table);
-                  }}
-                >
-                  ×
-                </button>
-              </span>
-            ) : null}
             {nums.length > 0 ? (
               <TableOrderNums
                 nums={nums}
                 stackVertical={stackVertical}
                 numberScale={numberScale}
-                accent={EXTRA_ACCENT}
+                accent={EXTRA_TABLE_ACCENT}
                 colorRanges={colorRanges}
                 highlightOrder={isHit ? highlight!.orderNumber : null}
                 highlightColor={highlightColor}
                 highlightRadius={highlightRadius}
               />
             ) : (
-              <span className="flex h-full w-full items-center justify-center text-[10px] font-bold text-amber-800/80">
-                T{table.number}
+              <span className="flex h-full w-full items-center justify-center text-[10px] text-[var(--forest)]/20">
+                ·
               </span>
             )}
           </Tag>
@@ -549,7 +517,7 @@ export function OrderCartinaView({
 
       {draftRect && draftRect.w > 0.5 && draftRect.h > 0.5 ? (
         <div
-          className="pointer-events-none absolute z-40 border-2 border-dashed border-amber-500 bg-amber-400/25"
+          className="pointer-events-none absolute z-40 border-2 border-dashed border-[var(--forest)] bg-[var(--forest)]/15"
           style={{
             left: `${draftRect.x}%`,
             top: `${draftRect.y}%`,

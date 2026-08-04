@@ -60,7 +60,7 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
   const [pendingNums, setPendingNums] = useState<number[]>([]);
   const [digits, setDigits] = useState("");
   const [busy, setBusy] = useState(false);
-  const [addTableMode, setAddTableMode] = useState(false);
+  const [tableTool, setTableTool] = useState<"none" | "add" | "delete">("none");
   const maxDigits = settings.orderMaxDigits;
 
   useEffect(() => {
@@ -130,7 +130,7 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
   }
 
   function openAssign(zone: ZoneLayout, tableNumber: number) {
-    if (addTableMode) return;
+    if (tableTool !== "none") return;
     setPending({ zone, tableNumber });
     setPendingNums(ordersForTable(board.assignments, zone.id, tableNumber));
     setDigits("");
@@ -257,9 +257,11 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
               {orderRoleLabel(role)}
             </h1>
             <p className="text-sm text-[var(--forest-muted)]">
-              {addTableMode
+              {tableTool === "add"
                 ? "Disegna un rettangolo ovunque sulla cartina (anche fuori zona)"
-                : "Tocca un tavolo e digita il numero d’ordine"}
+                : tableTool === "delete"
+                  ? "Tocca un tavolo extra per eliminarlo"
+                  : "Tocca un tavolo e digita il numero d’ordine"}
             </p>
           </div>
           <button
@@ -300,7 +302,7 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
               type="button"
               onClick={() => {
                 setMode(id);
-                if (id !== "global") setAddTableMode(false);
+                if (id !== "global") setTableTool("none");
               }}
               className={`flex-1 font-semibold touch-manipulation ${
                 embedded
@@ -324,22 +326,40 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
             }`}
           >
             {mode === "global" ? (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  setAddTableMode((v) => !v);
-                  setPending(null);
-                }}
-                className={`inline-flex items-center gap-1 rounded-2xl px-3 py-2.5 text-xs font-semibold touch-manipulation md:text-sm ${
-                  addTableMode
-                    ? "bg-amber-500 text-white"
-                    : "bg-amber-50 text-amber-900"
-                }`}
-              >
-                <PlusSquare className="h-3.5 w-3.5" />
-                Aggiungi tavolo
-              </button>
+              <>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    setTableTool((t) => (t === "add" ? "none" : "add"));
+                    setPending(null);
+                  }}
+                  className={`inline-flex items-center gap-1 rounded-2xl px-3 py-2.5 text-xs font-semibold touch-manipulation md:text-sm ${
+                    tableTool === "add"
+                      ? "bg-[var(--forest)] text-white"
+                      : "bg-white text-[var(--forest-ink)]"
+                  }`}
+                >
+                  <PlusSquare className="h-3.5 w-3.5" />
+                  Aggiungi tavolo
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    setTableTool((t) => (t === "delete" ? "none" : "delete"));
+                    setPending(null);
+                  }}
+                  className={`inline-flex items-center gap-1 rounded-2xl px-3 py-2.5 text-xs font-semibold touch-manipulation md:text-sm ${
+                    tableTool === "delete"
+                      ? "bg-red-600 text-white"
+                      : "bg-red-50 text-red-700"
+                  }`}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Elimina tavolo
+                </button>
+              </>
             ) : null}
             {!embedded ? (
               <button
@@ -359,14 +379,15 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
           </div>
         ) : null}
 
-        {addTableMode && mode === "global" ? (
+        {tableTool !== "none" && mode === "global" ? (
           <p
-            className={`pb-1 text-xs font-medium text-amber-800 ${
-              embedded ? "px-1.5" : "px-4 md:px-6"
-            }`}
+            className={`pb-1 text-xs font-medium ${
+              tableTool === "delete" ? "text-red-700" : "text-[var(--forest)]"
+            } ${embedded ? "px-1.5" : "px-4 md:px-6"}`}
           >
-            Trascina un rettangolo ovunque · griglia {CARTINA_GRID_SNAP}% · ×
-            per eliminare · tap di nuovo su «Aggiungi tavolo» per uscire
+            {tableTool === "add"
+              ? `Trascina un rettangolo ovunque · griglia ${CARTINA_GRID_SNAP}% · tap di nuovo per uscire`
+              : "Tocca un tavolo extra (bordo rosso) per eliminarlo · tap di nuovo per uscire"}
           </p>
         ) : null}
 
@@ -394,7 +415,8 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                 assignments={board.assignments}
                 highlight={null}
                 interactive
-                drawTableMode={addTableMode}
+                drawTableMode={tableTool === "add"}
+                deleteTableMode={tableTool === "delete"}
                 numberScale={
                   embedded
                     ? Math.max(0.85, settings.orderNumberScale)
