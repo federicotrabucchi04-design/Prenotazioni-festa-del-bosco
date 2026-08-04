@@ -96,18 +96,18 @@ export function OrderNumbersPanel({
         <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--forest-muted)]">
           Sequenza · croce = già trovato
         </p>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-10 gap-1 sm:gap-1.5">
           {window.map(({ n, found }) => {
             const isNext = !found && n === summary.next;
             return (
               <span
                 key={n}
-                className={`relative inline-flex min-h-12 min-w-12 items-center justify-center rounded-2xl px-3 py-2.5 font-black tabular-nums ${
+                className={`relative flex aspect-square w-full items-center justify-center rounded-xl font-black tabular-nums sm:rounded-2xl ${
                   found
                     ? "bg-neutral-100 text-neutral-400"
                     : isNext
-                      ? "bg-[var(--forest)] text-lg text-white"
-                      : "bg-[var(--forest)]/10 text-base"
+                      ? "bg-[var(--forest)] text-sm text-white sm:text-base"
+                      : "bg-[var(--forest)]/10 text-xs sm:text-sm"
                 }`}
                 style={
                   found || isNext
@@ -123,7 +123,7 @@ export function OrderNumbersPanel({
                     aria-hidden
                   >
                     <X
-                      className="h-[85%] w-[85%] text-red-600"
+                      className="h-[80%] w-[80%] text-red-600"
                       strokeWidth={3}
                     />
                   </span>
