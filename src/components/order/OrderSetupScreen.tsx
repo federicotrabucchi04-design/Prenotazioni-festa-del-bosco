@@ -30,12 +30,15 @@ import {
 import { useAppSettings } from "@/hooks/use-app-settings";
 import {
   CARTINA_COLORS,
+  isCartinaMirrored,
   loadCartinaPrefs,
   nextExtraTableNumber,
   saveCartinaPrefs,
+  withCartinaMirror,
   zoneAccentColor,
   EXTRA_TABLES_ZONE_ID,
   type CartinaExtraTable,
+  type CartinaMirrorView,
   type CartinaPrefs,
 } from "@/lib/cartina";
 import {
@@ -79,7 +82,18 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
     if (remote?.extraTables?.length && !local.extraTables?.length) {
       merged = { ...merged, extraTables: remote.extraTables };
     }
-    if (remote?.mirrored === true && !merged.mirrored) {
+    if (remote?.mirrorOrdini === true && !merged.mirrorOrdini) {
+      merged = { ...merged, mirrorOrdini: true };
+    }
+    if (remote?.mirrorSchermo === true && !merged.mirrorSchermo) {
+      merged = { ...merged, mirrorSchermo: true };
+    }
+    if (
+      remote?.mirrored === true &&
+      !merged.mirrorOrdini &&
+      !merged.mirrorSchermo &&
+      !merged.mirrored
+    ) {
       merged = { ...merged, mirrored: true };
     }
     return resolveOrderCartina(layout, merged);
@@ -260,18 +274,21 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
     }
   }
 
-  async function toggleMirror() {
+  async function toggleMirror(view: CartinaMirrorView) {
     setBusy(true);
     try {
-      const enabling = !prefs.mirrored;
-      const next: CartinaPrefs = {
-        placements: prefs.placements,
-        marks: prefs.marks ?? [],
-      };
-      if (prefs.extraTables?.length) next.extraTables = prefs.extraTables;
-      if (enabling) next.mirrored = true;
+      const enabling = !isCartinaMirrored(prefs, view);
+      const next = withCartinaMirror(prefs, view, enabling);
       await persistCartina(next);
-      toast.success(enabling ? "Cartina specchiata" : "Specchio disattivato");
+      toast.success(
+        enabling
+          ? view === "ordini"
+            ? "Ordini specchiato"
+            : "Schermo specchiato"
+          : view === "ordini"
+            ? "Specchio Ordini disattivato"
+            : "Specchio Schermo disattivato",
+      );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Errore");
     } finally {
@@ -385,15 +402,28 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => void toggleMirror()}
+                  onClick={() => void toggleMirror("ordini")}
                   className={`inline-flex items-center gap-1 rounded-2xl px-3 py-2.5 text-xs font-semibold touch-manipulation md:text-sm ${
-                    prefs.mirrored
+                    isCartinaMirrored(prefs, "ordini")
                       ? "bg-[var(--forest)] text-white"
                       : "bg-white text-[var(--forest-ink)]"
                   }`}
                 >
                   <FlipHorizontal2 className="h-3.5 w-3.5" />
-                  Specchia
+                  Specchia qui
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void toggleMirror("schermo")}
+                  className={`inline-flex items-center gap-1 rounded-2xl px-3 py-2.5 text-xs font-semibold touch-manipulation md:text-sm ${
+                    isCartinaMirrored(prefs, "schermo")
+                      ? "bg-sky-600 text-white"
+                      : "bg-sky-50 text-sky-900"
+                  }`}
+                >
+                  <FlipHorizontal2 className="h-3.5 w-3.5" />
+                  Specchia schermo
                 </button>
                 <button
                   type="button"

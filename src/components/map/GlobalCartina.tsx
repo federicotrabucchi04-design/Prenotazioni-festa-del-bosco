@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Download,
   Eye,
+  FlipHorizontal2,
   Minus,
   MousePointer2,
   Plus,
@@ -40,6 +41,7 @@ import {
   formatTableGuests,
   gapsFromPlacement,
   guestsByTable,
+  isCartinaMirrored,
   loadCartinaPrefs,
   normalizePlacement,
   placeZonesLikeCartina,
@@ -47,7 +49,9 @@ import {
   pointerPercent,
   resolvePlacedZones,
   saveCartinaPrefs,
+  withCartinaMirror,
   zoneAccentColor,
+  type CartinaMirrorView,
 } from "@/lib/cartina";
 import { saveOrderCartina } from "@/lib/order-board";
 import { snapGrid, CARTINA_GRID_SNAP } from "@/lib/layout-utils";
@@ -115,28 +119,93 @@ export function GlobalCartina() {
     setPublishing(true);
     try {
       saveCartinaPrefs(activePrefs);
-      // Non perdere i tavoli extra creati da Ordini
-      // Non perdere tavoli extra / specchio creati da Ordini
-      const merged: typeof activePrefs = {
+      // Non perdere tavoli extra / specchi creati da Ordini
+      const merged: CartinaPrefs = {
         ...activePrefs,
       };
       if (!merged.extraTables?.length && board.cartina?.extraTables?.length) {
         merged.extraTables = board.cartina.extraTables;
       }
-      if (merged.mirrored !== true && board.cartina?.mirrored === true) {
+      if (merged.mirrorOrdini == null && board.cartina?.mirrorOrdini === true) {
+        merged.mirrorOrdini = true;
+      }
+      if (merged.mirrorSchermo == null && board.cartina?.mirrorSchermo === true) {
+        merged.mirrorSchermo = true;
+      }
+      if (
+        merged.mirrored == null &&
+        merged.mirrorOrdini == null &&
+        merged.mirrorSchermo == null &&
+        board.cartina?.mirrored === true
+      ) {
         merged.mirrored = true;
       }
-      const payload: typeof activePrefs = {
+      const payload: CartinaPrefs = {
         placements: merged.placements,
         marks: merged.marks ?? [],
       };
       if (merged.extraTables?.length) payload.extraTables = merged.extraTables;
-      if (merged.mirrored === true) payload.mirrored = true;
+      if (isCartinaMirrored(merged, "ordini")) payload.mirrorOrdini = true;
+      if (isCartinaMirrored(merged, "schermo")) payload.mirrorSchermo = true;
       await saveOrderCartina(payload);
       toast.success("Cartina pubblicata ovunque");
       setStep("preview");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Errore pubblicazione");
+    } finally {
+      setPublishing(false);
+    }
+  }
+
+  async function toggleMirror(view: CartinaMirrorView) {
+    const live = board.cartina ?? activePrefs;
+    const enabling = !isCartinaMirrored(live, view);
+    const nextLocal = withCartinaMirror(
+      {
+        ...activePrefs,
+        extraTables: activePrefs.extraTables ?? live.extraTables,
+        mirrorOrdini: live.mirrorOrdini ?? activePrefs.mirrorOrdini,
+        mirrorSchermo: live.mirrorSchermo ?? activePrefs.mirrorSchermo,
+        mirrored: live.mirrored ?? activePrefs.mirrored,
+      },
+      view,
+      enabling,
+    );
+    updatePrefs(nextLocal);
+
+    setPublishing(true);
+    try {
+      const toPublish = withCartinaMirror(
+        {
+          placements: live.placements?.length
+            ? live.placements
+            : activePrefs.placements,
+          marks: live.marks ?? activePrefs.marks ?? [],
+          ...(live.extraTables?.length || activePrefs.extraTables?.length
+            ? {
+                extraTables:
+                  live.extraTables ?? activePrefs.extraTables,
+              }
+            : {}),
+          mirrorOrdini: live.mirrorOrdini,
+          mirrorSchermo: live.mirrorSchermo,
+          mirrored: live.mirrored,
+        },
+        view,
+        enabling,
+      );
+      await saveOrderCartina(toPublish);
+      toast.success(
+        enabling
+          ? view === "ordini"
+            ? "Ordini specchiato"
+            : "Schermo specchiato"
+          : view === "ordini"
+            ? "Specchio Ordini disattivato"
+            : "Specchio Schermo disattivato",
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Errore");
     } finally {
       setPublishing(false);
     }
@@ -226,6 +295,15 @@ export function GlobalCartina() {
               onChange={updatePrefs}
               onPreview={() => void publishAndPreview()}
               publishing={publishing}
+              mirrorOrdini={isCartinaMirrored(
+                board.cartina ?? activePrefs,
+                "ordini",
+              )}
+              mirrorSchermo={isCartinaMirrored(
+                board.cartina ?? activePrefs,
+                "schermo",
+              )}
+              onToggleMirror={(view) => void toggleMirror(view)}
               onZoneColor={async (zoneId, hex) => {
                 try {
                   await saveLayout({
@@ -314,6 +392,9 @@ function CartinaArrangeBoard({
   onChange,
   onPreview,
   publishing = false,
+  mirrorOrdini = false,
+  mirrorSchermo = false,
+  onToggleMirror,
   onZoneColor,
 }: {
   layoutZones: ZoneLayout[];
@@ -321,6 +402,9 @@ function CartinaArrangeBoard({
   onChange: (next: CartinaPrefs) => void;
   onPreview: () => void;
   publishing?: boolean;
+  mirrorOrdini?: boolean;
+  mirrorSchermo?: boolean;
+  onToggleMirror?: (view: CartinaMirrorView) => void;
   onZoneColor: (zoneId: string, hex: string) => void | Promise<void>;
 }) {
   const boardRef = useRef<HTMLDivElement>(null);
@@ -1060,6 +1144,35 @@ function CartinaArrangeBoard({
           </div>
         </div>
       ) : null}
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={publishing}
+          onClick={() => onToggleMirror?.("ordini")}
+          className={`inline-flex items-center gap-1 rounded-2xl px-3 py-2 text-xs font-semibold disabled:opacity-50 ${
+            mirrorOrdini
+              ? "bg-[var(--forest)] text-white"
+              : "bg-[var(--forest)]/10 text-[var(--forest)]"
+          }`}
+        >
+          <FlipHorizontal2 className="h-3.5 w-3.5" />
+          Specchia Ordini
+        </button>
+        <button
+          type="button"
+          disabled={publishing}
+          onClick={() => onToggleMirror?.("schermo")}
+          className={`inline-flex items-center gap-1 rounded-2xl px-3 py-2 text-xs font-semibold disabled:opacity-50 ${
+            mirrorSchermo
+              ? "bg-sky-600 text-white"
+              : "bg-sky-50 text-sky-900"
+          }`}
+        >
+          <FlipHorizontal2 className="h-3.5 w-3.5" />
+          Specchia Schermo
+        </button>
+      </div>
 
       <button
         type="button"

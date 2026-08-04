@@ -143,7 +143,15 @@ function normalizeCartina(raw: unknown): CartinaPrefs | null {
     : [];
   const out: CartinaPrefs = { placements, marks };
   if (extraTables.length) out.extraTables = extraTables;
-  if (c.mirrored === true) out.mirrored = true;
+  if (c.mirrorOrdini === true) out.mirrorOrdini = true;
+  if (c.mirrorSchermo === true) out.mirrorSchermo = true;
+  if (
+    c.mirrored === true &&
+    c.mirrorOrdini == null &&
+    c.mirrorSchermo == null
+  ) {
+    out.mirrored = true;
+  }
   return out;
 }
 

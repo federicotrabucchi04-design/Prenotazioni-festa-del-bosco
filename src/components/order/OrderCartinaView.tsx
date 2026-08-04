@@ -13,6 +13,7 @@ import {
   EXTRA_TABLES_ZONE_ID,
   EXTRA_TABLES_ZONE_NAME,
   gapsFromPlacement,
+  isCartinaMirrored,
   marksForDisplay,
   mirrorLeft,
   unmirrorCoord,
@@ -38,7 +39,6 @@ export function resolveOrderCartina(
   const extras = remote?.extraTables?.length
     ? remote.extraTables
     : undefined;
-  const mirrored = remote?.mirrored === true;
   if (remote && remote.placements.length > 0) {
     const known = new Set(layout.zones.map((z) => z.id));
     const placements = remote.placements.filter((p) => known.has(p.zoneId));
@@ -48,7 +48,15 @@ export function resolveOrderCartina(
         marks: remote.marks ?? [],
       };
       if (extras?.length) out.extraTables = extras;
-      if (mirrored) out.mirrored = true;
+      if (remote.mirrorOrdini === true) out.mirrorOrdini = true;
+      if (remote.mirrorSchermo === true) out.mirrorSchermo = true;
+      if (
+        remote.mirrored === true &&
+        remote.mirrorOrdini == null &&
+        remote.mirrorSchermo == null
+      ) {
+        out.mirrored = true;
+      }
       return out;
     }
   }
@@ -57,7 +65,15 @@ export function resolveOrderCartina(
     marks: remote?.marks ?? [],
   };
   if (extras?.length) out.extraTables = extras;
-  if (mirrored) out.mirrored = true;
+  if (remote?.mirrorOrdini === true) out.mirrorOrdini = true;
+  if (remote?.mirrorSchermo === true) out.mirrorSchermo = true;
+  if (
+    remote?.mirrored === true &&
+    remote.mirrorOrdini == null &&
+    remote.mirrorSchermo == null
+  ) {
+    out.mirrored = true;
+  }
   return out;
 }
 
@@ -250,8 +266,11 @@ export function OrderCartinaView({
     .filter(Boolean) as { zone: ZoneLayout; placement: ZoneOnBoard }[];
 
   const extraTables = prefs.extraTables ?? [];
-  const mirrored = prefs.mirrored === true;
   const isDisplay = variant === "display";
+  const mirrored = isCartinaMirrored(
+    prefs,
+    isDisplay ? "schermo" : "ordini",
+  );
 
   const boardRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState<DrawDraft | null>(null);

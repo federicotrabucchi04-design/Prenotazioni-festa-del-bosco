@@ -30,8 +30,15 @@ export interface CartinaPrefs {
    * Coordinate % rispetto all’intero foglio.
    */
   extraTables?: CartinaExtraTable[];
-  /** Specchio orizzontale della cartina (Ordini / Schermo) */
+  /**
+   * @deprecated usa mirrorOrdini / mirrorSchermo
+   * Se i nuovi flag mancano, vale per entrambi.
+   */
   mirrored?: boolean;
+  /** Specchio solo vista Ordini */
+  mirrorOrdini?: boolean;
+  /** Specchio solo vista Schermo */
+  mirrorSchermo?: boolean;
 }
 
 /** Tavolo extra disegnato in Ordini (fuori / sopra le zone) */
@@ -332,7 +339,15 @@ export function loadCartinaPrefs(layout: VenueLayout): CartinaPrefs {
           : [];
         const prefs: CartinaPrefs = { placements, marks };
         if (extraTables.length) prefs.extraTables = extraTables;
-        if (parsed.mirrored === true) prefs.mirrored = true;
+        if (parsed.mirrorOrdini === true) prefs.mirrorOrdini = true;
+        if (parsed.mirrorSchermo === true) prefs.mirrorSchermo = true;
+        if (
+          parsed.mirrored === true &&
+          parsed.mirrorOrdini == null &&
+          parsed.mirrorSchermo == null
+        ) {
+          prefs.mirrored = true;
+        }
         saveCartinaPrefs(prefs);
         return prefs;
       }
@@ -382,6 +397,44 @@ export function nextExtraTableNumber(tables: CartinaExtraTable[]) {
   let n = 1;
   while (used.has(n)) n += 1;
   return n;
+}
+
+export type CartinaMirrorView = "ordini" | "schermo";
+
+/** Specchio indipendente per Ordini e Schermo (legacy `mirrored` = entrambi). */
+export function isCartinaMirrored(
+  prefs: Pick<CartinaPrefs, "mirrored" | "mirrorOrdini" | "mirrorSchermo">,
+  view: CartinaMirrorView,
+): boolean {
+  if (view === "ordini") {
+    if (prefs.mirrorOrdini != null) return prefs.mirrorOrdini === true;
+    return prefs.mirrored === true;
+  }
+  if (prefs.mirrorSchermo != null) return prefs.mirrorSchermo === true;
+  return prefs.mirrored === true;
+}
+
+/** Imposta lo specchio di una vista senza toccare l’altra. */
+export function withCartinaMirror(
+  prefs: CartinaPrefs,
+  view: CartinaMirrorView,
+  enabled: boolean,
+): CartinaPrefs {
+  const next: CartinaPrefs = {
+    placements: prefs.placements,
+    marks: prefs.marks ?? [],
+  };
+  if (prefs.extraTables?.length) next.extraTables = prefs.extraTables;
+
+  const ordini =
+    view === "ordini" ? enabled : isCartinaMirrored(prefs, "ordini");
+  const schermo =
+    view === "schermo" ? enabled : isCartinaMirrored(prefs, "schermo");
+
+  if (ordini) next.mirrorOrdini = true;
+  if (schermo) next.mirrorSchermo = true;
+  // Non propagare più il flag legacy condiviso
+  return next;
 }
 
 /** Bordo sinistro di un box dopo eventuale specchio orizzontale */
