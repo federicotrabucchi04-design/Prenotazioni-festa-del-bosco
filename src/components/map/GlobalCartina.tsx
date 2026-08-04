@@ -50,7 +50,7 @@ import {
   zoneAccentColor,
 } from "@/lib/cartina";
 import { saveOrderCartina } from "@/lib/order-board";
-import { snapGrid, TABLE_GRID_SNAP } from "@/lib/layout-utils";
+import { snapGrid, CARTINA_GRID_SNAP } from "@/lib/layout-utils";
 import { CartinaViewportGuides } from "@/components/map/CartinaViewportGuides";
 
 type Step = "arrange" | "preview";
@@ -364,7 +364,7 @@ function CartinaArrangeBoard({
   }
 
   function snapBoard(v: number) {
-    return snapGrid(clampBoard(v));
+    return snapGrid(clampBoard(v), CARTINA_GRID_SNAP);
   }
 
   function startMarkDrag(
@@ -417,8 +417,8 @@ function CartinaArrangeBoard({
     // resize
     if (s.kind === "rect") {
       updateMark(d.markId, {
-        w: Math.max(TABLE_GRID_SNAP, snapBoard((s.w ?? 10) + dx)),
-        h: Math.max(TABLE_GRID_SNAP, snapBoard((s.h ?? 10) + dy)),
+        w: Math.max(CARTINA_GRID_SNAP, snapBoard((s.w ?? 10) + dx)),
+        h: Math.max(CARTINA_GRID_SNAP, snapBoard((s.h ?? 10) + dy)),
       });
       return;
     }
@@ -764,7 +764,7 @@ function CartinaArrangeBoard({
         Lavagna = foglio A4 verticale = ciò che vede lo <strong>Schermo</strong>{" "}
         (TV in verticale). Tratteggio blu = bordo TV/stampa; ambra = area sicura;
         rosso = riferimento da evitare (TV orizzontale). Zone e segni si
-        agganciano alla griglia ogni {TABLE_GRID_SNAP}%.
+        agganciano alla griglia ogni {CARTINA_GRID_SNAP}%.
       </p>
 
       <div
@@ -773,7 +773,7 @@ function CartinaArrangeBoard({
         onPointerMove={onBoardPointerMove}
         onPointerUp={onBoardPointerUp}
         className="relative mx-auto aspect-[210/297] w-full max-h-[min(72dvh,900px)] touch-none overflow-hidden border-2 border-blue-500/40 bg-[linear-gradient(rgba(45,90,39,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(45,90,39,0.1)_1px,transparent_1px)] bg-white shadow-sm"
-        style={{ backgroundSize: `${TABLE_GRID_SNAP}% ${TABLE_GRID_SNAP}%` }}
+        style={{ backgroundSize: `${CARTINA_GRID_SNAP}% ${CARTINA_GRID_SNAP}%` }}
       >
         {showGuides ? <CartinaViewportGuides /> : null}
 

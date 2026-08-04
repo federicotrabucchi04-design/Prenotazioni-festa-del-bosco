@@ -1,6 +1,6 @@
 import type { MapMark, Reservation, TableSpot, VenueLayout, ZoneLayout } from "@/lib/types";
 import { createId } from "@/lib/constants";
-import { clampPercent, snapGrid, TABLE_GRID_SNAP } from "@/lib/layout-utils";
+import { clampPercent, snapGrid, CARTINA_GRID_SNAP } from "@/lib/layout-utils";
 
 export const CARTINA_PREFS_KEY = "fdb-cartina-prefs-v3";
 
@@ -332,9 +332,9 @@ export function saveCartinaPrefs(prefs: CartinaPrefs) {
 }
 
 export function normalizePlacement(p: ZoneOnBoard): ZoneOnBoard {
-  // Snap alla stessa griglia dei tavoli (ogni 5%)
-  let w = Math.max(TABLE_GRID_SNAP, snapGrid(Math.max(MIN_ZONE_SIZE, p.w)));
-  let h = Math.max(TABLE_GRID_SNAP, snapGrid(Math.max(MIN_ZONE_SIZE, p.h)));
+  // Snap fitto cartina (ogni 2%)
+  let w = Math.max(CARTINA_GRID_SNAP, snapGrid(Math.max(MIN_ZONE_SIZE, p.w)));
+  let h = Math.max(CARTINA_GRID_SNAP, snapGrid(Math.max(MIN_ZONE_SIZE, p.h)));
   w = Math.min(100, w);
   h = Math.min(100, h);
   let x = snapGrid(p.x);
@@ -488,62 +488,68 @@ export interface TableFillRect {
 }
 
 /**
- * Rispecchia righe/colonne dalla disposizione editor: tutti i tavoli della
- * stessa tenda hanno la stessa larghezza e altezza, con bordo bianco fisso.
- * gapX / gapY indipendenti (vicini / lontani).
+ * Tavoli normali → griglia automatica; tavoli occasional → rettangolo libero x/y/w/h.
  */
 export function computeTableFillRects(
   tables: TableSpot[],
   gapX = TABLE_FILL_GAP,
   gapY = TABLE_FILL_GAP,
 ): TableFillRect[] {
-  if (tables.length === 0) return [];
-  if (tables.length === 1) {
-    const t = tables[0]!;
-    return [
-      {
-        table: t,
-        x: gapX / 2,
-        y: gapY / 2,
-        w: Math.max(1, 100 - gapX),
-        h: Math.max(1, 100 - gapY),
-      },
-    ];
-  }
-
-  const sorted = [...tables].sort((a, b) => a.y - b.y || a.x - b.x);
-  const rowTol = 7;
-  const rows: TableSpot[][] = [];
-  for (const t of sorted) {
-    const last = rows[rows.length - 1];
-    if (last && Math.abs(last[0]!.y - t.y) <= rowTol) {
-      last.push(t);
-    } else {
-      rows.push([t]);
-    }
-  }
-  rows.forEach((row) => row.sort((a, b) => a.x - b.x));
-
-  const nRows = rows.length;
-  const nCols = Math.max(...rows.map((r) => r.length));
-  const cellW = (100 - gapX * (nCols + 1)) / nCols;
-  const cellH = (100 - gapY * (nRows + 1)) / nRows;
-
+  const gridTables = tables.filter((t) => !t.occasional);
+  const freeTables = tables.filter((t) => t.occasional);
   const out: TableFillRect[] = [];
-  rows.forEach((row, ri) => {
-    const y = gapY + ri * (cellH + gapY);
-    const usedW = row.length * cellW + Math.max(0, row.length - 1) * gapX;
-    const startX = (100 - usedW) / 2;
-    row.forEach((t, ti) => {
-      out.push({
-        table: t,
-        x: startX + ti * (cellW + gapX),
-        y,
-        w: cellW,
-        h: cellH,
+
+  if (gridTables.length === 1) {
+    const t = gridTables[0]!;
+    out.push({
+      table: t,
+      x: gapX / 2,
+      y: gapY / 2,
+      w: Math.max(1, 100 - gapX),
+      h: Math.max(1, 100 - gapY),
+    });
+  } else if (gridTables.length > 1) {
+    const sorted = [...gridTables].sort((a, b) => a.y - b.y || a.x - b.x);
+    const rowTol = 7;
+    const rows: TableSpot[][] = [];
+    for (const t of sorted) {
+      const last = rows[rows.length - 1];
+      if (last && Math.abs(last[0]!.y - t.y) <= rowTol) {
+        last.push(t);
+      } else {
+        rows.push([t]);
+      }
+    }
+    rows.forEach((row) => row.sort((a, b) => a.x - b.x));
+
+    const nRows = rows.length;
+    const nCols = Math.max(...rows.map((r) => r.length));
+    const cellW = (100 - gapX * (nCols + 1)) / nCols;
+    const cellH = (100 - gapY * (nRows + 1)) / nRows;
+
+    rows.forEach((row, ri) => {
+      const y = gapY + ri * (cellH + gapY);
+      const usedW = row.length * cellW + Math.max(0, row.length - 1) * gapX;
+      const startX = (100 - usedW) / 2;
+      row.forEach((t, ti) => {
+        out.push({
+          table: t,
+          x: startX + ti * (cellW + gapX),
+          y,
+          w: cellW,
+          h: cellH,
+        });
       });
     });
-  });
+  }
+
+  for (const t of freeTables) {
+    const w = Math.max(2, Number(t.w) || 14);
+    const h = Math.max(2, Number(t.h) || 12);
+    const x = Math.max(0, Math.min(100 - w, Number(t.x) || 0));
+    const y = Math.max(0, Math.min(100 - h, Number(t.y) || 0));
+    out.push({ table: t, x, y, w, h });
+  }
 
   return out;
 }

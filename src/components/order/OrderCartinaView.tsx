@@ -19,6 +19,7 @@ import {
   colorForOrderNumber,
   type OrderColorRange,
 } from "@/lib/app-settings";
+import { CARTINA_GRID_SNAP, snapGrid } from "@/lib/layout-utils";
 
 export function resolveOrderCartina(
   layout: VenueLayout,
@@ -72,6 +73,34 @@ function fontPxForCell(
   return Math.max(10, Math.min(byH, byW));
 }
 
+type DrawDraft = {
+  zoneId: string;
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+};
+
+function normRect(d: DrawDraft) {
+  const x = Math.min(d.x0, d.x1);
+  const y = Math.min(d.y0, d.y1);
+  const w = Math.abs(d.x1 - d.x0);
+  const h = Math.abs(d.y1 - d.y0);
+  return { x, y, w, h };
+}
+
+function pointerInEl(
+  e: { clientX: number; clientY: number },
+  el: HTMLElement,
+) {
+  const rect = el.getBoundingClientRect();
+  if (rect.width < 1 || rect.height < 1) return { x: 0, y: 0 };
+  return {
+    x: Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100)),
+    y: Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100)),
+  };
+}
+
 /** Cartina con numeri d’ordine sui tavoli + cerchio highlight */
 export function OrderCartinaView({
   layout,
@@ -84,7 +113,9 @@ export function OrderCartinaView({
   highlightRadius = 1.55,
   numberScale = 1,
   colorRanges = [],
+  drawTableMode = false,
   onTableClick,
+  onDrawTable,
   className = "",
 }: {
   layout: VenueLayout;
@@ -97,7 +128,13 @@ export function OrderCartinaView({
   highlightRadius?: number;
   numberScale?: number;
   colorRanges?: OrderColorRange[];
+  /** Modalità: disegna rettangolo tavolo occasionale sulla zona */
+  drawTableMode?: boolean;
   onTableClick?: (zone: ZoneLayout, tableNumber: number) => void;
+  onDrawTable?: (
+    zone: ZoneLayout,
+    rect: { x: number; y: number; w: number; h: number },
+  ) => void;
   className?: string;
 }) {
   const byId = new Map(layout.zones.map((z) => [z.id, z]));
@@ -114,15 +151,57 @@ export function OrderCartinaView({
     Math.max(0.82, (isDisplay ? 0.94 : 0.9) * numberScale),
   );
 
+  const [draft, setDraft] = useState<DrawDraft | null>(null);
+  const draftRef = useRef<DrawDraft | null>(null);
+  const contentRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  function setDraftBoth(next: DrawDraft | null) {
+    draftRef.current = next;
+    setDraft(next);
+  }
+
+  function finishDraw() {
+    const d = draftRef.current;
+    setDraftBoth(null);
+    if (!d || !onDrawTable) return;
+    const zone = byId.get(d.zoneId);
+    if (!zone) return;
+    let { x, y, w, h } = normRect(d);
+    x = snapGrid(x, CARTINA_GRID_SNAP);
+    y = snapGrid(y, CARTINA_GRID_SNAP);
+    w = snapGrid(w, CARTINA_GRID_SNAP);
+    h = snapGrid(h, CARTINA_GRID_SNAP);
+    const min = CARTINA_GRID_SNAP * 2;
+    if (w < min || h < min) return;
+    w = Math.min(w, 100 - x);
+    h = Math.min(h, 100 - y);
+    if (w < min || h < min) return;
+    onDrawTable(zone, { x, y, w, h });
+  }
+
   return (
     <div
-      className={`order-cartina-view relative h-full w-full overflow-hidden bg-white ${className}`}
+      className={`order-cartina-view relative h-full w-full overflow-hidden bg-white ${className} ${
+        drawTableMode ? "cursor-crosshair" : ""
+      }`}
+      style={
+        drawTableMode
+          ? {
+              backgroundImage:
+                "linear-gradient(rgba(45,90,39,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(45,90,39,0.08) 1px, transparent 1px)",
+              backgroundSize: `${CARTINA_GRID_SNAP}% ${CARTINA_GRID_SNAP}%`,
+            }
+          : undefined
+      }
     >
       <ZoneMarksLayer marks={prefs.marks as MapMark[]} />
       {items.map(({ zone, placement }) => {
         const accent = zoneAccentColor(zone);
         const { gapX, gapY } = gapsFromPlacement(placement);
         const rects = computeTableFillRects(zone.tables, gapX, gapY);
+        const zoneDraft =
+          draft && draft.zoneId === zone.id ? normRect(draft) : null;
+
         return (
           <section
             key={zone.id}
@@ -130,7 +209,7 @@ export function OrderCartinaView({
               isDisplay
                 ? "rounded-none border"
                 : "rounded-md border-2 shadow-sm"
-            }`}
+            } ${drawTableMode ? "ring-2 ring-amber-400/70 ring-offset-1" : ""}`}
             style={{
               left: `${placement.x}%`,
               top: `${placement.y}%`,
@@ -151,7 +230,64 @@ export function OrderCartinaView({
                 {zone.name}
               </h4>
             ) : null}
-            <div className="relative min-h-0 flex-1 overflow-hidden bg-white">
+            <div
+              ref={(el) => {
+                if (el) contentRefs.current.set(zone.id, el);
+                else contentRefs.current.delete(zone.id);
+              }}
+              className={`relative min-h-0 flex-1 overflow-hidden bg-white ${
+                drawTableMode ? "touch-none" : ""
+              }`}
+              onPointerDown={
+                drawTableMode
+                  ? (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const el = contentRefs.current.get(zone.id);
+                      if (!el) return;
+                      el.setPointerCapture(e.pointerId);
+                      const p = pointerInEl(e, el);
+                      setDraftBoth({
+                        zoneId: zone.id,
+                        x0: p.x,
+                        y0: p.y,
+                        x1: p.x,
+                        y1: p.y,
+                      });
+                    }
+                  : undefined
+              }
+              onPointerMove={
+                drawTableMode
+                  ? (e) => {
+                      const d = draftRef.current;
+                      if (!d || d.zoneId !== zone.id) return;
+                      const el = contentRefs.current.get(zone.id);
+                      if (!el) return;
+                      const p = pointerInEl(e, el);
+                      setDraftBoth({ ...d, x1: p.x, y1: p.y });
+                    }
+                  : undefined
+              }
+              onPointerUp={
+                drawTableMode
+                  ? (e) => {
+                      const el = contentRefs.current.get(zone.id);
+                      if (el?.hasPointerCapture(e.pointerId)) {
+                        el.releasePointerCapture(e.pointerId);
+                      }
+                      finishDraw();
+                    }
+                  : undefined
+              }
+              onPointerCancel={
+                drawTableMode
+                  ? () => {
+                      setDraftBoth(null);
+                    }
+                  : undefined
+              }
+            >
               {rects.map(({ table, x, y, w, h }) => {
                 const nums = ordersForTable(assignments, zone.id, table.number);
                 const isHit =
@@ -160,29 +296,46 @@ export function OrderCartinaView({
                   highlight.found &&
                   nums.includes(highlight.orderNumber);
                 const stackVertical = nums.length > 1 && h > w;
-                const Tag = interactive ? "button" : "div";
+                const canClick = interactive && !drawTableMode;
+                const Tag = canClick ? "button" : "div";
+                const occasional = Boolean(table.occasional);
 
                 return (
                   <Tag
                     key={table.id}
-                    {...(interactive
+                    {...(canClick
                       ? {
                           type: "button" as const,
                           onClick: () => onTableClick?.(zone, table.number),
                         }
                       : {})}
                     className={`absolute p-0 text-center transition ${
-                      interactive ? "active:scale-95 touch-manipulation" : ""
-                    } ${isHit ? "z-30" : "z-[1]"}`}
+                      canClick ? "active:scale-95 touch-manipulation" : ""
+                    } ${isHit ? "z-30" : "z-[1]"} ${
+                      drawTableMode ? "pointer-events-none" : ""
+                    }`}
                     style={{
                       left: `${x}%`,
                       top: `${y}%`,
                       width: `${w}%`,
                       height: `${h}%`,
-                      backgroundColor: "#ffffff",
-                      boxShadow: `inset 0 0 0 1px ${accent}44`,
+                      backgroundColor: occasional
+                        ? "rgba(245, 158, 11, 0.12)"
+                        : "#ffffff",
+                      boxShadow: occasional
+                        ? `inset 0 0 0 2px ${accent}`
+                        : `inset 0 0 0 1px ${accent}44`,
+                      outline: occasional
+                        ? `1px dashed ${accent}`
+                        : undefined,
+                      outlineOffset: occasional ? -3 : undefined,
                       overflow: isHit ? "visible" : "hidden",
                     }}
+                    title={
+                      occasional
+                        ? `Tavolo extra ${table.number}`
+                        : `Tavolo ${table.number}`
+                    }
                   >
                     {nums.length > 0 ? (
                       <TableOrderNums
@@ -198,13 +351,31 @@ export function OrderCartinaView({
                         highlightRadius={highlightRadius}
                       />
                     ) : (
-                      <span className="flex h-full w-full items-center justify-center text-[10px] text-[var(--forest)]/20">
-                        ·
+                      <span
+                        className={`flex h-full w-full items-center justify-center text-[10px] ${
+                          occasional
+                            ? "font-bold text-amber-700/70"
+                            : "text-[var(--forest)]/20"
+                        }`}
+                      >
+                        {occasional ? `T${table.number}` : "·"}
                       </span>
                     )}
                   </Tag>
                 );
               })}
+
+              {zoneDraft && zoneDraft.w > 0.5 && zoneDraft.h > 0.5 ? (
+                <div
+                  className="pointer-events-none absolute z-40 border-2 border-dashed border-amber-500 bg-amber-400/25"
+                  style={{
+                    left: `${zoneDraft.x}%`,
+                    top: `${zoneDraft.y}%`,
+                    width: `${zoneDraft.w}%`,
+                    height: `${zoneDraft.h}%`,
+                  }}
+                />
+              ) : null}
             </div>
           </section>
         );

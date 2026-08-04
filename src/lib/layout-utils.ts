@@ -110,8 +110,11 @@ export function clampPercent(value: number) {
   return Math.min(92, Math.max(8, value));
 }
 
-/** Passo griglia % per agganciare i tavoli (ordine visivo) */
+/** Passo griglia % per agganciare i tavoli (editor zone) */
 export const TABLE_GRID_SNAP = 5;
+
+/** Passo più fitto per la lavagna cartina (zone / segni / tavoli extra) */
+export const CARTINA_GRID_SNAP = 2;
 
 export function snapPercent(value: number, step = TABLE_GRID_SNAP) {
   if (!Number.isFinite(value)) return clampPercent(50);
@@ -120,7 +123,7 @@ export function snapPercent(value: number, step = TABLE_GRID_SNAP) {
 }
 
 /** Snap su griglia 0–100 (lavagna cartina / segni) */
-export function snapGrid(value: number, step = TABLE_GRID_SNAP) {
+export function snapGrid(value: number, step = CARTINA_GRID_SNAP) {
   if (!Number.isFinite(value)) return 0;
   return Math.min(100, Math.max(0, Math.round(value / step) * step));
 }

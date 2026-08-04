@@ -19,6 +19,15 @@ export interface TableSpot {
   y: number;
   /** Posti massimi del tavolo */
   capacity: number;
+  /**
+   * Tavolo occasionale disegnato a rettangolo (Ordini):
+   * usa x/y/w/h liberi invece della griglia automatica.
+   */
+  occasional?: boolean;
+  /** Larghezza % (solo occasional) */
+  w?: number;
+  /** Altezza % (solo occasional) */
+  h?: number;
 }
 
 /** Riferimenti grafici (non interattivi come i tavoli) */

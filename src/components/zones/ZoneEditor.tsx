@@ -83,7 +83,7 @@ export function ZoneEditor() {
   }
 
   function snapMark(v: number) {
-    return snapGrid(v);
+    return snapGrid(v, TABLE_GRID_SNAP);
   }
 
   function updateZone(mutator: (z: ZoneLayout) => ZoneLayout) {

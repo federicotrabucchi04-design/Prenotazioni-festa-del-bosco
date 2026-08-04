@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { LogOut, Trash2 } from "lucide-react";
+import { LogOut, PlusSquare, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useAuthStore, orderRoleLabel } from "@/store/auth-store";
 import { useVenueLayout } from "@/hooks/use-venue-layout";
@@ -13,7 +13,14 @@ import {
 import { ZoneTabsBar } from "@/components/ZoneTabsBar";
 import { OnlineStatusBadge } from "@/components/OnlineStatusBadge";
 import { ZoneMarksLayer } from "@/components/map/ZoneMarksLayer";
-import { getZoneByName, TABLE_GRID_SNAP } from "@/lib/layout-utils";
+import {
+  getZoneByName,
+  nextTableNumber,
+  TABLE_GRID_SNAP,
+  CARTINA_GRID_SNAP,
+} from "@/lib/layout-utils";
+import { saveLayout } from "@/lib/layout";
+import { createId } from "@/lib/constants";
 import {
   clearAllAssignments,
   ordersForTable,
@@ -48,6 +55,7 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
   const [pendingNums, setPendingNums] = useState<number[]>([]);
   const [digits, setDigits] = useState("");
   const [busy, setBusy] = useState(false);
+  const [addTableMode, setAddTableMode] = useState(false);
   const maxDigits = settings.orderMaxDigits;
 
   useEffect(() => {
@@ -107,9 +115,42 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
   }
 
   function openAssign(zone: ZoneLayout, tableNumber: number) {
+    if (addTableMode) return;
     setPending({ zone, tableNumber });
     setPendingNums(ordersForTable(board.assignments, zone.id, tableNumber));
     setDigits("");
+  }
+
+  async function handleDrawOccasionalTable(
+    zone: ZoneLayout,
+    rect: { x: number; y: number; w: number; h: number },
+  ) {
+    setBusy(true);
+    try {
+      const number = nextTableNumber(zone);
+      const table = {
+        id: createId(),
+        number,
+        x: rect.x,
+        y: rect.y,
+        w: rect.w,
+        h: rect.h,
+        capacity: 8,
+        occasional: true as const,
+      };
+      await saveLayout({
+        ...layout,
+        updatedAt: Date.now(),
+        zones: layout.zones.map((z) =>
+          z.id === zone.id ? { ...z, tables: [...z.tables, table] } : z,
+        ),
+      });
+      toast.success(`Tavolo extra ${number} su ${zone.name}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Errore salvataggio");
+    } finally {
+      setBusy(false);
+    }
   }
 
   if (layoutLoading || boardLoading) {
@@ -143,7 +184,9 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
               {orderRoleLabel(role)}
             </h1>
             <p className="text-sm text-[var(--forest-muted)]">
-              Tocca un tavolo e digita il numero d’ordine
+              {addTableMode
+                ? "Disegna un rettangolo sulla zona per un tavolo extra"
+                : "Tocca un tavolo e digita il numero d’ordine"}
             </p>
           </div>
           <button
@@ -182,7 +225,10 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
             <button
               key={id}
               type="button"
-              onClick={() => setMode(id)}
+              onClick={() => {
+                setMode(id);
+                if (id !== "global") setAddTableMode(false);
+              }}
               className={`flex-1 font-semibold touch-manipulation ${
                 embedded
                   ? "rounded-xl py-1.5 text-[11px]"
@@ -198,21 +244,57 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
           ))}
         </div>
 
-        {!embedded && mode !== "numbers" ? (
-          <div className="flex gap-2 px-4 pb-2 md:px-6">
-            <button
-              type="button"
-              onClick={async () => {
-                if (!window.confirm("Cancellare tutti i numeri d’ordine?")) return;
-                await clearAllAssignments();
-                toast.success("Assegnazioni azzerate");
-              }}
-              className="inline-flex items-center gap-1 rounded-2xl bg-red-50 px-3 py-2.5 text-xs font-semibold text-red-700 touch-manipulation md:text-sm"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              Azzera numeri
-            </button>
+        {mode !== "numbers" ? (
+          <div
+            className={`flex flex-wrap gap-2 ${
+              embedded ? "px-1.5 pb-1" : "px-4 pb-2 md:px-6"
+            }`}
+          >
+            {mode === "global" ? (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setAddTableMode((v) => !v);
+                  setPending(null);
+                }}
+                className={`inline-flex items-center gap-1 rounded-2xl px-3 py-2.5 text-xs font-semibold touch-manipulation md:text-sm ${
+                  addTableMode
+                    ? "bg-amber-500 text-white"
+                    : "bg-amber-50 text-amber-900"
+                }`}
+              >
+                <PlusSquare className="h-3.5 w-3.5" />
+                Aggiungi tavolo
+              </button>
+            ) : null}
+            {!embedded ? (
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!window.confirm("Cancellare tutti i numeri d’ordine?"))
+                    return;
+                  await clearAllAssignments();
+                  toast.success("Assegnazioni azzerate");
+                }}
+                className="inline-flex items-center gap-1 rounded-2xl bg-red-50 px-3 py-2.5 text-xs font-semibold text-red-700 touch-manipulation md:text-sm"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Azzera numeri
+              </button>
+            ) : null}
           </div>
+        ) : null}
+
+        {addTableMode && mode === "global" ? (
+          <p
+            className={`pb-1 text-xs font-medium text-amber-800 ${
+              embedded ? "px-1.5" : "px-4 md:px-6"
+            }`}
+          >
+            Trascina un rettangolo dentro una zona · griglia {CARTINA_GRID_SNAP}%
+            · tap di nuovo su «Aggiungi tavolo» per uscire
+          </p>
         ) : null}
 
         <div
@@ -239,6 +321,7 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                 assignments={board.assignments}
                 highlight={null}
                 interactive
+                drawTableMode={addTableMode}
                 numberScale={
                   embedded
                     ? Math.max(0.85, settings.orderNumberScale)
@@ -246,6 +329,9 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                 }
                 colorRanges={settings.orderColorRanges}
                 onTableClick={openAssign}
+                onDrawTable={(zone, rect) => {
+                  void handleDrawOccasionalTable(zone, rect);
+                }}
               />
             </div>
           ) : (

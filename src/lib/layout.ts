@@ -93,13 +93,21 @@ function normalizeLayout(raw: Partial<VenueLayout> | null): VenueLayout {
       id: String(z.id || `zone_${zi}`),
       name: String(z.name || `Zona ${zi + 1}`),
       tables: Array.isArray(z.tables)
-        ? z.tables.map((t: Partial<TableSpot>, ti: number) => ({
-            id: String(t.id || `t_${zi}_${ti}`),
-            number: Number(t.number ?? ti + 1),
-            x: Number(t.x ?? 20),
-            y: Number(t.y ?? 20),
-            capacity: Math.max(1, Number(t.capacity ?? 8)),
-          }))
+        ? z.tables.map((t: Partial<TableSpot>, ti: number) => {
+            const table: TableSpot = {
+              id: String(t.id || `t_${zi}_${ti}`),
+              number: Number(t.number ?? ti + 1),
+              x: Number(t.x ?? 20),
+              y: Number(t.y ?? 20),
+              capacity: Math.max(1, Number(t.capacity ?? 8)),
+            };
+            if (t.occasional === true) {
+              table.occasional = true;
+              table.w = Math.max(2, Number(t.w ?? 14));
+              table.h = Math.max(2, Number(t.h ?? 12));
+            }
+            return table;
+          })
         : [],
       marks: Array.isArray(z.marks)
         ? z.marks
