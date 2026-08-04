@@ -35,10 +35,12 @@ export interface CartinaPrefs {
    * Se i nuovi flag mancano, vale per entrambi.
    */
   mirrored?: boolean;
-  /** Specchio solo vista Ordini */
+  /** Specchio solo vista Ordini (asse verticale / sinistra-destra) */
   mirrorOrdini?: boolean;
-  /** Specchio solo vista Schermo */
+  /** Specchio solo vista Schermo (asse verticale / sinistra-destra) */
   mirrorSchermo?: boolean;
+  /** Simmetria rispetto al centro — solo Schermo (ribaltamento 180°) */
+  centerSchermo?: boolean;
 }
 
 /** Tavolo extra disegnato in Ordini (fuori / sopra le zone) */
@@ -341,6 +343,7 @@ export function loadCartinaPrefs(layout: VenueLayout): CartinaPrefs {
         if (extraTables.length) prefs.extraTables = extraTables;
         if (parsed.mirrorOrdini === true) prefs.mirrorOrdini = true;
         if (parsed.mirrorSchermo === true) prefs.mirrorSchermo = true;
+        if (parsed.centerSchermo === true) prefs.centerSchermo = true;
         if (
           parsed.mirrored === true &&
           parsed.mirrorOrdini == null &&
@@ -420,11 +423,7 @@ export function withCartinaMirror(
   view: CartinaMirrorView,
   enabled: boolean,
 ): CartinaPrefs {
-  const next: CartinaPrefs = {
-    placements: prefs.placements,
-    marks: prefs.marks ?? [],
-  };
-  if (prefs.extraTables?.length) next.extraTables = prefs.extraTables;
+  const next = cloneCartinaFlags(prefs);
 
   const ordini =
     view === "ordini" ? enabled : isCartinaMirrored(prefs, "ordini");
@@ -433,8 +432,56 @@ export function withCartinaMirror(
 
   if (ordini) next.mirrorOrdini = true;
   if (schermo) next.mirrorSchermo = true;
-  // Non propagare più il flag legacy condiviso
+  if (isCenterSchermo(prefs)) next.centerSchermo = true;
   return next;
+}
+
+export function isCenterSchermo(
+  prefs: Pick<CartinaPrefs, "centerSchermo">,
+): boolean {
+  return prefs.centerSchermo === true;
+}
+
+export function withCenterSchermo(
+  prefs: CartinaPrefs,
+  enabled: boolean,
+): CartinaPrefs {
+  const next = cloneCartinaFlags(prefs);
+  if (isCartinaMirrored(prefs, "ordini")) next.mirrorOrdini = true;
+  if (isCartinaMirrored(prefs, "schermo")) next.mirrorSchermo = true;
+  if (enabled) next.centerSchermo = true;
+  return next;
+}
+
+function cloneCartinaFlags(prefs: CartinaPrefs): CartinaPrefs {
+  const next: CartinaPrefs = {
+    placements: prefs.placements,
+    marks: prefs.marks ?? [],
+  };
+  if (prefs.extraTables?.length) next.extraTables = prefs.extraTables;
+  return next;
+}
+
+export type CartinaFlip = { flipX: boolean; flipY: boolean };
+
+/** Transform di visualizzazione per Ordini / Schermo. */
+export function cartinaFlipForView(
+  prefs: Pick<
+    CartinaPrefs,
+    "mirrored" | "mirrorOrdini" | "mirrorSchermo" | "centerSchermo"
+  >,
+  view: CartinaMirrorView,
+): CartinaFlip {
+  if (view === "ordini") {
+    return { flipX: isCartinaMirrored(prefs, "ordini"), flipY: false };
+  }
+  const center = isCenterSchermo(prefs);
+  const mirror = isCartinaMirrored(prefs, "schermo");
+  // Specchio = flip X; simmetria centro = 180° (X+Y). Insieme: resta 180°.
+  return {
+    flipX: mirror || center,
+    flipY: center,
+  };
 }
 
 /** Bordo sinistro di un box dopo eventuale specchio orizzontale */
@@ -443,13 +490,18 @@ export function mirrorLeft(x: number, w: number, mirrored: boolean) {
   return 100 - x - w;
 }
 
+export function mirrorTop(y: number, h: number, flipY: boolean) {
+  if (!flipY) return y;
+  return 100 - y - h;
+}
+
 /** Punto (es. testo / estremità linea) dopo eventuale specchio */
 export function mirrorCoord(x: number, mirrored: boolean) {
   if (!mirrored) return x;
   return 100 - x;
 }
 
-/** Da coordinate visuali (schermo) a coordinate salvate, se la cartina è specchiata */
+/** Da coordinate visuali (schermo) a coordinate salvate */
 export function unmirrorLeft(x: number, w: number, mirrored: boolean) {
   return mirrorLeft(x, w, mirrored);
 }
@@ -458,23 +510,44 @@ export function unmirrorCoord(x: number, mirrored: boolean) {
   return mirrorCoord(x, mirrored);
 }
 
-/** Marks con X ribaltate per il rendering (testo resta leggibile) */
-export function marksForDisplay(marks: MapMark[], mirrored: boolean): MapMark[] {
-  if (!mirrored || marks.length === 0) return marks;
+export function unmirrorTop(y: number, h: number, flipY: boolean) {
+  return mirrorTop(y, h, flipY);
+}
+
+/** Marks con coordinate ribaltate per il rendering (testo resta leggibile) */
+export function marksForDisplay(
+  marks: MapMark[],
+  flip: boolean | CartinaFlip,
+): MapMark[] {
+  const f: CartinaFlip =
+    typeof flip === "boolean" ? { flipX: flip, flipY: false } : flip;
+  if ((!f.flipX && !f.flipY) || marks.length === 0) return marks;
   return marks.map((m) => {
     if (m.kind === "line") {
       return {
         ...m,
-        x: mirrorCoord(m.x, true),
-        x2: mirrorCoord(m.x2 ?? m.x, true),
+        x: mirrorCoord(m.x, f.flipX),
+        y: mirrorCoord(m.y, f.flipY),
+        x2: mirrorCoord(m.x2 ?? m.x, f.flipX),
+        y2: mirrorCoord(m.y2 ?? m.y, f.flipY),
       };
     }
     if (m.kind === "rect") {
       const w = Math.max(1, m.w ?? 10);
-      return { ...m, x: mirrorLeft(m.x, w, true), w };
+      const h = Math.max(1, m.h ?? 10);
+      return {
+        ...m,
+        x: mirrorLeft(m.x, w, f.flipX),
+        y: mirrorTop(m.y, h, f.flipY),
+        w,
+        h,
+      };
     }
-    // text: solo posizione, nessun scaleX sul glyph
-    return { ...m, x: mirrorCoord(m.x, true) };
+    return {
+      ...m,
+      x: mirrorCoord(m.x, f.flipX),
+      y: mirrorCoord(m.y, f.flipY),
+    };
   });
 }
 

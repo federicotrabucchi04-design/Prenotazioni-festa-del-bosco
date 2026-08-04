@@ -9,15 +9,17 @@ import type {
 } from "@/lib/cartina";
 import {
   autoPlaceZones,
+  cartinaFlipForView,
   computeTableFillRects,
   EXTRA_TABLES_ZONE_ID,
   EXTRA_TABLES_ZONE_NAME,
   gapsFromPlacement,
-  isCartinaMirrored,
   marksForDisplay,
   mirrorLeft,
+  mirrorTop,
   unmirrorCoord,
   unmirrorLeft,
+  unmirrorTop,
   zoneAccentColor,
 } from "@/lib/cartina";
 import { ZoneMarksLayer } from "@/components/map/ZoneMarksLayer";
@@ -50,6 +52,7 @@ export function resolveOrderCartina(
       if (extras?.length) out.extraTables = extras;
       if (remote.mirrorOrdini === true) out.mirrorOrdini = true;
       if (remote.mirrorSchermo === true) out.mirrorSchermo = true;
+      if (remote.centerSchermo === true) out.centerSchermo = true;
       if (
         remote.mirrored === true &&
         remote.mirrorOrdini == null &&
@@ -67,6 +70,7 @@ export function resolveOrderCartina(
   if (extras?.length) out.extraTables = extras;
   if (remote?.mirrorOrdini === true) out.mirrorOrdini = true;
   if (remote?.mirrorSchermo === true) out.mirrorSchermo = true;
+  if (remote?.centerSchermo === true) out.centerSchermo = true;
   if (
     remote?.mirrored === true &&
     remote.mirrorOrdini == null &&
@@ -267,7 +271,7 @@ export function OrderCartinaView({
 
   const extraTables = prefs.extraTables ?? [];
   const isDisplay = variant === "display";
-  const mirrored = isCartinaMirrored(
+  const flip = cartinaFlipForView(
     prefs,
     isDisplay ? "schermo" : "ordini",
   );
@@ -295,10 +299,9 @@ export function OrderCartinaView({
     w = Math.min(w, 100 - x);
     h = Math.min(h, 100 - y);
     if (w < min || h < min) return;
-    // Salva in coordinate canoniche (non specchiate)
     onDrawTable({
-      x: unmirrorLeft(x, w, mirrored),
-      y,
+      x: unmirrorLeft(x, w, flip.flipX),
+      y: unmirrorTop(y, h, flip.flipY),
       w,
       h,
     });
@@ -306,7 +309,7 @@ export function OrderCartinaView({
 
   const draftRect = draft ? normRect(draft) : null;
   const toolActive = drawTableMode || deleteTableMode || textPlaceMode;
-  const displayMarks = marksForDisplay(prefs.marks as MapMark[], mirrored);
+  const displayMarks = marksForDisplay(prefs.marks as MapMark[], flip);
 
   return (
     <div
@@ -348,8 +351,8 @@ export function OrderCartinaView({
                 if (!el || !onPlaceText) return;
                 const p = pointerInEl(e, el);
                 onPlaceText({
-                  x: unmirrorCoord(snapGrid(p.x, CARTINA_GRID_SNAP), mirrored),
-                  y: snapGrid(p.y, CARTINA_GRID_SNAP),
+                  x: unmirrorCoord(snapGrid(p.x, CARTINA_GRID_SNAP), flip.flipX),
+                  y: unmirrorCoord(snapGrid(p.y, CARTINA_GRID_SNAP), flip.flipY),
                 });
               }
             : undefined
@@ -384,12 +387,14 @@ export function OrderCartinaView({
         const accent = zoneAccentColor(zone);
         const { gapX, gapY } = gapsFromPlacement(placement);
         const rects = computeTableFillRects(zone.tables, gapX, gapY).map(
-          (r) =>
-            mirrored
-              ? { ...r, x: mirrorLeft(r.x, r.w, true) }
-              : r,
+          (r) => ({
+            ...r,
+            x: mirrorLeft(r.x, r.w, flip.flipX),
+            y: mirrorTop(r.y, r.h, flip.flipY),
+          }),
         );
-        const left = mirrorLeft(placement.x, placement.w, mirrored);
+        const left = mirrorLeft(placement.x, placement.w, flip.flipX);
+        const top = mirrorTop(placement.y, placement.h, flip.flipY);
 
         return (
           <section
@@ -401,7 +406,7 @@ export function OrderCartinaView({
             } ${drawTableMode || textPlaceMode ? "pointer-events-none" : ""}`}
             style={{
               left: `${left}%`,
-              top: `${placement.y}%`,
+              top: `${top}%`,
               width: `${placement.w}%`,
               height: `${placement.h}%`,
               borderColor: accent,
@@ -544,8 +549,8 @@ export function OrderCartinaView({
               drawTableMode ? "pointer-events-auto" : ""
             } ${canDelete ? "ring-2 ring-red-500 ring-inset" : ""}`}
             style={{
-              left: `${mirrorLeft(table.x, table.w, mirrored)}%`,
-              top: `${table.y}%`,
+              left: `${mirrorLeft(table.x, table.w, flip.flipX)}%`,
+              top: `${mirrorTop(table.y, table.h, flip.flipY)}%`,
               width: `${table.w}%`,
               height: `${table.h}%`,
               backgroundColor: "#ffffff",

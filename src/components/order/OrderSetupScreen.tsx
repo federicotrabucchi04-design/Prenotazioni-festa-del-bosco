@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { FlipHorizontal2, LogOut, PlusSquare, Trash2, Type } from "lucide-react";
+import { ChevronDown, FlipHorizontal2, LogOut, PlusSquare, RotateCcw, Trash2, Type } from "lucide-react";
 import toast from "react-hot-toast";
 import { useAuthStore, orderRoleLabel } from "@/store/auth-store";
 import { useVenueLayout } from "@/hooks/use-venue-layout";
@@ -22,6 +22,7 @@ import { saveLayout } from "@/lib/layout";
 import { createId } from "@/lib/constants";
 import {
   clearAllAssignments,
+  clearAssignmentsUpTo,
   ordersForTable,
   saveOrderCartina,
   setTableOrderNumbers,
@@ -31,10 +32,12 @@ import { useAppSettings } from "@/hooks/use-app-settings";
 import {
   CARTINA_COLORS,
   isCartinaMirrored,
+  isCenterSchermo,
   loadCartinaPrefs,
   nextExtraTableNumber,
   saveCartinaPrefs,
   withCartinaMirror,
+  withCenterSchermo,
   zoneAccentColor,
   EXTRA_TABLES_ZONE_ID,
   type CartinaExtraTable,
@@ -68,6 +71,7 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
     "none" | "add" | "delete" | "text"
   >("none");
   const [textColor, setTextColor] = useState<string>(CARTINA_COLORS[0]!.hex);
+  const [symOpen, setSymOpen] = useState(false);
   const maxDigits = settings.orderMaxDigits;
 
   useEffect(() => {
@@ -87,6 +91,9 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
     }
     if (remote?.mirrorSchermo === true && !merged.mirrorSchermo) {
       merged = { ...merged, mirrorSchermo: true };
+    }
+    if (remote?.centerSchermo === true && !merged.centerSchermo) {
+      merged = { ...merged, centerSchermo: true };
     }
     if (
       remote?.mirrored === true &&
@@ -296,6 +303,57 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
     }
   }
 
+  async function toggleCenterSchermo() {
+    setBusy(true);
+    try {
+      const enabling = !isCenterSchermo(prefs);
+      const next = withCenterSchermo(prefs, enabling);
+      await persistCartina(next);
+      toast.success(
+        enabling
+          ? "Simmetria centro Schermo attiva"
+          : "Simmetria centro Schermo disattivata",
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Errore");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleClearUpTo() {
+    const raw = window.prompt(
+      "Azzera tutti i numeri d’ordine fino a (incluso):",
+      "",
+    );
+    if (raw == null) return;
+    const n = Math.floor(Number(raw));
+    if (!Number.isFinite(n) || n <= 0) {
+      toast.error("Numero non valido");
+      return;
+    }
+    if (
+      !window.confirm(
+        `Cancellare tutti i numeri d’ordine da 1 a ${n} (inclusi)?`,
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const result = await clearAssignmentsUpTo(n);
+      toast.success(
+        result.removed
+          ? `Rimossi ${result.removed} numeri ≤ ${n}`
+          : `Nessun numero ≤ ${n} da rimuovere`,
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Errore");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (layoutLoading || boardLoading) {
     return (
       <div
@@ -391,40 +449,17 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
           ))}
         </div>
 
-        {mode !== "numbers" ? (
+        {mode === "global" ? (
           <div
-            className={`flex flex-wrap gap-2 ${
+            className={`space-y-2 ${
               embedded ? "px-1.5 pb-1" : "px-4 pb-2 md:px-6"
             }`}
           >
-            {mode === "global" ? (
-              <>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void toggleMirror("ordini")}
-                  className={`inline-flex items-center gap-1 rounded-2xl px-3 py-2.5 text-xs font-semibold touch-manipulation md:text-sm ${
-                    isCartinaMirrored(prefs, "ordini")
-                      ? "bg-[var(--forest)] text-white"
-                      : "bg-white text-[var(--forest-ink)]"
-                  }`}
-                >
-                  <FlipHorizontal2 className="h-3.5 w-3.5" />
-                  Specchia qui
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void toggleMirror("schermo")}
-                  className={`inline-flex items-center gap-1 rounded-2xl px-3 py-2.5 text-xs font-semibold touch-manipulation md:text-sm ${
-                    isCartinaMirrored(prefs, "schermo")
-                      ? "bg-sky-600 text-white"
-                      : "bg-sky-50 text-sky-900"
-                  }`}
-                >
-                  <FlipHorizontal2 className="h-3.5 w-3.5" />
-                  Specchia schermo
-                </button>
+            <div className="rounded-2xl border border-[var(--forest)]/10 bg-white/90 p-2">
+              <p className="mb-1.5 px-1 text-[10px] font-bold uppercase tracking-wide text-[var(--forest-muted)]">
+                Tavoli
+              </p>
+              <div className="flex flex-wrap gap-1.5">
                 <button
                   type="button"
                   disabled={busy}
@@ -432,14 +467,14 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                     setTableTool((t) => (t === "add" ? "none" : "add"));
                     setPending(null);
                   }}
-                  className={`inline-flex items-center gap-1 rounded-2xl px-3 py-2.5 text-xs font-semibold touch-manipulation md:text-sm ${
+                  className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-2 text-xs font-semibold touch-manipulation ${
                     tableTool === "add"
                       ? "bg-[var(--forest)] text-white"
-                      : "bg-white text-[var(--forest-ink)]"
+                      : "bg-[var(--forest)]/8 text-[var(--forest-ink)]"
                   }`}
                 >
                   <PlusSquare className="h-3.5 w-3.5" />
-                  Aggiungi tavolo
+                  Aggiungi
                 </button>
                 <button
                   type="button"
@@ -448,10 +483,10 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                     setTableTool((t) => (t === "text" ? "none" : "text"));
                     setPending(null);
                   }}
-                  className={`inline-flex items-center gap-1 rounded-2xl px-3 py-2.5 text-xs font-semibold touch-manipulation md:text-sm ${
+                  className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-2 text-xs font-semibold touch-manipulation ${
                     tableTool === "text"
                       ? "bg-[var(--forest)] text-white"
-                      : "bg-white text-[var(--forest-ink)]"
+                      : "bg-[var(--forest)]/8 text-[var(--forest-ink)]"
                   }`}
                 >
                   <Type className="h-3.5 w-3.5" />
@@ -464,32 +499,142 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                     setTableTool((t) => (t === "delete" ? "none" : "delete"));
                     setPending(null);
                   }}
-                  className={`inline-flex items-center gap-1 rounded-2xl px-3 py-2.5 text-xs font-semibold touch-manipulation md:text-sm ${
+                  className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-2 text-xs font-semibold touch-manipulation ${
                     tableTool === "delete"
                       ? "bg-red-600 text-white"
                       : "bg-red-50 text-red-700"
                   }`}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
-                  Elimina tavolo
+                  Elimina
                 </button>
-              </>
-            ) : null}
-            {!embedded ? (
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-[var(--forest)]/10 bg-white/90">
               <button
                 type="button"
-                onClick={async () => {
-                  if (!window.confirm("Cancellare tutti i numeri d’ordine?"))
-                    return;
-                  await clearAllAssignments();
-                  toast.success("Assegnazioni azzerate");
-                }}
-                className="inline-flex items-center gap-1 rounded-2xl bg-red-50 px-3 py-2.5 text-xs font-semibold text-red-700 touch-manipulation md:text-sm"
+                onClick={() => setSymOpen((v) => !v)}
+                className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left touch-manipulation"
               >
-                <Trash2 className="h-3.5 w-3.5" />
-                Azzera numeri
+                <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-[var(--forest-muted)]">
+                  <FlipHorizontal2 className="h-3.5 w-3.5" />
+                  Simmetrie
+                  {(isCartinaMirrored(prefs, "ordini") ||
+                    isCartinaMirrored(prefs, "schermo") ||
+                    isCenterSchermo(prefs)) && (
+                    <span className="rounded-full bg-[var(--forest)]/15 px-1.5 py-0.5 text-[10px] font-semibold normal-case text-[var(--forest)]">
+                      attive
+                    </span>
+                  )}
+                </span>
+                <ChevronDown
+                  className={`h-4 w-4 text-[var(--forest-muted)] transition ${
+                    symOpen ? "rotate-180" : ""
+                  }`}
+                />
               </button>
-            ) : null}
+              {symOpen ? (
+                <div className="space-y-1 border-t border-[var(--forest)]/10 px-2 pb-2 pt-1">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void toggleMirror("ordini")}
+                    className={`flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-left text-xs font-semibold touch-manipulation ${
+                      isCartinaMirrored(prefs, "ordini")
+                        ? "bg-[var(--forest)] text-white"
+                        : "bg-[var(--forest)]/5 text-[var(--forest-ink)]"
+                    }`}
+                  >
+                    Specchia Ordini
+                    <span className="text-[10px] opacity-80">sinistra↔destra</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void toggleMirror("schermo")}
+                    className={`flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-left text-xs font-semibold touch-manipulation ${
+                      isCartinaMirrored(prefs, "schermo")
+                        ? "bg-sky-600 text-white"
+                        : "bg-sky-50 text-sky-950"
+                    }`}
+                  >
+                    Specchia Schermo
+                    <span className="text-[10px] opacity-80">sinistra↔destra</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void toggleCenterSchermo()}
+                    className={`flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-left text-xs font-semibold touch-manipulation ${
+                      isCenterSchermo(prefs)
+                        ? "bg-violet-600 text-white"
+                        : "bg-violet-50 text-violet-950"
+                    }`}
+                  >
+                    Simmetria centro (Schermo)
+                    <span className="text-[10px] opacity-80">180°</span>
+                  </button>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="rounded-2xl border border-red-100 bg-white/90 p-2">
+              <p className="mb-1.5 px-1 text-[10px] font-bold uppercase tracking-wide text-red-700/70">
+                Numeri ordine
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={async () => {
+                    if (!window.confirm("Cancellare tutti i numeri d’ordine?"))
+                      return;
+                    await clearAllAssignments();
+                    toast.success("Assegnazioni azzerate");
+                  }}
+                  className="inline-flex items-center gap-1 rounded-xl bg-red-50 px-2.5 py-2 text-xs font-semibold text-red-700 touch-manipulation"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Azzera tutti
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void handleClearUpTo()}
+                  className="inline-flex items-center gap-1 rounded-xl bg-red-50 px-2.5 py-2 text-xs font-semibold text-red-700 touch-manipulation"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Azzera fino a…
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : mode !== "numbers" && !embedded ? (
+          <div className="flex flex-wrap gap-2 px-4 pb-2 md:px-6">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={async () => {
+                if (!window.confirm("Cancellare tutti i numeri d’ordine?"))
+                  return;
+                await clearAllAssignments();
+                toast.success("Assegnazioni azzerate");
+              }}
+              className="inline-flex items-center gap-1 rounded-2xl bg-red-50 px-3 py-2.5 text-xs font-semibold text-red-700 touch-manipulation md:text-sm"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Azzera tutti
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void handleClearUpTo()}
+              className="inline-flex items-center gap-1 rounded-2xl bg-red-50 px-3 py-2.5 text-xs font-semibold text-red-700 touch-manipulation md:text-sm"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Azzera fino a…
+            </button>
           </div>
         ) : null}
 

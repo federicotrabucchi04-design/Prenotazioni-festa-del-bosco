@@ -145,6 +145,7 @@ function normalizeCartina(raw: unknown): CartinaPrefs | null {
   if (extraTables.length) out.extraTables = extraTables;
   if (c.mirrorOrdini === true) out.mirrorOrdini = true;
   if (c.mirrorSchermo === true) out.mirrorSchermo = true;
+  if (c.centerSchermo === true) out.centerSchermo = true;
   if (
     c.mirrored === true &&
     c.mirrorOrdini == null &&
@@ -462,6 +463,54 @@ export async function clearAllAssignments() {
     updatedAt: next.updatedAt,
   });
   return next;
+}
+
+/** Rimuove dai tavoli tutti i numeri d’ordine ≤ maxInclusive. */
+export async function clearAssignmentsUpTo(maxInclusive: number) {
+  const max = Math.floor(Number(maxInclusive));
+  if (!Number.isFinite(max) || max <= 0) {
+    throw new Error("Indica un numero valido");
+  }
+  const current = await loadBoardForWrite();
+  const assignments: OrderAssignments = { ...current.assignments };
+  const patch: Record<string, unknown> = {};
+  let removed = 0;
+
+  for (const [k, list] of Object.entries(assignments)) {
+    const kept = list.filter((n) => n > max);
+    removed += list.length - kept.length;
+    if (kept.length === list.length) continue;
+    if (kept.length === 0) {
+      delete assignments[k];
+      patch[`assignments/${k}`] = null;
+    } else {
+      assignments[k] = kept;
+      patch[`assignments/${k}`] = kept;
+    }
+  }
+
+  if (removed === 0) {
+    return { ...current, removed: 0 };
+  }
+
+  const updatedAt = Date.now();
+  patch.updatedAt = updatedAt;
+  if (current.highlight && current.highlight.orderNumber <= max) {
+    patch.highlight = null;
+  }
+  const next: OrderBoardState = {
+    ...current,
+    assignments,
+    highlight:
+      current.highlight && current.highlight.orderNumber <= max
+        ? null
+        : current.highlight,
+    updatedAt,
+  };
+  writeDemo(next);
+  if (dataMode() === "demo") return { ...next, removed };
+  await offlineUpdate(ORDER_BOARD_PATH, patch);
+  return { ...next, removed };
 }
 
 async function fetchBoardOnce(): Promise<OrderBoardState> {

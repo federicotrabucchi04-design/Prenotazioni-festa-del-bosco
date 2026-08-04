@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  ChevronDown,
   Download,
   Eye,
   FlipHorizontal2,
@@ -42,6 +43,7 @@ import {
   gapsFromPlacement,
   guestsByTable,
   isCartinaMirrored,
+  isCenterSchermo,
   loadCartinaPrefs,
   normalizePlacement,
   placeZonesLikeCartina,
@@ -50,6 +52,7 @@ import {
   resolvePlacedZones,
   saveCartinaPrefs,
   withCartinaMirror,
+  withCenterSchermo,
   zoneAccentColor,
   type CartinaMirrorView,
 } from "@/lib/cartina";
@@ -132,6 +135,9 @@ export function GlobalCartina() {
       if (merged.mirrorSchermo == null && board.cartina?.mirrorSchermo === true) {
         merged.mirrorSchermo = true;
       }
+      if (merged.centerSchermo == null && board.cartina?.centerSchermo === true) {
+        merged.centerSchermo = true;
+      }
       if (
         merged.mirrored == null &&
         merged.mirrorOrdini == null &&
@@ -147,6 +153,7 @@ export function GlobalCartina() {
       if (merged.extraTables?.length) payload.extraTables = merged.extraTables;
       if (isCartinaMirrored(merged, "ordini")) payload.mirrorOrdini = true;
       if (isCartinaMirrored(merged, "schermo")) payload.mirrorSchermo = true;
+      if (isCenterSchermo(merged)) payload.centerSchermo = true;
       await saveOrderCartina(payload);
       toast.success("Cartina pubblicata ovunque");
       setStep("preview");
@@ -166,6 +173,7 @@ export function GlobalCartina() {
         extraTables: activePrefs.extraTables ?? live.extraTables,
         mirrorOrdini: live.mirrorOrdini ?? activePrefs.mirrorOrdini,
         mirrorSchermo: live.mirrorSchermo ?? activePrefs.mirrorSchermo,
+        centerSchermo: live.centerSchermo ?? activePrefs.centerSchermo,
         mirrored: live.mirrored ?? activePrefs.mirrored,
       },
       view,
@@ -189,6 +197,7 @@ export function GlobalCartina() {
             : {}),
           mirrorOrdini: live.mirrorOrdini,
           mirrorSchermo: live.mirrorSchermo,
+          centerSchermo: live.centerSchermo,
           mirrored: live.mirrored,
         },
         view,
@@ -203,6 +212,53 @@ export function GlobalCartina() {
           : view === "ordini"
             ? "Specchio Ordini disattivato"
             : "Specchio Schermo disattivato",
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Errore");
+    } finally {
+      setPublishing(false);
+    }
+  }
+
+  async function toggleCenter() {
+    const live = board.cartina ?? activePrefs;
+    const enabling = !isCenterSchermo(live);
+    const base = {
+      ...activePrefs,
+      extraTables: activePrefs.extraTables ?? live.extraTables,
+      mirrorOrdini: live.mirrorOrdini ?? activePrefs.mirrorOrdini,
+      mirrorSchermo: live.mirrorSchermo ?? activePrefs.mirrorSchermo,
+      centerSchermo: live.centerSchermo ?? activePrefs.centerSchermo,
+      mirrored: live.mirrored ?? activePrefs.mirrored,
+    };
+    const nextLocal = withCenterSchermo(base, enabling);
+    updatePrefs(nextLocal);
+    setPublishing(true);
+    try {
+      const toPublish = withCenterSchermo(
+        {
+          placements: live.placements?.length
+            ? live.placements
+            : activePrefs.placements,
+          marks: live.marks ?? activePrefs.marks ?? [],
+          ...(live.extraTables?.length || activePrefs.extraTables?.length
+            ? {
+                extraTables:
+                  live.extraTables ?? activePrefs.extraTables,
+              }
+            : {}),
+          mirrorOrdini: live.mirrorOrdini,
+          mirrorSchermo: live.mirrorSchermo,
+          centerSchermo: live.centerSchermo,
+          mirrored: live.mirrored,
+        },
+        enabling,
+      );
+      await saveOrderCartina(toPublish);
+      toast.success(
+        enabling
+          ? "Simmetria centro Schermo attiva"
+          : "Simmetria centro Schermo disattivata",
       );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Errore");
@@ -303,7 +359,9 @@ export function GlobalCartina() {
                 board.cartina ?? activePrefs,
                 "schermo",
               )}
+              centerSchermo={isCenterSchermo(board.cartina ?? activePrefs)}
               onToggleMirror={(view) => void toggleMirror(view)}
+              onToggleCenter={() => void toggleCenter()}
               onZoneColor={async (zoneId, hex) => {
                 try {
                   await saveLayout({
@@ -394,7 +452,9 @@ function CartinaArrangeBoard({
   publishing = false,
   mirrorOrdini = false,
   mirrorSchermo = false,
+  centerSchermo = false,
   onToggleMirror,
+  onToggleCenter,
   onZoneColor,
 }: {
   layoutZones: ZoneLayout[];
@@ -404,10 +464,13 @@ function CartinaArrangeBoard({
   publishing?: boolean;
   mirrorOrdini?: boolean;
   mirrorSchermo?: boolean;
+  centerSchermo?: boolean;
   onToggleMirror?: (view: CartinaMirrorView) => void;
+  onToggleCenter?: () => void;
   onZoneColor: (zoneId: string, hex: string) => void | Promise<void>;
 }) {
   const boardRef = useRef<HTMLDivElement>(null);
+  const [symOpen, setSymOpen] = useState(false);
   const [tool, setTool] = useState<Tool>("move");
   const [color, setColor] = useState<string>(CARTINA_COLORS[0]!.hex);
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
@@ -1145,33 +1208,70 @@ function CartinaArrangeBoard({
         </div>
       ) : null}
 
-      <div className="flex flex-wrap gap-2">
+      <div className="rounded-2xl border border-[var(--forest)]/15 bg-white">
         <button
           type="button"
-          disabled={publishing}
-          onClick={() => onToggleMirror?.("ordini")}
-          className={`inline-flex items-center gap-1 rounded-2xl px-3 py-2 text-xs font-semibold disabled:opacity-50 ${
-            mirrorOrdini
-              ? "bg-[var(--forest)] text-white"
-              : "bg-[var(--forest)]/10 text-[var(--forest)]"
-          }`}
+          onClick={() => setSymOpen((v) => !v)}
+          className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left"
         >
-          <FlipHorizontal2 className="h-3.5 w-3.5" />
-          Specchia Ordini
+          <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-[var(--forest-muted)]">
+            <FlipHorizontal2 className="h-3.5 w-3.5" />
+            Simmetrie
+            {(mirrorOrdini || mirrorSchermo || centerSchermo) && (
+              <span className="rounded-full bg-[var(--forest)]/15 px-1.5 py-0.5 text-[10px] font-semibold normal-case text-[var(--forest)]">
+                attive
+              </span>
+            )}
+          </span>
+          <ChevronDown
+            className={`h-4 w-4 text-[var(--forest-muted)] transition ${
+              symOpen ? "rotate-180" : ""
+            }`}
+          />
         </button>
-        <button
-          type="button"
-          disabled={publishing}
-          onClick={() => onToggleMirror?.("schermo")}
-          className={`inline-flex items-center gap-1 rounded-2xl px-3 py-2 text-xs font-semibold disabled:opacity-50 ${
-            mirrorSchermo
-              ? "bg-sky-600 text-white"
-              : "bg-sky-50 text-sky-900"
-          }`}
-        >
-          <FlipHorizontal2 className="h-3.5 w-3.5" />
-          Specchia Schermo
-        </button>
+        {symOpen ? (
+          <div className="space-y-1 border-t border-[var(--forest)]/10 px-2 pb-2 pt-1">
+            <button
+              type="button"
+              disabled={publishing}
+              onClick={() => onToggleMirror?.("ordini")}
+              className={`flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-left text-xs font-semibold disabled:opacity-50 ${
+                mirrorOrdini
+                  ? "bg-[var(--forest)] text-white"
+                  : "bg-[var(--forest)]/5 text-[var(--forest)]"
+              }`}
+            >
+              Specchia Ordini
+              <span className="text-[10px] opacity-80">sinistra↔destra</span>
+            </button>
+            <button
+              type="button"
+              disabled={publishing}
+              onClick={() => onToggleMirror?.("schermo")}
+              className={`flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-left text-xs font-semibold disabled:opacity-50 ${
+                mirrorSchermo
+                  ? "bg-sky-600 text-white"
+                  : "bg-sky-50 text-sky-900"
+              }`}
+            >
+              Specchia Schermo
+              <span className="text-[10px] opacity-80">sinistra↔destra</span>
+            </button>
+            <button
+              type="button"
+              disabled={publishing}
+              onClick={() => onToggleCenter?.()}
+              className={`flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-left text-xs font-semibold disabled:opacity-50 ${
+                centerSchermo
+                  ? "bg-violet-600 text-white"
+                  : "bg-violet-50 text-violet-950"
+              }`}
+            >
+              Simmetria centro (Schermo)
+              <span className="text-[10px] opacity-80">180°</span>
+            </button>
+          </div>
+        ) : null}
       </div>
 
       <button
