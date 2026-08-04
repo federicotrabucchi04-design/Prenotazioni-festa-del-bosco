@@ -418,12 +418,20 @@ export async function setActiveEvening(eveningId: string): Promise<void> {
 export async function archiveEvening(eveningId: string): Promise<ArchiveSummary> {
   await ensureEveningsReady();
 
-  // Snapshot completo prima di cancellare i dettagli, poi si terrà solo questo
+  // Snapshot obbligatorio prima di cancellare i dettagli
+  const { pendingOfflineWrites } = await import("@/lib/offline-sync");
+  if (pendingOfflineWrites() > 0) {
+    throw new Error(
+      `Ci sono ${pendingOfflineWrites()} modifiche ancora da sincronizzare. Aspetta la rete prima di archiviare.`,
+    );
+  }
   try {
     const { createBackup } = await import("@/lib/backup");
     await createBackup("archive");
-  } catch {
-    // best-effort: l’archivio procede comunque
+  } catch (err) {
+    throw new Error(
+      `Archivio bloccato: backup non riuscito (${err instanceof Error ? err.message : "errore"}). I dati dettagliati non sono stati cancellati.`,
+    );
   }
 
   let archive: ArchiveSummary;
@@ -529,13 +537,7 @@ export async function archiveEvening(eveningId: string): Promise<ArchiveSummary>
     }
   }
 
-  try {
-    const { keepOnlyLatestBackup } = await import("@/lib/backup");
-    await keepOnlyLatestBackup();
-  } catch {
-    // best-effort
-  }
-
+  // Non cancellare i backup precedenti: servono se qualcosa va storto dopo l’archivio
   return archive;
 }
 

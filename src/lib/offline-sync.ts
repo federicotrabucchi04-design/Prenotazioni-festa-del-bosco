@@ -16,10 +16,13 @@ export type QueuedWrite =
   | { id: string; op: "remove"; path: string; at: number };
 
 type OnlineListener = (online: boolean) => void;
+type QueueListener = (pending: number) => void;
 
 const onlineListeners = new Set<OnlineListener>();
+const queueListeners = new Set<QueueListener>();
 let started = false;
 let flushing = false;
+let retryTimer: ReturnType<typeof setInterval> | null = null;
 
 /** Firebase-safe: niente undefined */
 function sanitize<T>(value: T): T {
@@ -37,9 +40,20 @@ export function subscribeOnlineStatus(listener: OnlineListener): () => void {
   return () => onlineListeners.delete(listener);
 }
 
+export function subscribeOfflineQueue(listener: QueueListener): () => void {
+  queueListeners.add(listener);
+  listener(pendingOfflineWrites());
+  return () => queueListeners.delete(listener);
+}
+
 function emitOnline() {
   const online = getOnline();
   onlineListeners.forEach((l) => l(online));
+}
+
+function emitQueue() {
+  const n = pendingOfflineWrites();
+  queueListeners.forEach((l) => l(n));
 }
 
 function readQueue(): QueuedWrite[] {
@@ -54,18 +68,43 @@ function readQueue(): QueuedWrite[] {
   }
 }
 
-function writeQueue(queue: QueuedWrite[]) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+function writeQueue(queue: QueuedWrite[]): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+    emitQueue();
+    return true;
+  } catch {
+    // Quota / private mode: non perdere silenziosamente — tenta compressione
+    try {
+      const trimmed = queue.slice(-40);
+      localStorage.setItem(QUEUE_KEY, JSON.stringify(trimmed));
+      emitQueue();
+      return true;
+    } catch {
+      emitQueue();
+      return false;
+    }
+  }
 }
 
 export function pendingOfflineWrites(): number {
   return readQueue().length;
 }
 
-/** True se c’è almeno una scrittura in coda per questo path (esatto). */
+/** True se c’è scrittura in coda per path esatto o antenato/discendente. */
 export function hasPendingWriteForPath(path: string): boolean {
-  return readQueue().some((q) => q.path === path);
+  return readQueue().some((q) => {
+    if (q.path === path) return true;
+    if (q.path.startsWith(`${path}/`)) return true;
+    if (path.startsWith(`${q.path}/`)) return true;
+    return false;
+  });
+}
+
+/** Svuota la coda (es. prima di un restore). */
+export function clearOfflineQueue(): void {
+  writeQueue([]);
 }
 
 function enqueue(
@@ -73,7 +112,7 @@ function enqueue(
     | { op: "set"; path: string; value: unknown; at?: number }
     | { op: "update"; path: string; value: Record<string, unknown>; at?: number }
     | { op: "remove"; path: string; at?: number },
-) {
+): boolean {
   const queue = readQueue();
   const path = entry.path;
   const prevForPath = queue.filter((q) => q.path === path);
@@ -86,8 +125,7 @@ function enqueue(
       path,
       at: entry.at ?? Date.now(),
     });
-    writeQueue(kept);
-    return;
+    return writeQueue(kept);
   }
 
   if (entry.op === "set") {
@@ -98,8 +136,7 @@ function enqueue(
       value: entry.value,
       at: entry.at ?? Date.now(),
     });
-    writeQueue(kept);
-    return;
+    return writeQueue(kept);
   }
 
   // update: fondi con set/update precedenti sullo stesso path
@@ -116,8 +153,7 @@ function enqueue(
       }),
       at: Date.now(),
     });
-    writeQueue(kept);
-    return;
+    return writeQueue(kept);
   }
 
   const prevUpdate = prevForPath.find((q) => q.op === "update");
@@ -133,7 +169,7 @@ function enqueue(
     value: merged,
     at: entry.at ?? Date.now(),
   });
-  writeQueue(kept);
+  return writeQueue(kept);
 }
 
 export type WriteResult = "synced" | "queued";
@@ -144,19 +180,25 @@ export async function offlineSet(
 ): Promise<WriteResult> {
   const clean = sanitize(value);
   if (!getOnline()) {
-    enqueue({ op: "set", path, value: clean });
+    if (!enqueue({ op: "set", path, value: clean })) {
+      throw new Error("Memoria piena: modifica non salvata. Libera spazio e riprova.");
+    }
     return "queued";
   }
   const db = getFirebaseDb();
   if (!db) {
-    enqueue({ op: "set", path, value: clean });
+    if (!enqueue({ op: "set", path, value: clean })) {
+      throw new Error("Memoria piena: modifica non salvata.");
+    }
     return "queued";
   }
   try {
     await set(ref(db, path), clean);
     return "synced";
   } catch {
-    enqueue({ op: "set", path, value: clean });
+    if (!enqueue({ op: "set", path, value: clean })) {
+      throw new Error("Rete assente e memoria piena: modifica a rischio.");
+    }
     return "queued";
   }
 }
@@ -167,38 +209,50 @@ export async function offlineUpdate(
 ): Promise<WriteResult> {
   const clean = sanitize(value) as Record<string, unknown>;
   if (!getOnline()) {
-    enqueue({ op: "update", path, value: clean });
+    if (!enqueue({ op: "update", path, value: clean })) {
+      throw new Error("Memoria piena: modifica non salvata. Libera spazio e riprova.");
+    }
     return "queued";
   }
   const db = getFirebaseDb();
   if (!db) {
-    enqueue({ op: "update", path, value: clean });
+    if (!enqueue({ op: "update", path, value: clean })) {
+      throw new Error("Memoria piena: modifica non salvata.");
+    }
     return "queued";
   }
   try {
     await update(ref(db, path), clean);
     return "synced";
   } catch {
-    enqueue({ op: "update", path, value: clean });
+    if (!enqueue({ op: "update", path, value: clean })) {
+      throw new Error("Rete assente e memoria piena: modifica a rischio.");
+    }
     return "queued";
   }
 }
 
 export async function offlineRemove(path: string): Promise<WriteResult> {
   if (!getOnline()) {
-    enqueue({ op: "remove", path });
+    if (!enqueue({ op: "remove", path })) {
+      throw new Error("Memoria piena: modifica non salvata.");
+    }
     return "queued";
   }
   const db = getFirebaseDb();
   if (!db) {
-    enqueue({ op: "remove", path });
+    if (!enqueue({ op: "remove", path })) {
+      throw new Error("Memoria piena: modifica non salvata.");
+    }
     return "queued";
   }
   try {
     await remove(ref(db, path));
     return "synced";
   } catch {
-    enqueue({ op: "remove", path });
+    if (!enqueue({ op: "remove", path })) {
+      throw new Error("Rete assente e memoria piena: modifica a rischio.");
+    }
     return "queued";
   }
 }
@@ -227,12 +281,10 @@ export async function flushOfflineQueue(): Promise<number> {
         } else {
           await remove(ref(db, item.path));
         }
-        // Rileggi: enqueue può aver aggiunto voci nel frattempo
         const after = readQueue();
         if (after[0]?.id === item.id) {
           writeQueue(after.slice(1));
         } else {
-          // La testa è cambiata (coalesce): rimuovi solo l’id sincronizzato
           writeQueue(after.filter((q) => q.id !== item.id));
         }
         synced += 1;
@@ -246,7 +298,7 @@ export async function flushOfflineQueue(): Promise<number> {
   return synced;
 }
 
-/** Avvia listener online/offline e svuota la coda al riconnetto. */
+/** Avvia listener online/offline + retry periodico (anche se “online” ma Firebase fallisce). */
 export function startOfflineSync(onFlushed?: (count: number) => void): () => void {
   if (typeof window === "undefined") return () => {};
 
@@ -264,14 +316,34 @@ export function startOfflineSync(onFlushed?: (count: number) => void): () => voi
     started = true;
   }
 
+  if (retryTimer) clearInterval(retryTimer);
+  retryTimer = setInterval(() => {
+    if (!getOnline() || pendingOfflineWrites() === 0) return;
+    void flushOfflineQueue().then((n) => {
+      if (n > 0) onFlushed?.(n);
+    });
+  }, 12_000);
+
+  // Visibility: quando torni sulla tab, riprova subito
+  const onVis = () => {
+    if (document.visibilityState === "visible") onOnline();
+  };
+  document.addEventListener("visibilitychange", onVis);
+
   void flushOfflineQueue().then((n) => {
     if (n > 0) onFlushed?.(n);
   });
   emitOnline();
+  emitQueue();
 
   return () => {
     window.removeEventListener("online", onOnline);
     window.removeEventListener("offline", onOffline);
+    document.removeEventListener("visibilitychange", onVis);
+    if (retryTimer) {
+      clearInterval(retryTimer);
+      retryTimer = null;
+    }
     started = false;
   };
 }

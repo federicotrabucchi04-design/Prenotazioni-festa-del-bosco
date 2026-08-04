@@ -13,7 +13,12 @@ import {
   resetDemoEvenings,
 } from "@/lib/evenings";
 import { scheduleBackupAfterChange } from "@/lib/backup";
-import { offlineRemove, offlineSet, offlineUpdate } from "@/lib/offline-sync";
+import {
+  hasPendingWriteForPath,
+  offlineRemove,
+  offlineSet,
+  offlineUpdate,
+} from "@/lib/offline-sync";
 import { get, onValue, ref } from "firebase/database";
 
 type Listener = (items: Reservation[]) => void;
@@ -157,6 +162,15 @@ function attachFirebaseReservations(eveningId: string) {
         }
       }
       const sorted = sortReservations(items);
+      // Non far sparire le prenotazioni locali se remoto vuoto ma coda offline attiva
+      if (
+        sorted.length === 0 &&
+        hasPendingWriteForPath(path) &&
+        (readResCache(eveningId)?.length ?? 0) > 0
+      ) {
+        notify(readResCache(eveningId) ?? []);
+        return;
+      }
       writeResCache(eveningId, sorted);
       notify(sorted);
     },

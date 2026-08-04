@@ -4,6 +4,11 @@ import { getFirebaseDb, isFirebaseConfigured } from "@/lib/firebase";
 import { get, ref, remove, set, update } from "firebase/database";
 import { readDemoStore } from "@/lib/evenings";
 import { getCachedLayout } from "@/lib/reservations";
+import {
+  clearOfflineQueue,
+  pendingOfflineWrites,
+} from "@/lib/offline-sync";
+import type { OrderBoardState } from "@/lib/order-board";
 
 export const BACKUPS_PATH = "dataBackups";
 export const LOCAL_BACKUPS_KEY = "fdb-local-backups-v1";
@@ -29,8 +34,10 @@ export interface BackupSnapshot {
   /** Prenotazioni per serata: eveningId → id → record */
   eveningReservations: Record<string, Record<string, Reservation>>;
   venueLayout: VenueLayout | null;
+  /** Board ordini (numeri / cartina) — critico a metà serata */
+  orderBoard?: OrderBoardState | null;
   reservationCount: number;
-  version: 1;
+  version: 1 | 2;
 }
 
 export interface BackupMeta {
@@ -74,7 +81,9 @@ function sameBackupContent(a: BackupSnapshot, b: BackupSnapshot): boolean {
       JSON.stringify(a.eveningReservations) ===
         JSON.stringify(b.eveningReservations) &&
       JSON.stringify(a.evenings) === JSON.stringify(b.evenings) &&
-      JSON.stringify(a.venueLayout) === JSON.stringify(b.venueLayout)
+      JSON.stringify(a.venueLayout) === JSON.stringify(b.venueLayout) &&
+      JSON.stringify(a.orderBoard ?? null) ===
+        JSON.stringify(b.orderBoard ?? null)
     );
   } catch {
     return false;
@@ -123,6 +132,7 @@ function countReservations(
 async function collectSnapshot(source: BackupSource): Promise<BackupSnapshot> {
   const id = createId();
   const createdAt = Date.now();
+  const { getCachedOrderBoard } = await import("@/lib/order-board");
 
   if (dataMode() === "demo") {
     const store = readDemoStore();
@@ -138,20 +148,22 @@ async function collectSnapshot(source: BackupSource): Promise<BackupSnapshot> {
       evenings: { ...store.evenings },
       eveningReservations,
       venueLayout: getCachedLayout(),
+      orderBoard: getCachedOrderBoard(),
       reservationCount: countReservations(eveningReservations),
-      version: 1,
+      version: 2,
     };
   }
 
   const db = getFirebaseDb();
   if (!db) throw new Error("Firebase non configurato");
 
-  const [activeSnap, eveningsSnap, reservationsSnap, layoutSnap] =
+  const [activeSnap, eveningsSnap, reservationsSnap, layoutSnap, boardSnap] =
     await Promise.all([
       get(ref(db, "activeEveningId")),
       get(ref(db, "evenings")),
       get(ref(db, "eveningReservations")),
       get(ref(db, "venueLayout")),
+      get(ref(db, "orderBoard")),
     ]);
 
   const evenings = (eveningsSnap.val() as Record<string, Evening> | null) ?? {};
@@ -171,8 +183,11 @@ async function collectSnapshot(source: BackupSource): Promise<BackupSnapshot> {
     venueLayout: layoutSnap.exists()
       ? (layoutSnap.val() as VenueLayout)
       : getCachedLayout(),
+    orderBoard: boardSnap.exists()
+      ? (boardSnap.val() as OrderBoardState)
+      : getCachedOrderBoard(),
     reservationCount: countReservations(eveningReservations),
-    version: 1,
+    version: 2,
   };
 }
 
@@ -457,7 +472,7 @@ export function downloadActiveEveningCsv(snapshot: BackupSnapshot) {
 }
 
 /**
- * Ripristina prenotazioni (+ serate e layout) da uno snapshot.
+ * Ripristina prenotazioni (+ serate, layout, order board) da uno snapshot.
  * Sovrascrive i dati attuali: usare solo se serve davvero.
  */
 export async function restoreBackup(snapshot: BackupSnapshot) {
@@ -470,6 +485,15 @@ export async function restoreBackup(snapshot: BackupSnapshot) {
     return false;
   }
 
+  if (pendingOfflineWrites() > 0) {
+    const ok = window.confirm(
+      `Attenzione: ci sono ${pendingOfflineWrites()} modifiche offline in coda.\n` +
+        `Se continui verranno scartate per non sovrascrivere il restore.\nContinuare?`,
+    );
+    if (!ok) return false;
+    clearOfflineQueue();
+  }
+
   if (dataMode() === "demo") {
     const { writeDemoStore } = await import("@/lib/evenings");
     const reservations: Record<string, Reservation[]> = {};
@@ -477,7 +501,8 @@ export async function restoreBackup(snapshot: BackupSnapshot) {
       reservations[eid] = Object.values(map);
     }
     writeDemoStore({
-      activeEveningId: snapshot.activeEveningId ?? Object.keys(snapshot.evenings)[0]!,
+      activeEveningId:
+        snapshot.activeEveningId ?? Object.keys(snapshot.evenings)[0]!,
       evenings: snapshot.evenings,
       reservations,
       archives: readDemoStore().archives,
@@ -485,6 +510,10 @@ export async function restoreBackup(snapshot: BackupSnapshot) {
     if (snapshot.venueLayout) {
       const { saveLayout } = await import("@/lib/layout");
       await saveLayout(snapshot.venueLayout);
+    }
+    if (snapshot.orderBoard) {
+      const { restoreOrderBoardState } = await import("@/lib/order-board");
+      await restoreOrderBoardState(snapshot.orderBoard);
     }
     const { refreshReservationListeners } = await import("@/lib/reservations");
     refreshReservationListeners();
@@ -500,7 +529,13 @@ export async function restoreBackup(snapshot: BackupSnapshot) {
     activeEveningId: snapshot.activeEveningId,
   };
   if (snapshot.venueLayout) payload.venueLayout = snapshot.venueLayout;
+  if (snapshot.orderBoard) payload.orderBoard = snapshot.orderBoard;
   await update(ref(db), payload);
+
+  if (snapshot.orderBoard) {
+    const { restoreOrderBoardState } = await import("@/lib/order-board");
+    await restoreOrderBoardState(snapshot.orderBoard);
+  }
   return true;
 }
 

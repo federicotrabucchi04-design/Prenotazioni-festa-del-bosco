@@ -5,11 +5,17 @@ import {
   normalizePlacement,
 } from "@/lib/cartina";
 import type { MapMark } from "@/lib/types";
-import { offlineSet, offlineUpdate, hasPendingWriteForPath } from "@/lib/offline-sync";
-import { get, onValue, ref } from "firebase/database";
+import {
+  offlineSet,
+  offlineUpdate,
+  hasPendingWriteForPath,
+} from "@/lib/offline-sync";
+import { get, onValue, ref, runTransaction } from "firebase/database";
 
 export const ORDER_BOARD_STORAGE_KEY = "fdb-order-board";
 export const ORDER_BOARD_PATH = "orderBoard";
+/** Marker: cache inizializzata da remoto */
+const ORDER_BOARD_SEEDED_KEY = "fdb-order-board-seeded";
 
 export type OrderAssignments = Record<string, number[]>;
 
@@ -37,7 +43,7 @@ function emptyBoard(): OrderBoardState {
     assignments: {},
     highlight: null,
     cartina: null,
-    updatedAt: Date.now(),
+    updatedAt: 0,
   };
 }
 
@@ -74,7 +80,6 @@ export function normalizeOrderList(raw: unknown): number[] {
     }
     return out;
   }
-  // Firebase a volte serializza array sparsi come oggetto { "0": 1, "1": 2 }
   if (typeof raw === "object") {
     const out: number[] = [];
     for (const v of Object.values(raw as Record<string, unknown>)) {
@@ -157,7 +162,7 @@ function normalizeBoard(raw: Partial<OrderBoardState> | null): OrderBoardState {
     assignments,
     highlight,
     cartina: normalizeCartina(raw.cartina),
-    updatedAt: Number(raw.updatedAt) || Date.now(),
+    updatedAt: Number(raw.updatedAt) || 0,
   };
 }
 
@@ -177,8 +182,28 @@ function readDemo(): OrderBoardState {
 }
 
 function writeDemo(state: OrderBoardState) {
-  localStorage.setItem(ORDER_BOARD_STORAGE_KEY, JSON.stringify(state));
+  try {
+    localStorage.setItem(ORDER_BOARD_STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // quota: continua (UI + Firebase)
+  }
   notify(state);
+}
+
+function markSeededFromRemote() {
+  try {
+    localStorage.setItem(ORDER_BOARD_SEEDED_KEY, "1");
+  } catch {
+    // ignore
+  }
+}
+
+function wasSeededFromRemote() {
+  try {
+    return localStorage.getItem(ORDER_BOARD_SEEDED_KEY) === "1";
+  } catch {
+    return false;
+  }
 }
 
 function dataMode(): "firebase" | "demo" {
@@ -199,7 +224,6 @@ export function subscribeOrderBoard(listener: Listener): () => void {
     return () => listeners.delete(listener);
   }
 
-  // Seed da cache locale se offline
   if (typeof navigator !== "undefined" && !navigator.onLine) {
     listener(readDemo());
   }
@@ -208,37 +232,33 @@ export function subscribeOrderBoard(listener: Listener): () => void {
     ref(db, ORDER_BOARD_PATH),
     (snap) => {
       if (!snap.exists()) {
-        // Non cancellare board locale / coda offline
+        if (hasPendingWriteForPath(ORDER_BOARD_PATH)) {
+          listener(readDemo());
+          return;
+        }
         if (
-          hasPendingWriteForPath(ORDER_BOARD_PATH) ||
-          readDemo().updatedAt > 0
+          !wasSeededFromRemote() &&
+          Object.keys(readDemo().assignments).length > 0
         ) {
           listener(readDemo());
           return;
         }
         const empty = emptyBoard();
-        try {
-          localStorage.setItem(ORDER_BOARD_STORAGE_KEY, JSON.stringify(empty));
-        } catch {
-          // ignore
-        }
+        writeDemo(empty);
+        markSeededFromRemote();
         listener(empty);
         return;
       }
       const state = normalizeBoard(snap.val() as Partial<OrderBoardState>);
+      markSeededFromRemote();
       if (hasPendingWriteForPath(ORDER_BOARD_PATH)) {
         const local = readDemo();
-        // Preferisci locale se più recente mentre la coda è in sync
         if (local.updatedAt >= state.updatedAt) {
           listener(local);
           return;
         }
       }
-      try {
-        localStorage.setItem(ORDER_BOARD_STORAGE_KEY, JSON.stringify(state));
-      } catch {
-        // ignore quota
-      }
+      writeDemo(state);
       listener(state);
     },
     () => listener(readDemo()),
@@ -250,20 +270,18 @@ export function subscribeOrderBoard(listener: Listener): () => void {
   };
 }
 
-async function persist(state: OrderBoardState) {
+async function persistFull(state: OrderBoardState) {
   const next = { ...state, updatedAt: Date.now() };
-  // Sempre in memoria locale (sopravvive offline / ricarica)
   writeDemo(next);
-
-  if (dataMode() === "demo") {
-    return next;
-  }
-
+  if (dataMode() === "demo") return next;
   await offlineSet(ORDER_BOARD_PATH, next);
   return next;
 }
 
-/** Imposta l’elenco completo dei numeri su un tavolo (vuoto = rimuovi). */
+/**
+ * Scrive solo le foglie assignments toccate (multipath).
+ * Due tablet non si cancellano più cartina / altri tavoli.
+ */
 export async function setTableOrderNumbers(
   zoneId: string,
   tableNumber: number,
@@ -273,24 +291,41 @@ export async function setTableOrderNumbers(
   const current = await loadBoardForWrite();
   const assignments: OrderAssignments = { ...current.assignments };
   const cleaned = normalizeOrderList(orderNumbers);
+  const patch: Record<string, unknown> = {};
 
-  // Ogni numero ordine può stare su un solo tavolo
   for (const n of cleaned) {
     for (const [k, list] of Object.entries(assignments)) {
       if (k === key) continue;
+      if (!list.includes(n)) continue;
       const filtered = list.filter((x) => x !== n);
-      if (filtered.length === 0) delete assignments[k];
-      else if (filtered.length !== list.length) assignments[k] = filtered;
+      if (filtered.length === 0) {
+        delete assignments[k];
+        patch[`assignments/${k}`] = null;
+      } else {
+        assignments[k] = filtered;
+        patch[`assignments/${k}`] = filtered;
+      }
     }
   }
 
-  if (cleaned.length === 0) delete assignments[key];
-  else assignments[key] = cleaned;
+  if (cleaned.length === 0) {
+    delete assignments[key];
+    patch[`assignments/${key}`] = null;
+  } else {
+    assignments[key] = cleaned;
+    patch[`assignments/${key}`] = cleaned;
+  }
 
-  return persist({ ...current, assignments });
+  const updatedAt = Date.now();
+  patch.updatedAt = updatedAt;
+  const next: OrderBoardState = { ...current, assignments, updatedAt };
+  writeDemo(next);
+
+  if (dataMode() === "demo") return next;
+  await offlineUpdate(ORDER_BOARD_PATH, patch);
+  return next;
 }
 
-/** Aggiunge o sostituisce un singolo numero (compat). null = svuota tavolo. */
 export async function setTableOrderNumber(
   zoneId: string,
   tableNumber: number,
@@ -320,12 +355,9 @@ export async function setOrderHighlight(orderNumber: number | null) {
           at: Date.now(),
         };
 
-  if (dataMode() === "demo") {
-    return persist({ ...board, highlight });
-  }
-
   const next = { ...board, highlight, updatedAt: Date.now() };
   writeDemo(next);
+  if (dataMode() === "demo") return next;
   await offlineUpdate(ORDER_BOARD_PATH, {
     highlight,
     updatedAt: next.updatedAt,
@@ -337,20 +369,58 @@ export async function clearOrderHighlight() {
   return setOrderHighlight(null);
 }
 
-/** Pulisce lo highlight solo se è ancora quello partito a `at` (evita race tra device) */
+/** Pulisce highlight solo se è ancora quello con `at` (transaction anti-race). */
 export async function clearOrderHighlightIf(at: number) {
-  const current = await loadBoardForWrite();
-  if (!current.highlight || current.highlight.at !== at) return current;
-  return clearOrderHighlight();
+  const local = readDemo();
+  if (!local.highlight || local.highlight.at !== at) return local;
+
+  if (dataMode() === "demo") {
+    const next = { ...local, highlight: null, updatedAt: Date.now() };
+    writeDemo(next);
+    return next;
+  }
+
+  const db = getFirebaseDb();
+  if (!db || (typeof navigator !== "undefined" && !navigator.onLine)) {
+    const next = { ...local, highlight: null, updatedAt: Date.now() };
+    writeDemo(next);
+    await offlineUpdate(ORDER_BOARD_PATH, {
+      highlight: null,
+      updatedAt: next.updatedAt,
+    });
+    return next;
+  }
+
+  try {
+    await runTransaction(ref(db, `${ORDER_BOARD_PATH}/highlight`), (cur) => {
+      if (!cur || typeof cur !== "object") return cur;
+      const h = cur as Partial<OrderHighlight>;
+      if (Number(h.at) !== at) return; // abort
+      return null;
+    });
+    const updatedAt = Date.now();
+    await offlineUpdate(ORDER_BOARD_PATH, { updatedAt });
+    const next = { ...readDemo(), highlight: null, updatedAt };
+    writeDemo(next);
+    return next;
+  } catch {
+    const again = readDemo();
+    if (!again.highlight || again.highlight.at !== at) return again;
+    const next = { ...again, highlight: null, updatedAt: Date.now() };
+    writeDemo(next);
+    await offlineUpdate(ORDER_BOARD_PATH, {
+      highlight: null,
+      updatedAt: next.updatedAt,
+    });
+    return next;
+  }
 }
 
 export async function saveOrderCartina(cartina: CartinaPrefs) {
   const current = await loadBoardForWrite();
-  if (dataMode() === "demo") {
-    return persist({ ...current, cartina });
-  }
   const next = { ...current, cartina, updatedAt: Date.now() };
   writeDemo(next);
+  if (dataMode() === "demo") return next;
   await offlineUpdate(ORDER_BOARD_PATH, {
     cartina,
     updatedAt: next.updatedAt,
@@ -360,7 +430,20 @@ export async function saveOrderCartina(cartina: CartinaPrefs) {
 
 export async function clearAllAssignments() {
   const current = await loadBoardForWrite();
-  return persist({ ...current, assignments: {}, highlight: null });
+  const next: OrderBoardState = {
+    ...current,
+    assignments: {},
+    highlight: null,
+    updatedAt: Date.now(),
+  };
+  writeDemo(next);
+  if (dataMode() === "demo") return next;
+  await offlineUpdate(ORDER_BOARD_PATH, {
+    assignments: null,
+    highlight: null,
+    updatedAt: next.updatedAt,
+  });
+  return next;
 }
 
 async function fetchBoardOnce(): Promise<OrderBoardState> {
@@ -375,11 +458,11 @@ async function fetchBoardOnce(): Promise<OrderBoardState> {
   }
 }
 
-/** Locale se offline o più recente; altrimenti remoto. */
 async function loadBoardForWrite(): Promise<OrderBoardState> {
   const local = readDemo();
   if (dataMode() === "demo") return local;
   if (typeof navigator !== "undefined" && !navigator.onLine) return local;
+  if (hasPendingWriteForPath(ORDER_BOARD_PATH)) return local;
   try {
     const remote = await fetchBoardOnce();
     return remote.updatedAt >= local.updatedAt ? remote : local;
@@ -388,7 +471,6 @@ async function loadBoardForWrite(): Promise<OrderBoardState> {
   }
 }
 
-/** Trova tavolo/i con un certo numero ordine */
 export function findTablesByOrder(
   assignments: OrderAssignments,
   orderNumber: number,
@@ -405,7 +487,11 @@ export function findTablesByOrder(
 
 export async function patchOrderBoard(partial: Partial<OrderBoardState>) {
   const current = await loadBoardForWrite();
-  const next = normalizeBoard({ ...current, ...partial, updatedAt: Date.now() });
+  const next = normalizeBoard({
+    ...current,
+    ...partial,
+    updatedAt: Date.now(),
+  });
   writeDemo(next);
   if (dataMode() === "demo") return next;
   await offlineUpdate(ORDER_BOARD_PATH, {
@@ -413,4 +499,12 @@ export async function patchOrderBoard(partial: Partial<OrderBoardState>) {
     updatedAt: next.updatedAt,
   });
   return next;
+}
+
+export function getCachedOrderBoard(): OrderBoardState {
+  return readDemo();
+}
+
+export async function restoreOrderBoardState(state: OrderBoardState) {
+  return persistFull(normalizeBoard(state));
 }
