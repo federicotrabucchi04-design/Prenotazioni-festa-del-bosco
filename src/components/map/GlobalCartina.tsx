@@ -116,19 +116,23 @@ export function GlobalCartina() {
     try {
       saveCartinaPrefs(activePrefs);
       // Non perdere i tavoli extra creati da Ordini
+      // Non perdere tavoli extra / specchio creati da Ordini
       const merged: typeof activePrefs = {
         ...activePrefs,
-        extraTables:
-          activePrefs.extraTables?.length
-            ? activePrefs.extraTables
-            : board.cartina?.extraTables,
       };
-      if (!merged.extraTables?.length) {
-        const { extraTables: _e, ...rest } = merged;
-        await saveOrderCartina(rest);
-      } else {
-        await saveOrderCartina(merged);
+      if (!merged.extraTables?.length && board.cartina?.extraTables?.length) {
+        merged.extraTables = board.cartina.extraTables;
       }
+      if (merged.mirrored !== true && board.cartina?.mirrored === true) {
+        merged.mirrored = true;
+      }
+      const payload: typeof activePrefs = {
+        placements: merged.placements,
+        marks: merged.marks ?? [],
+      };
+      if (merged.extraTables?.length) payload.extraTables = merged.extraTables;
+      if (merged.mirrored === true) payload.mirrored = true;
+      await saveOrderCartina(payload);
       toast.success("Cartina pubblicata ovunque");
       setStep("preview");
     } catch (err) {

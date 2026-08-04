@@ -13,6 +13,10 @@ import {
   EXTRA_TABLES_ZONE_ID,
   EXTRA_TABLES_ZONE_NAME,
   gapsFromPlacement,
+  marksForDisplay,
+  mirrorLeft,
+  unmirrorCoord,
+  unmirrorLeft,
   zoneAccentColor,
 } from "@/lib/cartina";
 import { ZoneMarksLayer } from "@/components/map/ZoneMarksLayer";
@@ -34,6 +38,7 @@ export function resolveOrderCartina(
   const extras = remote?.extraTables?.length
     ? remote.extraTables
     : undefined;
+  const mirrored = remote?.mirrored === true;
   if (remote && remote.placements.length > 0) {
     const known = new Set(layout.zones.map((z) => z.id));
     const placements = remote.placements.filter((p) => known.has(p.zoneId));
@@ -43,6 +48,7 @@ export function resolveOrderCartina(
         marks: remote.marks ?? [],
       };
       if (extras?.length) out.extraTables = extras;
+      if (mirrored) out.mirrored = true;
       return out;
     }
   }
@@ -51,6 +57,7 @@ export function resolveOrderCartina(
     marks: remote?.marks ?? [],
   };
   if (extras?.length) out.extraTables = extras;
+  if (mirrored) out.mirrored = true;
   return out;
 }
 
@@ -198,10 +205,12 @@ export function OrderCartinaView({
   colorRanges = [],
   drawTableMode = false,
   deleteTableMode = false,
+  textPlaceMode = false,
   onTableClick,
   onDrawTable,
   onDeleteExtraTable,
   onDeleteZoneOccasional,
+  onPlaceText,
   className = "",
 }: {
   layout: VenueLayout;
@@ -218,6 +227,8 @@ export function OrderCartinaView({
   drawTableMode?: boolean;
   /** Modalità: tap su tavolo extra per eliminarlo */
   deleteTableMode?: boolean;
+  /** Modalità: tap per inserire una scritta */
+  textPlaceMode?: boolean;
   onTableClick?: (zone: ZoneLayout, tableNumber: number) => void;
   onDrawTable?: (rect: {
     x: number;
@@ -227,6 +238,7 @@ export function OrderCartinaView({
   }) => void;
   onDeleteExtraTable?: (table: CartinaExtraTable) => void;
   onDeleteZoneOccasional?: (zone: ZoneLayout, tableId: string) => void;
+  onPlaceText?: (pos: { x: number; y: number }) => void;
   className?: string;
 }) {
   const byId = new Map(layout.zones.map((z) => [z.id, z]));
@@ -238,6 +250,7 @@ export function OrderCartinaView({
     .filter(Boolean) as { zone: ZoneLayout; placement: ZoneOnBoard }[];
 
   const extraTables = prefs.extraTables ?? [];
+  const mirrored = prefs.mirrored === true;
   const isDisplay = variant === "display";
 
   const boardRef = useRef<HTMLDivElement>(null);
@@ -263,11 +276,18 @@ export function OrderCartinaView({
     w = Math.min(w, 100 - x);
     h = Math.min(h, 100 - y);
     if (w < min || h < min) return;
-    onDrawTable({ x, y, w, h });
+    // Salva in coordinate canoniche (non specchiate)
+    onDrawTable({
+      x: unmirrorLeft(x, w, mirrored),
+      y,
+      w,
+      h,
+    });
   }
 
   const draftRect = draft ? normRect(draft) : null;
-  const toolActive = drawTableMode || deleteTableMode;
+  const toolActive = drawTableMode || deleteTableMode || textPlaceMode;
+  const displayMarks = marksForDisplay(prefs.marks as MapMark[], mirrored);
 
   return (
     <div
@@ -275,9 +295,11 @@ export function OrderCartinaView({
       className={`order-cartina-view relative h-full w-full overflow-hidden bg-white ${className} ${
         drawTableMode
           ? "cursor-crosshair touch-none"
-          : deleteTableMode
-            ? "cursor-pointer"
-            : ""
+          : textPlaceMode
+            ? "cursor-cell"
+            : deleteTableMode
+              ? "cursor-pointer"
+              : ""
       }`}
       style={
         drawTableMode
@@ -299,7 +321,19 @@ export function OrderCartinaView({
               const p = pointerInEl(e, el);
               setDraftBoth({ x0: p.x, y0: p.y, x1: p.x, y1: p.y });
             }
-          : undefined
+          : textPlaceMode
+            ? (e) => {
+                if ((e.target as HTMLElement).closest("[data-extra-ui]")) return;
+                e.preventDefault();
+                const el = boardRef.current;
+                if (!el || !onPlaceText) return;
+                const p = pointerInEl(e, el);
+                onPlaceText({
+                  x: unmirrorCoord(snapGrid(p.x, CARTINA_GRID_SNAP), mirrored),
+                  y: snapGrid(p.y, CARTINA_GRID_SNAP),
+                });
+              }
+            : undefined
       }
       onPointerMove={
         drawTableMode
@@ -326,11 +360,17 @@ export function OrderCartinaView({
       }
       onPointerCancel={drawTableMode ? () => setDraftBoth(null) : undefined}
     >
-      <ZoneMarksLayer marks={prefs.marks as MapMark[]} />
+      <ZoneMarksLayer marks={displayMarks} />
       {items.map(({ zone, placement }) => {
         const accent = zoneAccentColor(zone);
         const { gapX, gapY } = gapsFromPlacement(placement);
-        const rects = computeTableFillRects(zone.tables, gapX, gapY);
+        const rects = computeTableFillRects(zone.tables, gapX, gapY).map(
+          (r) =>
+            mirrored
+              ? { ...r, x: mirrorLeft(r.x, r.w, true) }
+              : r,
+        );
+        const left = mirrorLeft(placement.x, placement.w, mirrored);
 
         return (
           <section
@@ -339,9 +379,9 @@ export function OrderCartinaView({
               isDisplay
                 ? "rounded-none border"
                 : "rounded-md border-2 shadow-sm"
-            } ${drawTableMode ? "pointer-events-none" : ""}`}
+            } ${drawTableMode || textPlaceMode ? "pointer-events-none" : ""}`}
             style={{
-              left: `${placement.x}%`,
+              left: `${left}%`,
               top: `${placement.y}%`,
               width: `${placement.w}%`,
               height: `${placement.h}%`,
@@ -485,7 +525,7 @@ export function OrderCartinaView({
               drawTableMode ? "pointer-events-auto" : ""
             } ${canDelete ? "ring-2 ring-red-500 ring-inset" : ""}`}
             style={{
-              left: `${table.x}%`,
+              left: `${mirrorLeft(table.x, table.w, mirrored)}%`,
               top: `${table.y}%`,
               width: `${table.w}%`,
               height: `${table.h}%`,

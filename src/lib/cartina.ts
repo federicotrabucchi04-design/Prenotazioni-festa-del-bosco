@@ -30,6 +30,8 @@ export interface CartinaPrefs {
    * Coordinate % rispetto all’intero foglio.
    */
   extraTables?: CartinaExtraTable[];
+  /** Specchio orizzontale della cartina (Ordini / Schermo) */
+  mirrored?: boolean;
 }
 
 /** Tavolo extra disegnato in Ordini (fuori / sopra le zone) */
@@ -330,6 +332,7 @@ export function loadCartinaPrefs(layout: VenueLayout): CartinaPrefs {
           : [];
         const prefs: CartinaPrefs = { placements, marks };
         if (extraTables.length) prefs.extraTables = extraTables;
+        if (parsed.mirrored === true) prefs.mirrored = true;
         saveCartinaPrefs(prefs);
         return prefs;
       }
@@ -379,6 +382,47 @@ export function nextExtraTableNumber(tables: CartinaExtraTable[]) {
   let n = 1;
   while (used.has(n)) n += 1;
   return n;
+}
+
+/** Bordo sinistro di un box dopo eventuale specchio orizzontale */
+export function mirrorLeft(x: number, w: number, mirrored: boolean) {
+  if (!mirrored) return x;
+  return 100 - x - w;
+}
+
+/** Punto (es. testo / estremità linea) dopo eventuale specchio */
+export function mirrorCoord(x: number, mirrored: boolean) {
+  if (!mirrored) return x;
+  return 100 - x;
+}
+
+/** Da coordinate visuali (schermo) a coordinate salvate, se la cartina è specchiata */
+export function unmirrorLeft(x: number, w: number, mirrored: boolean) {
+  return mirrorLeft(x, w, mirrored);
+}
+
+export function unmirrorCoord(x: number, mirrored: boolean) {
+  return mirrorCoord(x, mirrored);
+}
+
+/** Marks con X ribaltate per il rendering (testo resta leggibile) */
+export function marksForDisplay(marks: MapMark[], mirrored: boolean): MapMark[] {
+  if (!mirrored || marks.length === 0) return marks;
+  return marks.map((m) => {
+    if (m.kind === "line") {
+      return {
+        ...m,
+        x: mirrorCoord(m.x, true),
+        x2: mirrorCoord(m.x2 ?? m.x, true),
+      };
+    }
+    if (m.kind === "rect") {
+      const w = Math.max(1, m.w ?? 10);
+      return { ...m, x: mirrorLeft(m.x, w, true), w };
+    }
+    // text: solo posizione, nessun scaleX sul glyph
+    return { ...m, x: mirrorCoord(m.x, true) };
+  });
 }
 
 export function normalizePlacement(p: ZoneOnBoard): ZoneOnBoard {

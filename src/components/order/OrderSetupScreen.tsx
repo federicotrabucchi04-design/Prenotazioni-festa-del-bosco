@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { LogOut, PlusSquare, Trash2 } from "lucide-react";
+import { FlipHorizontal2, LogOut, PlusSquare, Trash2, Type } from "lucide-react";
 import toast from "react-hot-toast";
 import { useAuthStore, orderRoleLabel } from "@/store/auth-store";
 import { useVenueLayout } from "@/hooks/use-venue-layout";
@@ -29,6 +29,7 @@ import {
 } from "@/lib/order-board";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import {
+  CARTINA_COLORS,
   loadCartinaPrefs,
   nextExtraTableNumber,
   saveCartinaPrefs,
@@ -42,7 +43,7 @@ import {
   type OrderColorRange,
 } from "@/lib/app-settings";
 import { OrderNumbersPanel } from "@/components/order/OrderNumbersPanel";
-import type { ZoneLayout } from "@/lib/types";
+import type { MapMark, ZoneLayout } from "@/lib/types";
 
 /** Assegna numeri d’ordine toccando i tavoli (cartina globale + per zona) */
 export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
@@ -60,7 +61,10 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
   const [pendingNums, setPendingNums] = useState<number[]>([]);
   const [digits, setDigits] = useState("");
   const [busy, setBusy] = useState(false);
-  const [tableTool, setTableTool] = useState<"none" | "add" | "delete">("none");
+  const [tableTool, setTableTool] = useState<
+    "none" | "add" | "delete" | "text"
+  >("none");
+  const [textColor, setTextColor] = useState<string>(CARTINA_COLORS[0]!.hex);
   const maxDigits = settings.orderMaxDigits;
 
   useEffect(() => {
@@ -71,11 +75,14 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
     const remote = board.cartina;
     if (remote?.placements.length) return resolveOrderCartina(layout, remote);
     const local = loadCartinaPrefs(layout);
-    // Mantieni eventuali extra salvati sul board anche senza placements remoti
+    let merged = local;
     if (remote?.extraTables?.length && !local.extraTables?.length) {
-      return { ...local, extraTables: remote.extraTables };
+      merged = { ...merged, extraTables: remote.extraTables };
     }
-    return resolveOrderCartina(layout, local);
+    if (remote?.mirrored === true && !merged.mirrored) {
+      merged = { ...merged, mirrored: true };
+    }
+    return resolveOrderCartina(layout, merged);
   }, [board.cartina, layout]);
 
   const zone = getZoneByName(layout, zoneName) ?? layout.zones[0] ?? null;
@@ -226,6 +233,52 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
     }
   }
 
+  async function handlePlaceText(pos: { x: number; y: number }) {
+    const label = window.prompt("Testo da inserire sulla cartina", "");
+    if (!label?.trim()) return;
+    setBusy(true);
+    try {
+      const mark: MapMark = {
+        id: createId(),
+        kind: "text",
+        x: pos.x,
+        y: pos.y,
+        text: label.trim(),
+        color: textColor,
+        fontSize: 3.2,
+      };
+      const next: CartinaPrefs = {
+        ...prefs,
+        marks: [...(prefs.marks ?? []), mark],
+      };
+      await persistCartina(next);
+      toast.success("Scritta aggiunta");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Errore");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggleMirror() {
+    setBusy(true);
+    try {
+      const enabling = !prefs.mirrored;
+      const next: CartinaPrefs = {
+        placements: prefs.placements,
+        marks: prefs.marks ?? [],
+      };
+      if (prefs.extraTables?.length) next.extraTables = prefs.extraTables;
+      if (enabling) next.mirrored = true;
+      await persistCartina(next);
+      toast.success(enabling ? "Cartina specchiata" : "Specchio disattivato");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Errore");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (layoutLoading || boardLoading) {
     return (
       <div
@@ -261,7 +314,9 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                 ? "Disegna un rettangolo ovunque sulla cartina (anche fuori zona)"
                 : tableTool === "delete"
                   ? "Tocca un tavolo extra per eliminarlo"
-                  : "Tocca un tavolo e digita il numero d’ordine"}
+                  : tableTool === "text"
+                    ? "Tocca la cartina per inserire una scritta colorata"
+                    : "Tocca un tavolo e digita il numero d’ordine"}
             </p>
           </div>
           <button
@@ -330,6 +385,19 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                 <button
                   type="button"
                   disabled={busy}
+                  onClick={() => void toggleMirror()}
+                  className={`inline-flex items-center gap-1 rounded-2xl px-3 py-2.5 text-xs font-semibold touch-manipulation md:text-sm ${
+                    prefs.mirrored
+                      ? "bg-[var(--forest)] text-white"
+                      : "bg-white text-[var(--forest-ink)]"
+                  }`}
+                >
+                  <FlipHorizontal2 className="h-3.5 w-3.5" />
+                  Specchia
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
                   onClick={() => {
                     setTableTool((t) => (t === "add" ? "none" : "add"));
                     setPending(null);
@@ -342,6 +410,22 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                 >
                   <PlusSquare className="h-3.5 w-3.5" />
                   Aggiungi tavolo
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    setTableTool((t) => (t === "text" ? "none" : "text"));
+                    setPending(null);
+                  }}
+                  className={`inline-flex items-center gap-1 rounded-2xl px-3 py-2.5 text-xs font-semibold touch-manipulation md:text-sm ${
+                    tableTool === "text"
+                      ? "bg-[var(--forest)] text-white"
+                      : "bg-white text-[var(--forest-ink)]"
+                  }`}
+                >
+                  <Type className="h-3.5 w-3.5" />
+                  Scritta
                 </button>
                 <button
                   type="button"
@@ -380,15 +464,42 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
         ) : null}
 
         {tableTool !== "none" && mode === "global" ? (
-          <p
-            className={`pb-1 text-xs font-medium ${
-              tableTool === "delete" ? "text-red-700" : "text-[var(--forest)]"
-            } ${embedded ? "px-1.5" : "px-4 md:px-6"}`}
+          <div
+            className={`pb-1 ${embedded ? "px-1.5" : "px-4 md:px-6"}`}
           >
-            {tableTool === "add"
-              ? `Trascina un rettangolo ovunque · griglia ${CARTINA_GRID_SNAP}% · tap di nuovo per uscire`
-              : "Tocca un tavolo extra (bordo rosso) per eliminarlo · tap di nuovo per uscire"}
-          </p>
+            <p
+              className={`text-xs font-medium ${
+                tableTool === "delete"
+                  ? "text-red-700"
+                  : "text-[var(--forest)]"
+              }`}
+            >
+              {tableTool === "add"
+                ? `Trascina un rettangolo ovunque · griglia ${CARTINA_GRID_SNAP}% · tap di nuovo per uscire`
+                : tableTool === "text"
+                  ? "Scegli il colore, poi tocca dove vuoi la scritta · tap di nuovo su Scritta per uscire"
+                  : "Tocca un tavolo extra (bordo rosso) per eliminarlo · tap di nuovo per uscire"}
+            </p>
+            {tableTool === "text" ? (
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {CARTINA_COLORS.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    title={c.label}
+                    onClick={() => setTextColor(c.hex)}
+                    className={`h-7 w-7 rounded-full border-2 touch-manipulation ${
+                      textColor === c.hex
+                        ? "border-[var(--forest-ink)] scale-110"
+                        : "border-white/80"
+                    }`}
+                    style={{ backgroundColor: c.hex }}
+                    aria-label={c.label}
+                  />
+                ))}
+              </div>
+            ) : null}
+          </div>
         ) : null}
 
         <div
@@ -417,6 +528,7 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                 interactive
                 drawTableMode={tableTool === "add"}
                 deleteTableMode={tableTool === "delete"}
+                textPlaceMode={tableTool === "text"}
                 numberScale={
                   embedded
                     ? Math.max(0.85, settings.orderNumberScale)
@@ -432,6 +544,9 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                 }}
                 onDeleteZoneOccasional={(z, tableId) => {
                   void handleDeleteZoneOccasional(z, tableId);
+                }}
+                onPlaceText={(pos) => {
+                  void handlePlaceText(pos);
                 }}
               />
             </div>

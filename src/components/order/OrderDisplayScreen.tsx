@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { LogOut } from "lucide-react";
+import { FlipHorizontal2, LogOut } from "lucide-react";
 import toast from "react-hot-toast";
 import { useAuthStore } from "@/store/auth-store";
 import { useVenueLayout } from "@/hooks/use-venue-layout";
@@ -13,8 +13,15 @@ import {
   resolveOrderCartina,
 } from "@/components/order/OrderCartinaView";
 import { A4PortraitContain } from "@/components/order/A4PortraitContain";
-import { loadCartinaPrefs } from "@/lib/cartina";
-import { clearOrderHighlightIf } from "@/lib/order-board";
+import {
+  loadCartinaPrefs,
+  saveCartinaPrefs,
+  type CartinaPrefs,
+} from "@/lib/cartina";
+import {
+  clearOrderHighlightIf,
+  saveOrderCartina,
+} from "@/lib/order-board";
 import { OnlineStatusBadge } from "@/components/OnlineStatusBadge";
 
 /**
@@ -29,6 +36,7 @@ export function OrderDisplayScreen({ embedded = false }: { embedded?: boolean })
   const { settings } = useAppSettings();
   const viewport = useViewport();
   const [showExit, setShowExit] = useState(false);
+  const [mirrorBusy, setMirrorBusy] = useState(false);
 
   const prefs = useMemo(() => {
     if (board.cartina?.placements.length) {
@@ -44,7 +52,6 @@ export function OrderDisplayScreen({ embedded = false }: { embedded?: boolean })
   const numberScale = useMemo(() => {
     const base = settings.orderNumberScale;
     if (embedded) return Math.max(0.9, base);
-    // Con numeri = altezza tavolo, non serve boost enorme (già capped ~96% cella)
     if (viewport.isPortraitDisplay) return Math.max(1, base);
     if (viewport.portrait) return Math.max(1, base);
     return Math.max(1, base);
@@ -64,6 +71,28 @@ export function OrderDisplayScreen({ embedded = false }: { embedded?: boolean })
     }, remaining);
     return () => window.clearTimeout(t);
   }, [board.highlight?.at, board.highlight?.orderNumber, highlightMs]);
+
+  async function toggleMirror(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (mirrorBusy) return;
+    setMirrorBusy(true);
+    try {
+      const enabling = !prefs.mirrored;
+      const next: CartinaPrefs = {
+        placements: prefs.placements,
+        marks: prefs.marks ?? [],
+      };
+      if (prefs.extraTables?.length) next.extraTables = prefs.extraTables;
+      if (enabling) next.mirrored = true;
+      saveCartinaPrefs(next);
+      await saveOrderCartina(next);
+      toast.success(enabling ? "Cartina specchiata" : "Specchio disattivato");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Errore");
+    } finally {
+      setMirrorBusy(false);
+    }
+  }
 
   if (layoutLoading || boardLoading) {
     return (
@@ -140,16 +169,30 @@ export function OrderDisplayScreen({ embedded = false }: { embedded?: boolean })
       ) : null}
 
       <div
-        className={`pointer-events-none absolute z-50 ${
+        className={`absolute z-50 flex items-center gap-2 ${
           embedded
-            ? "left-1 top-1 scale-90"
+            ? "left-1 top-1"
             : "left-[max(0.5rem,env(safe-area-inset-left))] top-[max(0.5rem,env(safe-area-inset-top))]"
         }`}
       >
-        <OnlineStatusBadge
-          variant="dark"
-          className="bg-black/65 text-[11px] shadow-md ring-1 ring-white/20"
-        />
+        <div className={embedded ? "pointer-events-none scale-90" : "pointer-events-none"}>
+          <OnlineStatusBadge
+            variant="dark"
+            className="bg-black/65 text-[11px] shadow-md ring-1 ring-white/20"
+          />
+        </div>
+        <button
+          type="button"
+          disabled={mirrorBusy}
+          onClick={(e) => void toggleMirror(e)}
+          className={`inline-flex items-center gap-1 rounded-xl bg-black/65 font-semibold text-white shadow-md ring-1 ring-white/20 touch-manipulation disabled:opacity-50 ${
+            embedded ? "px-1.5 py-1 text-[9px]" : "px-2.5 py-1.5 text-xs"
+          } ${prefs.mirrored ? "ring-2 ring-emerald-400" : ""}`}
+          title={prefs.mirrored ? "Disattiva specchio" : "Specchia cartina"}
+        >
+          <FlipHorizontal2 className={embedded ? "h-3 w-3" : "h-3.5 w-3.5"} />
+          Specchia
+        </button>
       </div>
 
       {!embedded && showExit ? (
