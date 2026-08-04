@@ -39,7 +39,9 @@ export interface CartinaPrefs {
   mirrorOrdini?: boolean;
   /** Specchio solo vista Schermo (asse verticale / sinistra-destra) */
   mirrorSchermo?: boolean;
-  /** Simmetria rispetto al centro — solo Schermo (ribaltamento 180°) */
+  /** Simmetria rispetto al centro — Ordini (ribaltamento 180°) */
+  centerOrdini?: boolean;
+  /** Simmetria rispetto al centro — Schermo (ribaltamento 180°) */
   centerSchermo?: boolean;
 }
 
@@ -343,6 +345,7 @@ export function loadCartinaPrefs(layout: VenueLayout): CartinaPrefs {
         if (extraTables.length) prefs.extraTables = extraTables;
         if (parsed.mirrorOrdini === true) prefs.mirrorOrdini = true;
         if (parsed.mirrorSchermo === true) prefs.mirrorSchermo = true;
+        if (parsed.centerOrdini === true) prefs.centerOrdini = true;
         if (parsed.centerSchermo === true) prefs.centerSchermo = true;
         if (
           parsed.mirrored === true &&
@@ -432,25 +435,51 @@ export function withCartinaMirror(
 
   if (ordini) next.mirrorOrdini = true;
   if (schermo) next.mirrorSchermo = true;
-  if (isCenterSchermo(prefs)) next.centerSchermo = true;
+  if (isCenterSymmetry(prefs, "ordini")) next.centerOrdini = true;
+  if (isCenterSymmetry(prefs, "schermo")) next.centerSchermo = true;
   return next;
 }
 
-export function isCenterSchermo(
-  prefs: Pick<CartinaPrefs, "centerSchermo">,
+export function isCenterSymmetry(
+  prefs: Pick<CartinaPrefs, "centerOrdini" | "centerSchermo">,
+  view: CartinaMirrorView,
 ): boolean {
+  if (view === "ordini") return prefs.centerOrdini === true;
   return prefs.centerSchermo === true;
 }
 
-export function withCenterSchermo(
+/** @deprecated usa isCenterSymmetry(prefs, "schermo") */
+export function isCenterSchermo(
+  prefs: Pick<CartinaPrefs, "centerSchermo" | "centerOrdini">,
+): boolean {
+  return isCenterSymmetry(prefs, "schermo");
+}
+
+export function withCenterSymmetry(
   prefs: CartinaPrefs,
+  view: CartinaMirrorView,
   enabled: boolean,
 ): CartinaPrefs {
   const next = cloneCartinaFlags(prefs);
   if (isCartinaMirrored(prefs, "ordini")) next.mirrorOrdini = true;
   if (isCartinaMirrored(prefs, "schermo")) next.mirrorSchermo = true;
-  if (enabled) next.centerSchermo = true;
+
+  const ordini =
+    view === "ordini" ? enabled : isCenterSymmetry(prefs, "ordini");
+  const schermo =
+    view === "schermo" ? enabled : isCenterSymmetry(prefs, "schermo");
+
+  if (ordini) next.centerOrdini = true;
+  if (schermo) next.centerSchermo = true;
   return next;
+}
+
+/** @deprecated usa withCenterSymmetry(prefs, "schermo", enabled) */
+export function withCenterSchermo(
+  prefs: CartinaPrefs,
+  enabled: boolean,
+): CartinaPrefs {
+  return withCenterSymmetry(prefs, "schermo", enabled);
 }
 
 function cloneCartinaFlags(prefs: CartinaPrefs): CartinaPrefs {
@@ -468,15 +497,16 @@ export type CartinaFlip = { flipX: boolean; flipY: boolean };
 export function cartinaFlipForView(
   prefs: Pick<
     CartinaPrefs,
-    "mirrored" | "mirrorOrdini" | "mirrorSchermo" | "centerSchermo"
+    | "mirrored"
+    | "mirrorOrdini"
+    | "mirrorSchermo"
+    | "centerOrdini"
+    | "centerSchermo"
   >,
   view: CartinaMirrorView,
 ): CartinaFlip {
-  if (view === "ordini") {
-    return { flipX: isCartinaMirrored(prefs, "ordini"), flipY: false };
-  }
-  const center = isCenterSchermo(prefs);
-  const mirror = isCartinaMirrored(prefs, "schermo");
+  const center = isCenterSymmetry(prefs, view);
+  const mirror = isCartinaMirrored(prefs, view);
   // Specchio = flip X; simmetria centro = 180° (X+Y). Insieme: resta 180°.
   return {
     flipX: mirror || center,

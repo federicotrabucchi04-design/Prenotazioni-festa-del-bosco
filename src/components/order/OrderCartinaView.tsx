@@ -52,6 +52,7 @@ export function resolveOrderCartina(
       if (extras?.length) out.extraTables = extras;
       if (remote.mirrorOrdini === true) out.mirrorOrdini = true;
       if (remote.mirrorSchermo === true) out.mirrorSchermo = true;
+      if (remote.centerOrdini === true) out.centerOrdini = true;
       if (remote.centerSchermo === true) out.centerSchermo = true;
       if (
         remote.mirrored === true &&
@@ -70,6 +71,7 @@ export function resolveOrderCartina(
   if (extras?.length) out.extraTables = extras;
   if (remote?.mirrorOrdini === true) out.mirrorOrdini = true;
   if (remote?.mirrorSchermo === true) out.mirrorSchermo = true;
+  if (remote?.centerOrdini === true) out.centerOrdini = true;
   if (remote?.centerSchermo === true) out.centerSchermo = true;
   if (
     remote?.mirrored === true &&

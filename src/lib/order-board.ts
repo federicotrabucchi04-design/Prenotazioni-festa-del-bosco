@@ -145,6 +145,7 @@ function normalizeCartina(raw: unknown): CartinaPrefs | null {
   if (extraTables.length) out.extraTables = extraTables;
   if (c.mirrorOrdini === true) out.mirrorOrdini = true;
   if (c.mirrorSchermo === true) out.mirrorSchermo = true;
+  if (c.centerOrdini === true) out.centerOrdini = true;
   if (c.centerSchermo === true) out.centerSchermo = true;
   if (
     c.mirrored === true &&

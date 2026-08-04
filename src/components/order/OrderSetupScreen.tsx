@@ -32,12 +32,12 @@ import { useAppSettings } from "@/hooks/use-app-settings";
 import {
   CARTINA_COLORS,
   isCartinaMirrored,
-  isCenterSchermo,
+  isCenterSymmetry,
   loadCartinaPrefs,
   nextExtraTableNumber,
   saveCartinaPrefs,
   withCartinaMirror,
-  withCenterSchermo,
+  withCenterSymmetry,
   zoneAccentColor,
   EXTRA_TABLES_ZONE_ID,
   type CartinaExtraTable,
@@ -71,7 +71,9 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
     "none" | "add" | "delete" | "text"
   >("none");
   const [textColor, setTextColor] = useState<string>(CARTINA_COLORS[0]!.hex);
-  const [symOpen, setSymOpen] = useState(false);
+  const [openMenu, setOpenMenu] = useState<null | "tavoli" | "simmetrie" | "numeri">(
+    null,
+  );
   const maxDigits = settings.orderMaxDigits;
 
   useEffect(() => {
@@ -91,6 +93,9 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
     }
     if (remote?.mirrorSchermo === true && !merged.mirrorSchermo) {
       merged = { ...merged, mirrorSchermo: true };
+    }
+    if (remote?.centerOrdini === true && !merged.centerOrdini) {
+      merged = { ...merged, centerOrdini: true };
     }
     if (remote?.centerSchermo === true && !merged.centerSchermo) {
       merged = { ...merged, centerSchermo: true };
@@ -303,16 +308,20 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
     }
   }
 
-  async function toggleCenterSchermo() {
+  async function toggleCenter(view: CartinaMirrorView) {
     setBusy(true);
     try {
-      const enabling = !isCenterSchermo(prefs);
-      const next = withCenterSchermo(prefs, enabling);
+      const enabling = !isCenterSymmetry(prefs, view);
+      const next = withCenterSymmetry(prefs, view, enabling);
       await persistCartina(next);
       toast.success(
         enabling
-          ? "Simmetria centro Schermo attiva"
-          : "Simmetria centro Schermo disattivata",
+          ? view === "ordini"
+            ? "Simmetria centro Ordini attiva"
+            : "Simmetria centro Schermo attiva"
+          : view === "ordini"
+            ? "Simmetria centro Ordini disattivata"
+            : "Simmetria centro Schermo disattivata",
       );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Errore");
@@ -433,6 +442,7 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
               onClick={() => {
                 setMode(id);
                 if (id !== "global") setTableTool("none");
+                setOpenMenu(null);
               }}
               className={`flex-1 font-semibold touch-manipulation ${
                 embedded
@@ -451,91 +461,114 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
 
         {mode === "global" ? (
           <div
-            className={`space-y-2 ${
+            className={`relative z-20 flex flex-wrap items-start gap-2 ${
               embedded ? "px-1.5 pb-1" : "px-4 pb-2 md:px-6"
             }`}
           >
-            <div className="rounded-2xl border border-[var(--forest)]/10 bg-white/90 p-2">
-              <p className="mb-1.5 px-1 text-[10px] font-bold uppercase tracking-wide text-[var(--forest-muted)]">
-                Tavoli
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => {
-                    setTableTool((t) => (t === "add" ? "none" : "add"));
-                    setPending(null);
-                  }}
-                  className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-2 text-xs font-semibold touch-manipulation ${
-                    tableTool === "add"
-                      ? "bg-[var(--forest)] text-white"
-                      : "bg-[var(--forest)]/8 text-[var(--forest-ink)]"
-                  }`}
-                >
-                  <PlusSquare className="h-3.5 w-3.5" />
-                  Aggiungi
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => {
-                    setTableTool((t) => (t === "text" ? "none" : "text"));
-                    setPending(null);
-                  }}
-                  className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-2 text-xs font-semibold touch-manipulation ${
-                    tableTool === "text"
-                      ? "bg-[var(--forest)] text-white"
-                      : "bg-[var(--forest)]/8 text-[var(--forest-ink)]"
-                  }`}
-                >
-                  <Type className="h-3.5 w-3.5" />
-                  Scritta
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => {
-                    setTableTool((t) => (t === "delete" ? "none" : "delete"));
-                    setPending(null);
-                  }}
-                  className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-2 text-xs font-semibold touch-manipulation ${
-                    tableTool === "delete"
-                      ? "bg-red-600 text-white"
-                      : "bg-red-50 text-red-700"
-                  }`}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Elimina
-                </button>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-[var(--forest)]/10 bg-white/90">
+            {/* Tavoli */}
+            <div className="relative">
               <button
                 type="button"
-                onClick={() => setSymOpen((v) => !v)}
-                className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left touch-manipulation"
+                onClick={() =>
+                  setOpenMenu((m) => (m === "tavoli" ? null : "tavoli"))
+                }
+                className={`inline-flex items-center gap-1 rounded-2xl px-3 py-2.5 text-xs font-semibold touch-manipulation md:text-sm ${
+                  openMenu === "tavoli" || tableTool !== "none"
+                    ? "bg-[var(--forest)] text-white"
+                    : "bg-white text-[var(--forest-ink)]"
+                }`}
               >
-                <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-[var(--forest-muted)]">
-                  <FlipHorizontal2 className="h-3.5 w-3.5" />
-                  Simmetrie
-                  {(isCartinaMirrored(prefs, "ordini") ||
-                    isCartinaMirrored(prefs, "schermo") ||
-                    isCenterSchermo(prefs)) && (
-                    <span className="rounded-full bg-[var(--forest)]/15 px-1.5 py-0.5 text-[10px] font-semibold normal-case text-[var(--forest)]">
-                      attive
-                    </span>
-                  )}
-                </span>
+                Tavoli
                 <ChevronDown
-                  className={`h-4 w-4 text-[var(--forest-muted)] transition ${
-                    symOpen ? "rotate-180" : ""
+                  className={`h-3.5 w-3.5 transition ${
+                    openMenu === "tavoli" ? "rotate-180" : ""
                   }`}
                 />
               </button>
-              {symOpen ? (
-                <div className="space-y-1 border-t border-[var(--forest)]/10 px-2 pb-2 pt-1">
+              {openMenu === "tavoli" ? (
+                <div className="absolute left-0 top-full z-30 mt-1 min-w-[11rem] rounded-2xl border border-[var(--forest)]/15 bg-white p-1.5 shadow-lg">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      setTableTool((t) => (t === "add" ? "none" : "add"));
+                      setPending(null);
+                      setOpenMenu(null);
+                    }}
+                    className={`flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs font-semibold touch-manipulation ${
+                      tableTool === "add"
+                        ? "bg-[var(--forest)] text-white"
+                        : "text-[var(--forest-ink)] hover:bg-[var(--forest)]/5"
+                    }`}
+                  >
+                    <PlusSquare className="h-3.5 w-3.5" />
+                    Aggiungi tavolo
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      setTableTool((t) => (t === "text" ? "none" : "text"));
+                      setPending(null);
+                      setOpenMenu(null);
+                    }}
+                    className={`flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs font-semibold touch-manipulation ${
+                      tableTool === "text"
+                        ? "bg-[var(--forest)] text-white"
+                        : "text-[var(--forest-ink)] hover:bg-[var(--forest)]/5"
+                    }`}
+                  >
+                    <Type className="h-3.5 w-3.5" />
+                    Scritta
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      setTableTool((t) => (t === "delete" ? "none" : "delete"));
+                      setPending(null);
+                      setOpenMenu(null);
+                    }}
+                    className={`flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs font-semibold touch-manipulation ${
+                      tableTool === "delete"
+                        ? "bg-red-600 text-white"
+                        : "text-red-700 hover:bg-red-50"
+                    }`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Elimina tavolo
+                  </button>
+                </div>
+              ) : null}
+            </div>
+
+            {/* Simmetrie */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() =>
+                  setOpenMenu((m) => (m === "simmetrie" ? null : "simmetrie"))
+                }
+                className={`inline-flex items-center gap-1 rounded-2xl px-3 py-2.5 text-xs font-semibold touch-manipulation md:text-sm ${
+                  openMenu === "simmetrie" ||
+                  isCartinaMirrored(prefs, "ordini") ||
+                  isCartinaMirrored(prefs, "schermo") ||
+                  isCenterSymmetry(prefs, "ordini") ||
+                  isCenterSymmetry(prefs, "schermo")
+                    ? "bg-[var(--forest)] text-white"
+                    : "bg-white text-[var(--forest-ink)]"
+                }`}
+              >
+                <FlipHorizontal2 className="h-3.5 w-3.5" />
+                Simmetrie
+                <ChevronDown
+                  className={`h-3.5 w-3.5 transition ${
+                    openMenu === "simmetrie" ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+              {openMenu === "simmetrie" ? (
+                <div className="absolute left-0 top-full z-30 mt-1 min-w-[14rem] rounded-2xl border border-[var(--forest)]/15 bg-white p-1.5 shadow-lg">
                   <button
                     type="button"
                     disabled={busy}
@@ -543,11 +576,11 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                     className={`flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-left text-xs font-semibold touch-manipulation ${
                       isCartinaMirrored(prefs, "ordini")
                         ? "bg-[var(--forest)] text-white"
-                        : "bg-[var(--forest)]/5 text-[var(--forest-ink)]"
+                        : "text-[var(--forest-ink)] hover:bg-[var(--forest)]/5"
                     }`}
                   >
                     Specchia Ordini
-                    <span className="text-[10px] opacity-80">sinistra↔destra</span>
+                    <span className="text-[10px] opacity-70">↔</span>
                   </button>
                   <button
                     type="button"
@@ -556,85 +589,152 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                     className={`flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-left text-xs font-semibold touch-manipulation ${
                       isCartinaMirrored(prefs, "schermo")
                         ? "bg-sky-600 text-white"
-                        : "bg-sky-50 text-sky-950"
+                        : "text-sky-950 hover:bg-sky-50"
                     }`}
                   >
                     Specchia Schermo
-                    <span className="text-[10px] opacity-80">sinistra↔destra</span>
+                    <span className="text-[10px] opacity-70">↔</span>
                   </button>
                   <button
                     type="button"
                     disabled={busy}
-                    onClick={() => void toggleCenterSchermo()}
+                    onClick={() => void toggleCenter("ordini")}
                     className={`flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-left text-xs font-semibold touch-manipulation ${
-                      isCenterSchermo(prefs)
+                      isCenterSymmetry(prefs, "ordini")
                         ? "bg-violet-600 text-white"
-                        : "bg-violet-50 text-violet-950"
+                        : "text-violet-950 hover:bg-violet-50"
                     }`}
                   >
-                    Simmetria centro (Schermo)
-                    <span className="text-[10px] opacity-80">180°</span>
+                    Centro Ordini
+                    <span className="text-[10px] opacity-70">180°</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void toggleCenter("schermo")}
+                    className={`flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-left text-xs font-semibold touch-manipulation ${
+                      isCenterSymmetry(prefs, "schermo")
+                        ? "bg-violet-600 text-white"
+                        : "text-violet-950 hover:bg-violet-50"
+                    }`}
+                  >
+                    Centro Schermo
+                    <span className="text-[10px] opacity-70">180°</span>
                   </button>
                 </div>
               ) : null}
             </div>
 
-            <div className="rounded-2xl border border-red-100 bg-white/90 p-2">
-              <p className="mb-1.5 px-1 text-[10px] font-bold uppercase tracking-wide text-red-700/70">
-                Numeri ordine
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={async () => {
-                    if (!window.confirm("Cancellare tutti i numeri d’ordine?"))
-                      return;
-                    await clearAllAssignments();
-                    toast.success("Assegnazioni azzerate");
-                  }}
-                  className="inline-flex items-center gap-1 rounded-xl bg-red-50 px-2.5 py-2 text-xs font-semibold text-red-700 touch-manipulation"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Azzera tutti
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void handleClearUpTo()}
-                  className="inline-flex items-center gap-1 rounded-xl bg-red-50 px-2.5 py-2 text-xs font-semibold text-red-700 touch-manipulation"
-                >
-                  <RotateCcw className="h-3.5 w-3.5" />
-                  Azzera fino a…
-                </button>
-              </div>
+            {/* Numeri */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() =>
+                  setOpenMenu((m) => (m === "numeri" ? null : "numeri"))
+                }
+                className={`inline-flex items-center gap-1 rounded-2xl px-3 py-2.5 text-xs font-semibold touch-manipulation md:text-sm ${
+                  openMenu === "numeri"
+                    ? "bg-red-600 text-white"
+                    : "bg-white text-red-700"
+                }`}
+              >
+                Numeri
+                <ChevronDown
+                  className={`h-3.5 w-3.5 transition ${
+                    openMenu === "numeri" ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+              {openMenu === "numeri" ? (
+                <div className="absolute left-0 top-full z-30 mt-1 min-w-[12rem] rounded-2xl border border-red-100 bg-white p-1.5 shadow-lg">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={async () => {
+                      setOpenMenu(null);
+                      if (!window.confirm("Cancellare tutti i numeri d’ordine?"))
+                        return;
+                      await clearAllAssignments();
+                      toast.success("Assegnazioni azzerate");
+                    }}
+                    className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs font-semibold text-red-700 touch-manipulation hover:bg-red-50"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Azzera tutti
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      setOpenMenu(null);
+                      void handleClearUpTo();
+                    }}
+                    className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs font-semibold text-red-700 touch-manipulation hover:bg-red-50"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Azzera fino a…
+                  </button>
+                </div>
+              ) : null}
             </div>
           </div>
-        ) : mode !== "numbers" && !embedded ? (
-          <div className="flex flex-wrap gap-2 px-4 pb-2 md:px-6">
-            <button
-              type="button"
-              disabled={busy}
-              onClick={async () => {
-                if (!window.confirm("Cancellare tutti i numeri d’ordine?"))
-                  return;
-                await clearAllAssignments();
-                toast.success("Assegnazioni azzerate");
-              }}
-              className="inline-flex items-center gap-1 rounded-2xl bg-red-50 px-3 py-2.5 text-xs font-semibold text-red-700 touch-manipulation md:text-sm"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              Azzera tutti
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void handleClearUpTo()}
-              className="inline-flex items-center gap-1 rounded-2xl bg-red-50 px-3 py-2.5 text-xs font-semibold text-red-700 touch-manipulation md:text-sm"
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-              Azzera fino a…
-            </button>
+        ) : mode !== "numbers" ? (
+          <div
+            className={`relative z-20 ${
+              embedded ? "px-1.5 pb-1" : "px-4 pb-2 md:px-6"
+            }`}
+          >
+            <div className="relative inline-block">
+              <button
+                type="button"
+                onClick={() =>
+                  setOpenMenu((m) => (m === "numeri" ? null : "numeri"))
+                }
+                className={`inline-flex items-center gap-1 rounded-2xl px-3 py-2.5 text-xs font-semibold touch-manipulation md:text-sm ${
+                  openMenu === "numeri"
+                    ? "bg-red-600 text-white"
+                    : "bg-white text-red-700"
+                }`}
+              >
+                Numeri
+                <ChevronDown
+                  className={`h-3.5 w-3.5 transition ${
+                    openMenu === "numeri" ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+              {openMenu === "numeri" ? (
+                <div className="absolute left-0 top-full z-30 mt-1 min-w-[12rem] rounded-2xl border border-red-100 bg-white p-1.5 shadow-lg">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={async () => {
+                      setOpenMenu(null);
+                      if (!window.confirm("Cancellare tutti i numeri d’ordine?"))
+                        return;
+                      await clearAllAssignments();
+                      toast.success("Assegnazioni azzerate");
+                    }}
+                    className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs font-semibold text-red-700 touch-manipulation hover:bg-red-50"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Azzera tutti
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      setOpenMenu(null);
+                      void handleClearUpTo();
+                    }}
+                    className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs font-semibold text-red-700 touch-manipulation hover:bg-red-50"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Azzera fino a…
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </div>
         ) : null}
 
