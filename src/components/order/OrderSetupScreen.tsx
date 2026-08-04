@@ -461,7 +461,7 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
 
         {mode === "global" ? (
           <div
-            className={`relative z-20 flex flex-wrap items-start gap-2 ${
+            className={`relative z-50 flex flex-wrap items-start gap-2 ${
               embedded ? "px-1.5 pb-1" : "px-4 pb-2 md:px-6"
             }`}
           >
@@ -486,7 +486,7 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                 />
               </button>
               {openMenu === "tavoli" ? (
-                <div className="absolute left-0 top-full z-50 mt-1 min-w-[11rem] rounded-2xl border border-[var(--forest)]/20 bg-[#ffffff] p-1.5 shadow-xl ring-1 ring-black/10">
+                <div className="absolute left-0 top-full z-[100] mt-1 min-w-[11rem] rounded-2xl border border-[var(--forest)]/20 bg-[#ffffff] p-1.5 shadow-xl ring-1 ring-black/10">
                   <button
                     type="button"
                     disabled={busy}
@@ -568,7 +568,7 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                 />
               </button>
               {openMenu === "simmetrie" ? (
-                <div className="absolute left-0 top-full z-50 mt-1 min-w-[14rem] rounded-2xl border border-[var(--forest)]/20 bg-[#ffffff] p-1.5 shadow-xl ring-1 ring-black/10">
+                <div className="absolute left-0 top-full z-[100] mt-1 min-w-[14rem] rounded-2xl border border-[var(--forest)]/20 bg-[#ffffff] p-1.5 shadow-xl ring-1 ring-black/10">
                   <button
                     type="button"
                     disabled={busy}
@@ -649,7 +649,7 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                 />
               </button>
               {openMenu === "numeri" ? (
-                <div className="absolute left-0 top-full z-50 mt-1 min-w-[12rem] rounded-2xl border border-red-200 bg-[#ffffff] p-1.5 shadow-xl ring-1 ring-black/10">
+                <div className="absolute left-0 top-full z-[100] mt-1 min-w-[12rem] rounded-2xl border border-red-200 bg-[#ffffff] p-1.5 shadow-xl ring-1 ring-black/10">
                   <button
                     type="button"
                     disabled={busy}
@@ -683,7 +683,7 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
           </div>
         ) : mode !== "numbers" ? (
           <div
-            className={`relative z-20 ${
+            className={`relative z-50 ${
               embedded ? "px-1.5 pb-1" : "px-4 pb-2 md:px-6"
             }`}
           >
@@ -707,7 +707,7 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                 />
               </button>
               {openMenu === "numeri" ? (
-                <div className="absolute left-0 top-full z-50 mt-1 min-w-[12rem] rounded-2xl border border-red-200 bg-[#ffffff] p-1.5 shadow-xl ring-1 ring-black/10">
+                <div className="absolute left-0 top-full z-[100] mt-1 min-w-[12rem] rounded-2xl border border-red-200 bg-[#ffffff] p-1.5 shadow-xl ring-1 ring-black/10">
                   <button
                     type="button"
                     disabled={busy}
@@ -781,7 +781,7 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
         ) : null}
 
         <div
-          className={`flex min-h-0 flex-1 flex-col overflow-auto ${
+          className={`relative z-0 flex min-h-0 flex-1 flex-col overflow-auto ${
             embedded
               ? "px-0.5 pb-1"
               : "px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:px-4"

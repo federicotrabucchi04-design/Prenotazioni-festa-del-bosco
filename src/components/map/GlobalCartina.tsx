@@ -1230,7 +1230,7 @@ function CartinaArrangeBoard({
         </div>
       ) : null}
 
-      <div className="relative z-20">
+      <div className="relative z-50">
         <button
           type="button"
           onClick={() => setSymOpen((v) => !v)}
@@ -1247,7 +1247,7 @@ function CartinaArrangeBoard({
           />
         </button>
         {symOpen ? (
-          <div className="absolute left-0 top-full z-50 mt-1 min-w-[14rem] rounded-2xl border border-[var(--forest)]/20 bg-[#ffffff] p-1.5 shadow-xl ring-1 ring-black/10">
+          <div className="absolute left-0 top-full z-[100] mt-1 min-w-[14rem] rounded-2xl border border-[var(--forest)]/20 bg-[#ffffff] p-1.5 shadow-xl ring-1 ring-black/10">
             <button
               type="button"
               disabled={publishing}
