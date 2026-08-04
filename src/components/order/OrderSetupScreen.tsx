@@ -621,6 +621,9 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                     Centro Schermo
                     <span className="text-[10px] opacity-70">180°</span>
                   </button>
+                  <p className="mt-1 px-2.5 pb-1 text-[10px] leading-snug text-[var(--forest-muted)]">
+                    Si combinano: ↔ + 180° = ↕
+                  </p>
                 </div>
               ) : null}
             </div>

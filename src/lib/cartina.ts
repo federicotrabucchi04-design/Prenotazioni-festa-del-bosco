@@ -507,9 +507,10 @@ export function cartinaFlipForView(
 ): CartinaFlip {
   const center = isCenterSymmetry(prefs, view);
   const mirror = isCartinaMirrored(prefs, view);
-  // Specchio = flip X; simmetria centro = 180° (X+Y). Insieme: resta 180°.
+  // Specchio = flip X; centro = 180° (X+Y). Si combinano (XOR):
+  // nessuno → identità; solo ↔ → flip X; solo 180° → flip X+Y; entrambi → flip Y.
   return {
-    flipX: mirror || center,
+    flipX: mirror !== center,
     flipY: center,
   };
 }
