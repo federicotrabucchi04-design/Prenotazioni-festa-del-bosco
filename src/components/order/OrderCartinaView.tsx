@@ -63,41 +63,101 @@ export function extraTablesZone(): ZoneLayout {
   };
 }
 
-/** Larghezza stimata in em (cifre tabular-nums + eventuali "-") */
+/** Larghezza stimata (fallback; il fit reale usa misurazione DOM) */
 function contentWidthEm(nums: number[], withDashes: boolean) {
   let em = 0;
   nums.forEach((n, i) => {
-    if (withDashes && i > 0) em += 0.38;
-    em += String(n).length * 0.52;
+    if (withDashes && i > 0) em += 0.35;
+    em += String(n).length * 0.62;
   });
   return Math.max(em, 0.5);
 }
 
+/** Più numeri → lungo l’asse più lungo della cella */
+function shouldStackVertical(cellW: number, cellH: number, count: number) {
+  if (count <= 1) return false;
+  return cellH > cellW;
+}
+
 /**
- * Font in px: priorità altezza tavolo (~92%).
- * Riduce solo se la riga non entra in larghezza.
+ * Stima iniziale font (poi raffinata con binary search sul DOM).
+ * Coefficienti conservativi per font-black tabular-nums.
  */
-function fontPxForCell(
+function estimateFontPx(
   cellW: number,
   cellH: number,
   nums: number[],
   stackVertical: boolean,
-  heightRatio: number,
 ): number {
-  if (cellW < 2 || cellH < 2 || nums.length === 0) return 10;
+  if (cellW < 2 || cellH < 2 || nums.length === 0) return 1;
+  const usableW = cellW * 0.98;
+  const usableH = cellH * 0.98;
 
   if (stackVertical) {
-    const lineH = cellH / nums.length;
-    const byH = lineH * heightRatio;
+    const lineH = usableH / nums.length;
     const maxDigits = Math.max(...nums.map((n) => String(n).length));
-    const byW = cellW / (maxDigits * 0.52);
-    return Math.max(10, Math.min(byH, byW));
+    const byH = lineH * 0.98;
+    const byW = usableW / (maxDigits * 0.62);
+    return Math.max(1, Math.min(byH, byW));
   }
 
-  const byH = cellH * heightRatio;
-  const needEm = contentWidthEm(nums, nums.length > 1);
-  const byW = (cellW * 0.98) / needEm;
-  return Math.max(10, Math.min(byH, byW));
+  const byH = usableH * 0.98;
+  const byW = usableW / contentWidthEm(nums, nums.length > 1);
+  return Math.max(1, Math.min(byH, byW));
+}
+
+/**
+ * Font massimo che entra nella cella senza tagliare (misura DOM reale).
+ */
+function fitFontToBox(
+  box: HTMLElement,
+  content: HTMLElement,
+  textNodes: HTMLElement[],
+  seedPx: number,
+): number {
+  const maxW = box.clientWidth;
+  const maxH = box.clientHeight;
+  if (maxW < 2 || maxH < 2 || textNodes.length === 0) return 1;
+
+  const apply = (px: number) => {
+    for (const n of textNodes) n.style.fontSize = `${px}px`;
+  };
+
+  const fits = (px: number) => {
+    apply(px);
+    // offset* più affidabile di scroll* con flex centering
+    return content.offsetWidth <= maxW - 1 && content.offsetHeight <= maxH - 1;
+  };
+
+  let lo = 1;
+  let hi = Math.max(
+    2,
+    Math.min(
+      Math.floor(Math.max(maxW, maxH) * 1.2),
+      Math.ceil(seedPx * 1.35) + 4,
+    ),
+  );
+
+  if (!fits(1)) {
+    apply(1);
+    return 1;
+  }
+  // Alza il tetto se c’è ancora spazio
+  if (fits(hi)) {
+    let grow = hi;
+    const cap = Math.floor(Math.max(maxW, maxH));
+    while (grow < cap && fits(grow + 1)) grow += 1;
+    apply(grow);
+    return grow;
+  }
+
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi + 1) / 2);
+    if (fits(mid)) lo = mid;
+    else hi = mid - 1;
+  }
+  apply(lo);
+  return lo;
 }
 
 type DrawDraft = { x0: number; y0: number; x1: number; y1: number };
@@ -176,10 +236,6 @@ export function OrderCartinaView({
 
   const extraTables = prefs.extraTables ?? [];
   const isDisplay = variant === "display";
-  const heightRatio = Math.min(
-    0.96,
-    Math.max(0.82, (isDisplay ? 0.94 : 0.9) * numberScale),
-  );
 
   const boardRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState<DrawDraft | null>(null);
@@ -311,7 +367,7 @@ export function OrderCartinaView({
                   highlight != null &&
                   highlight.found &&
                   nums.includes(highlight.orderNumber);
-                const stackVertical = nums.length > 1 && h > w;
+                const stackVertical = shouldStackVertical(w, h, nums.length);
                 const canClick = interactive && !drawTableMode;
                 const Tag = canClick ? "button" : "div";
                 const occasional = Boolean(table.occasional);
@@ -375,7 +431,7 @@ export function OrderCartinaView({
                       <TableOrderNums
                         nums={nums}
                         stackVertical={stackVertical}
-                        heightRatio={heightRatio}
+                        numberScale={numberScale}
                         accent={accent}
                         colorRanges={colorRanges}
                         highlightOrder={
@@ -415,7 +471,11 @@ export function OrderCartinaView({
           highlight != null &&
           highlight.found &&
           nums.includes(highlight.orderNumber);
-        const stackVertical = nums.length > 1 && table.h > table.w;
+        const stackVertical = shouldStackVertical(
+          table.w,
+          table.h,
+          nums.length,
+        );
         const canClick = interactive && !drawTableMode;
         const Tag = canClick ? "button" : "div";
 
@@ -471,7 +531,7 @@ export function OrderCartinaView({
               <TableOrderNums
                 nums={nums}
                 stackVertical={stackVertical}
-                heightRatio={heightRatio}
+                numberScale={numberScale}
                 accent={EXTRA_ACCENT}
                 colorRanges={colorRanges}
                 highlightOrder={isHit ? highlight!.orderNumber : null}
@@ -504,8 +564,8 @@ export function OrderCartinaView({
 
 function TableOrderNums({
   nums,
-  stackVertical,
-  heightRatio,
+  stackVertical: stackVerticalHint,
+  numberScale,
   accent,
   colorRanges,
   highlightOrder,
@@ -514,47 +574,93 @@ function TableOrderNums({
 }: {
   nums: number[];
   stackVertical: boolean;
-  heightRatio: number;
+  numberScale: number;
   accent: string;
   colorRanges: OrderColorRange[];
   highlightOrder: number | null;
   highlightColor: string;
   highlightRadius: number;
 }) {
-  const ref = useRef<HTMLSpanElement>(null);
-  const [fontPx, setFontPx] = useState(16);
+  const boxRef = useRef<HTMLSpanElement>(null);
+  const contentRef = useRef<HTMLSpanElement>(null);
+  const [fontPx, setFontPx] = useState(8);
+  const [stackVertical, setStackVertical] = useState(stackVerticalHint);
 
   useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
+    setStackVertical(stackVerticalHint);
+  }, [stackVerticalHint, nums.join(",")]);
 
-    const measure = () => {
-      const w = el.clientWidth;
-      const h = el.clientHeight;
-      setFontPx(fontPxForCell(w, h, nums, stackVertical, heightRatio));
+  useLayoutEffect(() => {
+    const box = boxRef.current;
+    const content = contentRef.current;
+    if (!box || !content) return;
+
+    const run = () => {
+      const cw = box.clientWidth;
+      const ch = box.clientHeight;
+      if (cw < 2 || ch < 2 || nums.length === 0) {
+        setFontPx(1);
+        return;
+      }
+
+      const measuredVertical = shouldStackVertical(cw, ch, nums.length);
+      if (measuredVertical !== stackVertical) {
+        setStackVertical(measuredVertical);
+        return;
+      }
+
+      const seed =
+        estimateFontPx(cw, ch, nums, stackVertical) *
+        Math.max(0.85, numberScale);
+      const nodes = Array.from(
+        content.querySelectorAll<HTMLElement>("[data-fit-text]"),
+      );
+      setFontPx(fitFontToBox(box, content, nodes, seed));
     };
 
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
+    run();
+    const ro = new ResizeObserver(run);
+    ro.observe(box);
     return () => ro.disconnect();
-  }, [nums, stackVertical, heightRatio]);
+  }, [nums, stackVertical, numberScale, highlightOrder]);
 
   const fontSize = `${fontPx}px`;
 
-  if (stackVertical) {
-    return (
+  return (
+    <span
+      ref={boxRef}
+      className="relative z-[1] flex h-full w-full items-center justify-center overflow-hidden"
+    >
       <span
-        ref={ref}
-        className="relative z-[1] flex h-full w-full flex-col items-stretch justify-center"
+        ref={contentRef}
+        className={`inline-flex max-h-full max-w-full items-center justify-center ${
+          stackVertical ? "flex-col" : "flex-row flex-nowrap"
+        }`}
+        style={{ lineHeight: 1 }}
       >
-        {nums.map((orderNum) => {
+        {nums.map((orderNum, i) => {
           const hit = highlightOrder === orderNum;
           return (
             <span
               key={orderNum}
-              className="flex min-h-0 flex-1 items-center justify-center"
+              className="inline-flex items-center"
+              style={{ lineHeight: 1 }}
             >
+              {!stackVertical && i > 0 ? (
+                <span
+                  data-fit-text
+                  className="font-black tabular-nums"
+                  style={{
+                    fontSize,
+                    color: accent,
+                    lineHeight: 1,
+                    padding: "0 0.02em",
+                  }}
+                  aria-hidden
+                >
+                  -
+                </span>
+              ) : null}
               <OrderNumGlyph
                 orderNum={orderNum}
                 fontSize={fontSize}
@@ -571,46 +677,6 @@ function TableOrderNums({
           );
         })}
       </span>
-    );
-  }
-
-  return (
-    <span
-      ref={ref}
-      className="relative z-[1] flex h-full w-full flex-row flex-nowrap items-center justify-center"
-    >
-      {nums.map((orderNum, i) => {
-        const hit = highlightOrder === orderNum;
-        return (
-          <span key={orderNum} className="inline-flex items-center">
-            {i > 0 ? (
-              <span
-                className="font-black leading-none tabular-nums"
-                style={{
-                  fontSize,
-                  color: accent,
-                  padding: "0 0.05em",
-                }}
-                aria-hidden
-              >
-                -
-              </span>
-            ) : null}
-            <OrderNumGlyph
-              orderNum={orderNum}
-              fontSize={fontSize}
-              color={
-                hit
-                  ? highlightColor
-                  : colorForOrderNumber(orderNum, colorRanges)
-              }
-              hit={hit}
-              highlightColor={highlightColor}
-              highlightRadius={highlightRadius}
-            />
-          </span>
-        );
-      })}
     </span>
   );
 }
@@ -635,6 +701,7 @@ function OrderNumGlyph({
       className={`relative inline-flex items-center justify-center ${
         hit ? "z-10" : ""
       }`}
+      style={{ lineHeight: 1 }}
     >
       {hit ? (
         <span
@@ -654,8 +721,9 @@ function OrderNumGlyph({
         />
       ) : null}
       <span
-        className="relative z-[1] font-black leading-none tabular-nums"
-        style={{ fontSize, color }}
+        data-fit-text
+        className="relative z-[1] block font-black tabular-nums"
+        style={{ fontSize, color, lineHeight: 1 }}
       >
         {orderNum}
       </span>
