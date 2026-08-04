@@ -79,11 +79,16 @@ export function GlobalCartina() {
   useEffect(() => {
     if (!open || prefs !== null || boardLoading) return;
     const remote = board.cartina;
-    setPrefs(
-      remote && remote.placements.length > 0
-        ? remote
-        : loadCartinaPrefs(layout),
-    );
+    if (remote && remote.placements.length > 0) {
+      setPrefs(remote);
+      return;
+    }
+    const local = loadCartinaPrefs(layout);
+    if (remote?.extraTables?.length && !local.extraTables?.length) {
+      setPrefs({ ...local, extraTables: remote.extraTables });
+    } else {
+      setPrefs(local);
+    }
   }, [open, boardLoading, board.cartina, layout, prefs]);
 
   const eveningLabel = active?.label ?? EVENT_DATE;
@@ -110,7 +115,20 @@ export function GlobalCartina() {
     setPublishing(true);
     try {
       saveCartinaPrefs(activePrefs);
-      await saveOrderCartina(activePrefs);
+      // Non perdere i tavoli extra creati da Ordini
+      const merged: typeof activePrefs = {
+        ...activePrefs,
+        extraTables:
+          activePrefs.extraTables?.length
+            ? activePrefs.extraTables
+            : board.cartina?.extraTables,
+      };
+      if (!merged.extraTables?.length) {
+        const { extraTables: _e, ...rest } = merged;
+        await saveOrderCartina(rest);
+      } else {
+        await saveOrderCartina(merged);
+      }
       toast.success("Cartina pubblicata ovunque");
       setStep("preview");
     } catch (err) {

@@ -2,10 +2,16 @@
 
 import { useLayoutEffect, useRef, useState } from "react";
 import type { MapMark, VenueLayout, ZoneLayout } from "@/lib/types";
-import type { CartinaPrefs, ZoneOnBoard } from "@/lib/cartina";
+import type {
+  CartinaExtraTable,
+  CartinaPrefs,
+  ZoneOnBoard,
+} from "@/lib/cartina";
 import {
   autoPlaceZones,
   computeTableFillRects,
+  EXTRA_TABLES_ZONE_ID,
+  EXTRA_TABLES_ZONE_NAME,
   gapsFromPlacement,
   zoneAccentColor,
 } from "@/lib/cartina";
@@ -25,14 +31,36 @@ export function resolveOrderCartina(
   layout: VenueLayout,
   remote: CartinaPrefs | null,
 ): CartinaPrefs {
+  const extras = remote?.extraTables?.length
+    ? remote.extraTables
+    : undefined;
   if (remote && remote.placements.length > 0) {
     const known = new Set(layout.zones.map((z) => z.id));
     const placements = remote.placements.filter((p) => known.has(p.zoneId));
     if (placements.length > 0) {
-      return { placements, marks: remote.marks ?? [] };
+      const out: CartinaPrefs = {
+        placements,
+        marks: remote.marks ?? [],
+      };
+      if (extras?.length) out.extraTables = extras;
+      return out;
     }
   }
-  return { placements: autoPlaceZones(layout.zones), marks: [] };
+  const out: CartinaPrefs = {
+    placements: autoPlaceZones(layout.zones),
+    marks: remote?.marks ?? [],
+  };
+  if (extras?.length) out.extraTables = extras;
+  return out;
+}
+
+export function extraTablesZone(): ZoneLayout {
+  return {
+    id: EXTRA_TABLES_ZONE_ID,
+    name: EXTRA_TABLES_ZONE_NAME,
+    tables: [],
+    marks: [],
+  };
 }
 
 /** Larghezza stimata in em (cifre tabular-nums + eventuali "-") */
@@ -66,20 +94,13 @@ function fontPxForCell(
     return Math.max(10, Math.min(byH, byW));
   }
 
-  // Orizzontale (1 numero o più con trattino): quasi tutta l’altezza
   const byH = cellH * heightRatio;
   const needEm = contentWidthEm(nums, nums.length > 1);
   const byW = (cellW * 0.98) / needEm;
   return Math.max(10, Math.min(byH, byW));
 }
 
-type DrawDraft = {
-  zoneId: string;
-  x0: number;
-  y0: number;
-  x1: number;
-  y1: number;
-};
+type DrawDraft = { x0: number; y0: number; x1: number; y1: number };
 
 function normRect(d: DrawDraft) {
   const x = Math.min(d.x0, d.x1);
@@ -101,6 +122,8 @@ function pointerInEl(
   };
 }
 
+const EXTRA_ACCENT = "#b45309";
+
 /** Cartina con numeri d’ordine sui tavoli + cerchio highlight */
 export function OrderCartinaView({
   layout,
@@ -116,6 +139,8 @@ export function OrderCartinaView({
   drawTableMode = false,
   onTableClick,
   onDrawTable,
+  onDeleteExtraTable,
+  onDeleteZoneOccasional,
   className = "",
 }: {
   layout: VenueLayout;
@@ -128,13 +153,17 @@ export function OrderCartinaView({
   highlightRadius?: number;
   numberScale?: number;
   colorRanges?: OrderColorRange[];
-  /** Modalità: disegna rettangolo tavolo occasionale sulla zona */
+  /** Modalità: disegna rettangolo ovunque sulla cartina */
   drawTableMode?: boolean;
   onTableClick?: (zone: ZoneLayout, tableNumber: number) => void;
-  onDrawTable?: (
-    zone: ZoneLayout,
-    rect: { x: number; y: number; w: number; h: number },
-  ) => void;
+  onDrawTable?: (rect: {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  }) => void;
+  onDeleteExtraTable?: (table: CartinaExtraTable) => void;
+  onDeleteZoneOccasional?: (zone: ZoneLayout, tableId: string) => void;
   className?: string;
 }) {
   const byId = new Map(layout.zones.map((z) => [z.id, z]));
@@ -145,15 +174,16 @@ export function OrderCartinaView({
     })
     .filter(Boolean) as { zone: ZoneLayout; placement: ZoneOnBoard }[];
 
+  const extraTables = prefs.extraTables ?? [];
   const isDisplay = variant === "display";
   const heightRatio = Math.min(
     0.96,
     Math.max(0.82, (isDisplay ? 0.94 : 0.9) * numberScale),
   );
 
+  const boardRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState<DrawDraft | null>(null);
   const draftRef = useRef<DrawDraft | null>(null);
-  const contentRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   function setDraftBoth(next: DrawDraft | null) {
     draftRef.current = next;
@@ -164,8 +194,6 @@ export function OrderCartinaView({
     const d = draftRef.current;
     setDraftBoth(null);
     if (!d || !onDrawTable) return;
-    const zone = byId.get(d.zoneId);
-    if (!zone) return;
     let { x, y, w, h } = normRect(d);
     x = snapGrid(x, CARTINA_GRID_SNAP);
     y = snapGrid(y, CARTINA_GRID_SNAP);
@@ -176,13 +204,17 @@ export function OrderCartinaView({
     w = Math.min(w, 100 - x);
     h = Math.min(h, 100 - y);
     if (w < min || h < min) return;
-    onDrawTable(zone, { x, y, w, h });
+    onDrawTable({ x, y, w, h });
   }
+
+  const draftRect = draft ? normRect(draft) : null;
+  const canManageExtras = interactive && !isDisplay;
 
   return (
     <div
+      ref={boardRef}
       className={`order-cartina-view relative h-full w-full overflow-hidden bg-white ${className} ${
-        drawTableMode ? "cursor-crosshair" : ""
+        drawTableMode ? "cursor-crosshair touch-none" : ""
       }`}
       style={
         drawTableMode
@@ -193,14 +225,51 @@ export function OrderCartinaView({
             }
           : undefined
       }
+      onPointerDown={
+        drawTableMode
+          ? (e) => {
+              if ((e.target as HTMLElement).closest("[data-extra-ui]")) return;
+              e.preventDefault();
+              const el = boardRef.current;
+              if (!el) return;
+              el.setPointerCapture(e.pointerId);
+              const p = pointerInEl(e, el);
+              setDraftBoth({ x0: p.x, y0: p.y, x1: p.x, y1: p.y });
+            }
+          : undefined
+      }
+      onPointerMove={
+        drawTableMode
+          ? (e) => {
+              const d = draftRef.current;
+              if (!d) return;
+              const el = boardRef.current;
+              if (!el) return;
+              const p = pointerInEl(e, el);
+              setDraftBoth({ ...d, x1: p.x, y1: p.y });
+            }
+          : undefined
+      }
+      onPointerUp={
+        drawTableMode
+          ? (e) => {
+              const el = boardRef.current;
+              if (el?.hasPointerCapture(e.pointerId)) {
+                el.releasePointerCapture(e.pointerId);
+              }
+              finishDraw();
+            }
+          : undefined
+      }
+      onPointerCancel={drawTableMode ? () => setDraftBoth(null) : undefined}
     >
       <ZoneMarksLayer marks={prefs.marks as MapMark[]} />
       {items.map(({ zone, placement }) => {
         const accent = zoneAccentColor(zone);
         const { gapX, gapY } = gapsFromPlacement(placement);
+        // Solo tavoli griglia: gli occasional di zona legacy restano nel fill,
+        // ma i nuovi extra sono a livello foglio.
         const rects = computeTableFillRects(zone.tables, gapX, gapY);
-        const zoneDraft =
-          draft && draft.zoneId === zone.id ? normRect(draft) : null;
 
         return (
           <section
@@ -209,7 +278,7 @@ export function OrderCartinaView({
               isDisplay
                 ? "rounded-none border"
                 : "rounded-md border-2 shadow-sm"
-            } ${drawTableMode ? "ring-2 ring-amber-400/70 ring-offset-1" : ""}`}
+            } ${drawTableMode ? "pointer-events-none" : ""}`}
             style={{
               left: `${placement.x}%`,
               top: `${placement.y}%`,
@@ -230,66 +299,13 @@ export function OrderCartinaView({
                 {zone.name}
               </h4>
             ) : null}
-            <div
-              ref={(el) => {
-                if (el) contentRefs.current.set(zone.id, el);
-                else contentRefs.current.delete(zone.id);
-              }}
-              className={`relative min-h-0 flex-1 overflow-hidden bg-white ${
-                drawTableMode ? "touch-none" : ""
-              }`}
-              onPointerDown={
-                drawTableMode
-                  ? (e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      const el = contentRefs.current.get(zone.id);
-                      if (!el) return;
-                      el.setPointerCapture(e.pointerId);
-                      const p = pointerInEl(e, el);
-                      setDraftBoth({
-                        zoneId: zone.id,
-                        x0: p.x,
-                        y0: p.y,
-                        x1: p.x,
-                        y1: p.y,
-                      });
-                    }
-                  : undefined
-              }
-              onPointerMove={
-                drawTableMode
-                  ? (e) => {
-                      const d = draftRef.current;
-                      if (!d || d.zoneId !== zone.id) return;
-                      const el = contentRefs.current.get(zone.id);
-                      if (!el) return;
-                      const p = pointerInEl(e, el);
-                      setDraftBoth({ ...d, x1: p.x, y1: p.y });
-                    }
-                  : undefined
-              }
-              onPointerUp={
-                drawTableMode
-                  ? (e) => {
-                      const el = contentRefs.current.get(zone.id);
-                      if (el?.hasPointerCapture(e.pointerId)) {
-                        el.releasePointerCapture(e.pointerId);
-                      }
-                      finishDraw();
-                    }
-                  : undefined
-              }
-              onPointerCancel={
-                drawTableMode
-                  ? () => {
-                      setDraftBoth(null);
-                    }
-                  : undefined
-              }
-            >
+            <div className="relative min-h-0 flex-1 overflow-hidden bg-white">
               {rects.map(({ table, x, y, w, h }) => {
-                const nums = ordersForTable(assignments, zone.id, table.number);
+                const nums = ordersForTable(
+                  assignments,
+                  zone.id,
+                  table.number,
+                );
                 const isHit =
                   isDisplay &&
                   highlight != null &&
@@ -311,9 +327,7 @@ export function OrderCartinaView({
                       : {})}
                     className={`absolute p-0 text-center transition ${
                       canClick ? "active:scale-95 touch-manipulation" : ""
-                    } ${isHit ? "z-30" : "z-[1]"} ${
-                      drawTableMode ? "pointer-events-none" : ""
-                    }`}
+                    } ${isHit ? "z-30" : "z-[1]"}`}
                     style={{
                       left: `${x}%`,
                       top: `${y}%`,
@@ -337,6 +351,26 @@ export function OrderCartinaView({
                         : `Tavolo ${table.number}`
                     }
                   >
+                    {canManageExtras &&
+                    occasional &&
+                    onDeleteZoneOccasional ? (
+                      <span
+                        data-extra-ui
+                        className="absolute right-0 top-0 z-20"
+                      >
+                        <button
+                          type="button"
+                          className="flex h-5 w-5 items-center justify-center rounded-bl bg-red-600 text-[10px] font-bold text-white"
+                          aria-label={`Elimina tavolo ${table.number}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteZoneOccasional(zone, table.id);
+                          }}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ) : null}
                     {nums.length > 0 ? (
                       <TableOrderNums
                         nums={nums}
@@ -364,22 +398,106 @@ export function OrderCartinaView({
                   </Tag>
                 );
               })}
-
-              {zoneDraft && zoneDraft.w > 0.5 && zoneDraft.h > 0.5 ? (
-                <div
-                  className="pointer-events-none absolute z-40 border-2 border-dashed border-amber-500 bg-amber-400/25"
-                  style={{
-                    left: `${zoneDraft.x}%`,
-                    top: `${zoneDraft.y}%`,
-                    width: `${zoneDraft.w}%`,
-                    height: `${zoneDraft.h}%`,
-                  }}
-                />
-              ) : null}
             </div>
           </section>
         );
       })}
+
+      {/* Tavoli extra a livello foglio (anche fuori zona) */}
+      {extraTables.map((table) => {
+        const nums = ordersForTable(
+          assignments,
+          EXTRA_TABLES_ZONE_ID,
+          table.number,
+        );
+        const isHit =
+          isDisplay &&
+          highlight != null &&
+          highlight.found &&
+          nums.includes(highlight.orderNumber);
+        const stackVertical = nums.length > 1 && table.h > table.w;
+        const canClick = interactive && !drawTableMode;
+        const Tag = canClick ? "button" : "div";
+
+        return (
+          <Tag
+            key={table.id}
+            data-extra-ui
+            {...(canClick
+              ? {
+                  type: "button" as const,
+                  onClick: () =>
+                    onTableClick?.(extraTablesZone(), table.number),
+                }
+              : {})}
+            className={`absolute z-20 p-0 text-center transition ${
+              canClick ? "active:scale-95 touch-manipulation" : ""
+            } ${isHit ? "z-30" : ""} ${
+              drawTableMode ? "pointer-events-auto" : ""
+            }`}
+            style={{
+              left: `${table.x}%`,
+              top: `${table.y}%`,
+              width: `${table.w}%`,
+              height: `${table.h}%`,
+              backgroundColor: "rgba(245, 158, 11, 0.18)",
+              boxShadow: `inset 0 0 0 2px ${EXTRA_ACCENT}`,
+              outline: `1px dashed ${EXTRA_ACCENT}`,
+              outlineOffset: -3,
+              overflow: isHit ? "visible" : "hidden",
+            }}
+            title={`Tavolo extra ${table.number}`}
+          >
+            {canManageExtras && onDeleteExtraTable ? (
+              <span
+                data-extra-ui
+                className="absolute right-0 top-0 z-20"
+              >
+                <button
+                  type="button"
+                  className="flex h-5 w-5 items-center justify-center rounded-bl bg-red-600 text-[10px] font-bold text-white touch-manipulation"
+                  aria-label={`Elimina tavolo extra ${table.number}`}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteExtraTable(table);
+                  }}
+                >
+                  ×
+                </button>
+              </span>
+            ) : null}
+            {nums.length > 0 ? (
+              <TableOrderNums
+                nums={nums}
+                stackVertical={stackVertical}
+                heightRatio={heightRatio}
+                accent={EXTRA_ACCENT}
+                colorRanges={colorRanges}
+                highlightOrder={isHit ? highlight!.orderNumber : null}
+                highlightColor={highlightColor}
+                highlightRadius={highlightRadius}
+              />
+            ) : (
+              <span className="flex h-full w-full items-center justify-center text-[10px] font-bold text-amber-800/80">
+                T{table.number}
+              </span>
+            )}
+          </Tag>
+        );
+      })}
+
+      {draftRect && draftRect.w > 0.5 && draftRect.h > 0.5 ? (
+        <div
+          className="pointer-events-none absolute z-40 border-2 border-dashed border-amber-500 bg-amber-400/25"
+          style={{
+            left: `${draftRect.x}%`,
+            top: `${draftRect.y}%`,
+            width: `${draftRect.w}%`,
+            height: `${draftRect.h}%`,
+          }}
+        />
+      ) : null}
     </div>
   );
 }

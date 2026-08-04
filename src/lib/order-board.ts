@@ -1,8 +1,10 @@
 import { getFirebaseDb, isFirebaseConfigured } from "@/lib/firebase";
 import {
   type CartinaPrefs,
+  type CartinaExtraTable,
   type ZoneOnBoard,
   normalizePlacement,
+  normalizeExtraTable,
 } from "@/lib/cartina";
 import type { MapMark } from "@/lib/types";
 import {
@@ -134,7 +136,14 @@ function normalizeCartina(raw: unknown): CartinaPrefs | null {
   const marks: MapMark[] = Array.isArray(c.marks)
     ? (c.marks as MapMark[]).filter((m) => m && m.kind)
     : [];
-  return { placements, marks };
+  const extraTables = Array.isArray(c.extraTables)
+    ? (c.extraTables as Partial<CartinaExtraTable>[])
+        .map((t, i) => normalizeExtraTable(t, i))
+        .filter((t): t is CartinaExtraTable => Boolean(t))
+    : [];
+  const out: CartinaPrefs = { placements, marks };
+  if (extraTables.length) out.extraTables = extraTables;
+  return out;
 }
 
 function normalizeBoard(raw: Partial<OrderBoardState> | null): OrderBoardState {

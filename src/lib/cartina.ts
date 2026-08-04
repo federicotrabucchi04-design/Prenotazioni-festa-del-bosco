@@ -25,7 +25,26 @@ export interface ZoneOnBoard {
 export interface CartinaPrefs {
   placements: ZoneOnBoard[];
   marks: MapMark[];
+  /**
+   * Tavoli occasionali liberi sulla lavagna A4 (anche fuori dalle zone).
+   * Coordinate % rispetto all’intero foglio.
+   */
+  extraTables?: CartinaExtraTable[];
 }
+
+/** Tavolo extra disegnato in Ordini (fuori / sopra le zone) */
+export interface CartinaExtraTable {
+  id: string;
+  number: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** zoneId fittizio per assegnazioni numeri sui tavoli extra */
+export const EXTRA_TABLES_ZONE_ID = "__extra__";
+export const EXTRA_TABLES_ZONE_NAME = "Extra";
 
 export const CARTINA_COLORS = [
   { id: "forest", hex: "#2d5a27", label: "Verde" },
@@ -304,7 +323,13 @@ export function loadCartinaPrefs(layout: VenueLayout): CartinaPrefs {
         const marks = Array.isArray(parsed.marks)
           ? (parsed.marks as MapMark[]).map(normalizeCartinaMark).filter(Boolean) as MapMark[]
           : [];
-        const prefs = { placements, marks };
+        const extraTables = Array.isArray(parsed.extraTables)
+          ? (parsed.extraTables as Partial<CartinaExtraTable>[])
+              .map((t, i) => normalizeExtraTable(t, i))
+              .filter((t): t is CartinaExtraTable => Boolean(t))
+          : [];
+        const prefs: CartinaPrefs = { placements, marks };
+        if (extraTables.length) prefs.extraTables = extraTables;
         saveCartinaPrefs(prefs);
         return prefs;
       }
@@ -329,6 +354,31 @@ export function loadCartinaPrefs(layout: VenueLayout): CartinaPrefs {
 export function saveCartinaPrefs(prefs: CartinaPrefs) {
   if (typeof window === "undefined") return;
   localStorage.setItem(CARTINA_PREFS_KEY, JSON.stringify(prefs));
+}
+
+export function normalizeExtraTable(
+  t: Partial<CartinaExtraTable>,
+  index = 0,
+): CartinaExtraTable | null {
+  const id = String(t.id || "").trim();
+  if (!id) return null;
+  let w = Math.max(CARTINA_GRID_SNAP * 2, snapGrid(Number(t.w) || 14));
+  let h = Math.max(CARTINA_GRID_SNAP * 2, snapGrid(Number(t.h) || 12));
+  w = Math.min(100, w);
+  h = Math.min(100, h);
+  let x = snapGrid(Number(t.x) || 0);
+  let y = snapGrid(Number(t.y) || 0);
+  x = Math.max(0, Math.min(x, 100 - w));
+  y = Math.max(0, Math.min(y, 100 - h));
+  const number = Math.max(1, Math.floor(Number(t.number) || index + 1));
+  return { id, number, x, y, w, h };
+}
+
+export function nextExtraTableNumber(tables: CartinaExtraTable[]) {
+  const used = new Set(tables.map((t) => t.number));
+  let n = 1;
+  while (used.has(n)) n += 1;
+  return n;
 }
 
 export function normalizePlacement(p: ZoneOnBoard): ZoneOnBoard {

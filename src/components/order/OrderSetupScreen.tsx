@@ -15,7 +15,6 @@ import { OnlineStatusBadge } from "@/components/OnlineStatusBadge";
 import { ZoneMarksLayer } from "@/components/map/ZoneMarksLayer";
 import {
   getZoneByName,
-  nextTableNumber,
   TABLE_GRID_SNAP,
   CARTINA_GRID_SNAP,
 } from "@/lib/layout-utils";
@@ -24,13 +23,19 @@ import { createId } from "@/lib/constants";
 import {
   clearAllAssignments,
   ordersForTable,
+  saveOrderCartina,
   setTableOrderNumbers,
   type OrderAssignments,
 } from "@/lib/order-board";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import {
   loadCartinaPrefs,
+  nextExtraTableNumber,
+  saveCartinaPrefs,
   zoneAccentColor,
+  EXTRA_TABLES_ZONE_ID,
+  type CartinaExtraTable,
+  type CartinaPrefs,
 } from "@/lib/cartina";
 import {
   colorForOrderNumber,
@@ -65,10 +70,20 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
   const prefs = useMemo(() => {
     const remote = board.cartina;
     if (remote?.placements.length) return resolveOrderCartina(layout, remote);
-    return resolveOrderCartina(layout, loadCartinaPrefs(layout));
+    const local = loadCartinaPrefs(layout);
+    // Mantieni eventuali extra salvati sul board anche senza placements remoti
+    if (remote?.extraTables?.length && !local.extraTables?.length) {
+      return { ...local, extraTables: remote.extraTables };
+    }
+    return resolveOrderCartina(layout, local);
   }, [board.cartina, layout]);
 
   const zone = getZoneByName(layout, zoneName) ?? layout.zones[0] ?? null;
+
+  async function persistCartina(next: CartinaPrefs) {
+    saveCartinaPrefs(next);
+    await saveOrderCartina(next);
+  }
 
   async function savePending(numsOverride?: number[]) {
     if (!pending) return;
@@ -121,33 +136,91 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
     setDigits("");
   }
 
-  async function handleDrawOccasionalTable(
-    zone: ZoneLayout,
-    rect: { x: number; y: number; w: number; h: number },
-  ) {
+  async function handleDrawExtraTable(rect: {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  }) {
     setBusy(true);
     try {
-      const number = nextTableNumber(zone);
-      const table = {
+      const existing = prefs.extraTables ?? [];
+      const number = nextExtraTableNumber(existing);
+      const table: CartinaExtraTable = {
         id: createId(),
         number,
         x: rect.x,
         y: rect.y,
         w: rect.w,
         h: rect.h,
-        capacity: 8,
-        occasional: true as const,
       };
+      const next: CartinaPrefs = {
+        ...prefs,
+        extraTables: [...existing, table],
+      };
+      await persistCartina(next);
+      toast.success(`Tavolo extra ${number} aggiunto`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Errore salvataggio");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDeleteExtraTable(table: CartinaExtraTable) {
+    if (
+      !window.confirm(
+        `Eliminare il tavolo extra ${table.number}? I numeri d’ordine su di esso verranno tolti.`,
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const next: CartinaPrefs = {
+        ...prefs,
+        extraTables: (prefs.extraTables ?? []).filter((t) => t.id !== table.id),
+      };
+      if (!next.extraTables?.length) {
+        const { extraTables: _drop, ...rest } = next;
+        await persistCartina(rest);
+      } else {
+        await persistCartina(next);
+      }
+      await setTableOrderNumbers(EXTRA_TABLES_ZONE_ID, table.number, []);
+      toast.success(`Tavolo extra ${table.number} eliminato`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Errore");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDeleteZoneOccasional(zone: ZoneLayout, tableId: string) {
+    const table = zone.tables.find((t) => t.id === tableId);
+    if (!table) return;
+    if (
+      !window.confirm(
+        `Eliminare il tavolo ${table.number} da ${zone.name}?`,
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    try {
       await saveLayout({
         ...layout,
         updatedAt: Date.now(),
         zones: layout.zones.map((z) =>
-          z.id === zone.id ? { ...z, tables: [...z.tables, table] } : z,
+          z.id === zone.id
+            ? { ...z, tables: z.tables.filter((t) => t.id !== tableId) }
+            : z,
         ),
       });
-      toast.success(`Tavolo extra ${number} su ${zone.name}`);
+      await setTableOrderNumbers(zone.id, table.number, []);
+      toast.success(`Tavolo ${table.number} eliminato`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Errore salvataggio");
+      toast.error(err instanceof Error ? err.message : "Errore");
     } finally {
       setBusy(false);
     }
@@ -185,7 +258,7 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
             </h1>
             <p className="text-sm text-[var(--forest-muted)]">
               {addTableMode
-                ? "Disegna un rettangolo sulla zona per un tavolo extra"
+                ? "Disegna un rettangolo ovunque sulla cartina (anche fuori zona)"
                 : "Tocca un tavolo e digita il numero d’ordine"}
             </p>
           </div>
@@ -292,8 +365,8 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
               embedded ? "px-1.5" : "px-4 md:px-6"
             }`}
           >
-            Trascina un rettangolo dentro una zona · griglia {CARTINA_GRID_SNAP}%
-            · tap di nuovo su «Aggiungi tavolo» per uscire
+            Trascina un rettangolo ovunque · griglia {CARTINA_GRID_SNAP}% · ×
+            per eliminare · tap di nuovo su «Aggiungi tavolo» per uscire
           </p>
         ) : null}
 
@@ -329,8 +402,14 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                 }
                 colorRanges={settings.orderColorRanges}
                 onTableClick={openAssign}
-                onDrawTable={(zone, rect) => {
-                  void handleDrawOccasionalTable(zone, rect);
+                onDrawTable={(rect) => {
+                  void handleDrawExtraTable(rect);
+                }}
+                onDeleteExtraTable={(table) => {
+                  void handleDeleteExtraTable(table);
+                }}
+                onDeleteZoneOccasional={(z, tableId) => {
+                  void handleDeleteZoneOccasional(z, tableId);
                 }}
               />
             </div>
