@@ -10,6 +10,7 @@ import {
   Monitor,
   Keyboard,
   Laptop,
+  Ticket,
 } from "lucide-react";
 import { useAuthStore, orderRoleLabel } from "@/store/auth-store";
 import { subscribeAppSettings } from "@/lib/app-settings";
@@ -106,6 +107,7 @@ export function LoginScreen() {
             <Hint icon={LayoutGrid} title="Ordini" text="Tablet · numeri" />
             <Hint icon={Monitor} title="Schermo" text="TV verticale" />
             <Hint icon={Keyboard} title="Tastierino" text="Telefono · cerca" />
+            <Hint icon={Ticket} title="Buoni" text="Solo trovati" />
           </div>
         </motion.form>
       </main>

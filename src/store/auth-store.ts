@@ -22,6 +22,7 @@ function resolveRoleFromPin(normalized: string): UserRole | null {
   if (normalized === pins.orderSetup) return "orderSetup";
   if (normalized === pins.orderDisplay) return "orderDisplay";
   if (normalized === pins.orderKeypad) return "orderKeypad";
+  if (normalized === pins.orderBuoni) return "orderBuoni";
   return null;
 }
 
@@ -58,7 +59,8 @@ export function isOrderRole(role: UserRole | null) {
   return (
     role === "orderSetup" ||
     role === "orderDisplay" ||
-    role === "orderKeypad"
+    role === "orderKeypad" ||
+    role === "orderBuoni"
   );
 }
 
@@ -74,6 +76,8 @@ export function orderRoleLabel(role: UserRole) {
       return "Schermo cartina";
     case "orderKeypad":
       return "Tastierino";
+    case "orderBuoni":
+      return "Buoni";
     case "computer":
       return "Computer (4 pannelli)";
     case "admin":

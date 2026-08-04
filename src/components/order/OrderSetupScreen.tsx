@@ -29,6 +29,7 @@ import {
   colorForOrderNumber,
   type OrderColorRange,
 } from "@/lib/app-settings";
+import { OrderNumbersPanel } from "@/components/order/OrderNumbersPanel";
 import type { ZoneLayout } from "@/lib/types";
 
 /** Assegna numeri d’ordine toccando i tavoli (cartina globale + per zona) */
@@ -38,7 +39,7 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
   const { layout, loading: layoutLoading } = useVenueLayout();
   const { board, loading: boardLoading } = useOrderBoard();
   const { settings } = useAppSettings();
-  const [mode, setMode] = useState<"global" | "zone">("global");
+  const [mode, setMode] = useState<"global" | "zone" | "numbers">("global");
   const [zoneName, setZoneName] = useState(layout.zones[0]?.name ?? "");
   const [pending, setPending] = useState<{
     zone: ZoneLayout;
@@ -171,39 +172,33 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
         }`}
       >
         <div className={`flex gap-2 ${embedded ? "px-1.5 py-1" : "px-4 py-2 md:px-6"}`}>
-          <button
-            type="button"
-            onClick={() => setMode("global")}
-            className={`flex-1 font-semibold touch-manipulation ${
-              embedded
-                ? "rounded-xl py-1.5 text-[11px]"
-                : "rounded-2xl py-3 text-sm md:text-base"
-            } ${
-              mode === "global"
-                ? "bg-[var(--forest)] text-white"
-                : "bg-white text-[var(--forest-ink)]"
-            }`}
-          >
-            Cartina globale
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode("zone")}
-            className={`flex-1 font-semibold touch-manipulation ${
-              embedded
-                ? "rounded-xl py-1.5 text-[11px]"
-                : "rounded-2xl py-3 text-sm md:text-base"
-            } ${
-              mode === "zone"
-                ? "bg-[var(--forest)] text-white"
-                : "bg-white text-[var(--forest-ink)]"
-            }`}
-          >
-            Per zona
-          </button>
+          {(
+            [
+              { id: "global" as const, label: embedded ? "Globale" : "Cartina" },
+              { id: "zone" as const, label: "Per zona" },
+              { id: "numbers" as const, label: "Numeri" },
+            ] as const
+          ).map(({ id, label }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setMode(id)}
+              className={`flex-1 font-semibold touch-manipulation ${
+                embedded
+                  ? "rounded-xl py-1.5 text-[11px]"
+                  : "rounded-2xl py-3 text-sm md:text-base"
+              } ${
+                mode === id
+                  ? "bg-[var(--forest)] text-white"
+                  : "bg-white text-[var(--forest-ink)]"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
-        {!embedded ? (
+        {!embedded && mode !== "numbers" ? (
           <div className="flex gap-2 px-4 pb-2 md:px-6">
             <button
               type="button"
@@ -227,7 +222,16 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
               : "px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:px-4"
           }`}
         >
-          {mode === "global" ? (
+          {mode === "numbers" ? (
+            <OrderNumbersPanel
+              assignments={board.assignments}
+              start={settings.orderNumberStart}
+              searchAhead={settings.orderSearchAhead}
+              recentExtras={settings.orderRecentExtras}
+              colorRanges={settings.orderColorRanges}
+              variant="setup"
+            />
+          ) : mode === "global" ? (
             <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-[var(--forest)]/15 bg-white md:min-h-[min(70dvh,820px)]">
               <OrderCartinaView
                 layout={layout}

@@ -15,6 +15,7 @@ import { SettingsPanel } from "@/components/SettingsPanel";
 import { OrderSetupScreen } from "@/components/order/OrderSetupScreen";
 import { OrderDisplayScreen } from "@/components/order/OrderDisplayScreen";
 import { OrderKeypadScreen } from "@/components/order/OrderKeypadScreen";
+import { OrderBuoniScreen } from "@/components/order/OrderBuoniScreen";
 import {
   useAuthStore,
   canEditReservations,
@@ -80,6 +81,7 @@ export function App() {
   if (isOrderRole(role)) {
     if (role === "orderSetup") return <OrderSetupScreen />;
     if (role === "orderDisplay") return <OrderDisplayScreen />;
+    if (role === "orderBuoni") return <OrderBuoniScreen />;
     return <OrderKeypadScreen />;
   }
 

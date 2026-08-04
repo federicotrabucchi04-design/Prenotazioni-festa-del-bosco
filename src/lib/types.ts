@@ -4,6 +4,7 @@ export type UserRole =
   | "orderSetup"
   | "orderDisplay"
   | "orderKeypad"
+  | "orderBuoni"
   | "computer";
 
 /** Nome zona dinamico (configurabile dall'admin) */

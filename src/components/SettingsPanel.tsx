@@ -23,6 +23,7 @@ const PIN_FIELDS: { key: keyof AppPins; label: string; hint: string }[] = [
   { key: "orderSetup", label: "Assegna ordini", hint: "Metti numeri sui tavoli" },
   { key: "orderDisplay", label: "Schermo cartina", hint: "TV / tablet grande" },
   { key: "orderKeypad", label: "Tastierino", hint: "Cerca ordine" },
+  { key: "orderBuoni", label: "Buoni", hint: "Solo numeri trovati" },
 ];
 
 export function SettingsPanel({
@@ -321,6 +322,73 @@ export function SettingsPanel({
                           {n}
                         </button>
                       ))}
+                    </div>
+                  </label>
+
+                  <label className="mt-4 block">
+                    <span className="text-xs font-semibold text-[var(--forest-muted)]">
+                      Primo numero sequenza buoni
+                    </span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={9999}
+                      value={draft.orderNumberStart}
+                      onChange={(e) =>
+                        setDraft((d) => ({
+                          ...d,
+                          orderNumberStart: Number(e.target.value) || 1,
+                        }))
+                      }
+                      className="field-input mt-2"
+                    />
+                  </label>
+
+                  <label className="mt-4 block">
+                    <span className="text-xs font-semibold text-[var(--forest-muted)]">
+                      Quanti prossimi da cercare mostrare
+                    </span>
+                    <div className="mt-2 flex items-center gap-3">
+                      <input
+                        type="range"
+                        min={5}
+                        max={60}
+                        value={draft.orderSearchAhead}
+                        onChange={(e) =>
+                          setDraft((d) => ({
+                            ...d,
+                            orderSearchAhead: Number(e.target.value),
+                          }))
+                        }
+                        className="w-full accent-[var(--forest)]"
+                      />
+                      <span className="w-10 text-center text-lg font-bold text-[var(--forest-ink)]">
+                        {draft.orderSearchAhead}
+                      </span>
+                    </div>
+                  </label>
+
+                  <label className="mt-4 block">
+                    <span className="text-xs font-semibold text-[var(--forest-muted)]">
+                      Extras oltre il buco da mostrare
+                    </span>
+                    <div className="mt-2 flex items-center gap-3">
+                      <input
+                        type="range"
+                        min={0}
+                        max={40}
+                        value={draft.orderRecentExtras}
+                        onChange={(e) =>
+                          setDraft((d) => ({
+                            ...d,
+                            orderRecentExtras: Number(e.target.value),
+                          }))
+                        }
+                        className="w-full accent-[var(--forest)]"
+                      />
+                      <span className="w-10 text-center text-lg font-bold text-[var(--forest-ink)]">
+                        {draft.orderRecentExtras}
+                      </span>
                     </div>
                   </label>
                 </section>

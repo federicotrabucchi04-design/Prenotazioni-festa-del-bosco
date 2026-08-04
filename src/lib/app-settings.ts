@@ -12,6 +12,7 @@ export interface AppPins {
   orderSetup: string;
   orderDisplay: string;
   orderKeypad: string;
+  orderBuoni: string;
   computer: string;
 }
 
@@ -38,6 +39,12 @@ export interface AppSettings {
   capacityOverflow: number;
   /** Cifre max numero ordine (tastierino) */
   orderMaxDigits: number;
+  /** Primo numero della sequenza buoni (di solito 1) */
+  orderNumberStart: number;
+  /** Quanti prossimi numeri da cercare mostrare (Ordini) */
+  orderSearchAhead: number;
+  /** Quanti extras/buchi recenti mostrare in contesto */
+  orderRecentExtras: number;
   updatedAt: number;
 }
 
@@ -56,6 +63,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     orderSetup: PINS.orderSetup,
     orderDisplay: PINS.orderDisplay,
     orderKeypad: PINS.orderKeypad,
+    orderBuoni: PINS.orderBuoni,
     computer: PINS.computer,
   },
   orderHighlightSeconds: 8,
@@ -65,6 +73,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   orderColorRanges: DEFAULT_COLOR_RANGES.map((r) => ({ ...r })),
   capacityOverflow: 2,
   orderMaxDigits: 4,
+  orderNumberStart: 1,
+  orderSearchAhead: 20,
+  orderRecentExtras: 12,
   updatedAt: 0,
 };
 
@@ -161,6 +172,10 @@ export function normalizeSettings(raw: Partial<AppSettings> | null): AppSettings
         (pinsRaw as AppPins).orderKeypad,
         DEFAULT_SETTINGS.pins.orderKeypad,
       ),
+      orderBuoni: normalizePin(
+        (pinsRaw as AppPins).orderBuoni,
+        DEFAULT_SETTINGS.pins.orderBuoni,
+      ),
       computer: normalizePin(
         (pinsRaw as AppPins).computer,
         DEFAULT_SETTINGS.pins.computer,
@@ -200,6 +215,24 @@ export function normalizeSettings(raw: Partial<AppSettings> | null): AppSettings
       2,
       6,
       DEFAULT_SETTINGS.orderMaxDigits,
+    ),
+    orderNumberStart: clampInt(
+      Number(raw?.orderNumberStart),
+      1,
+      9999,
+      DEFAULT_SETTINGS.orderNumberStart,
+    ),
+    orderSearchAhead: clampInt(
+      Number(raw?.orderSearchAhead),
+      5,
+      60,
+      DEFAULT_SETTINGS.orderSearchAhead,
+    ),
+    orderRecentExtras: clampInt(
+      Number(raw?.orderRecentExtras),
+      0,
+      40,
+      DEFAULT_SETTINGS.orderRecentExtras,
     ),
     updatedAt: Number(raw?.updatedAt) || Date.now(),
   };

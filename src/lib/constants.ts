@@ -21,6 +21,8 @@ export const PINS = {
   orderDisplay: "SCHERMO2026",
   /** Tastierino numerico */
   orderKeypad: "TASTO2026",
+  /** Solo visualizzazione buoni / numeri trovati */
+  orderBuoni: "BUONI2026",
   /** Quattro pannelli: schermo, tastierino, staff, ordini */
   computer: "COMPUTER2026",
 } as const;
