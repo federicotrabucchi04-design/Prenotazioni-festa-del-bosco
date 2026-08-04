@@ -46,7 +46,7 @@ export function OrderBuoniScreen({ embedded = false }: { embedded?: boolean }) {
               {orderRoleLabel(role)}
             </h1>
             <p className="text-sm text-[var(--forest-muted)]">
-              Numeri già trovati e prossimo da cercare
+              Fatti fino a… e già trovati vicini
             </p>
           </div>
           <button

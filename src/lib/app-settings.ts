@@ -43,7 +43,7 @@ export interface AppSettings {
   orderNumberStart: number;
   /** Quanti prossimi numeri da cercare mostrare (Ordini) */
   orderSearchAhead: number;
-  /** Quanti extras/buchi recenti mostrare in contesto */
+  /** Buoni: mostra “già trovati” solo se distanza dal prossimo &lt; questo valore */
   orderRecentExtras: number;
   updatedAt: number;
 }
@@ -75,7 +75,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   orderMaxDigits: 4,
   orderNumberStart: 1,
   orderSearchAhead: 20,
-  orderRecentExtras: 12,
+  orderRecentExtras: 20,
   updatedAt: 0,
 };
 

@@ -370,7 +370,7 @@ export function SettingsPanel({
 
                   <label className="mt-4 block">
                     <span className="text-xs font-semibold text-[var(--forest-muted)]">
-                      Extras oltre il buco da mostrare
+                      Buoni: distanza max “già trovati” dal prossimo
                     </span>
                     <div className="mt-2 flex items-center gap-3">
                       <input

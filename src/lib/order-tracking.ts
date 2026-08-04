@@ -49,23 +49,35 @@ export function summarizeBuoni(
   };
 }
 
-/** Prossimi N numeri mancanti da cercare (a partire dal primo buco). */
-export function nextMissingNumbers(
+/** Finestra da mostrare in Ordini: include anche i già trovati (con croce). */
+export function searchWindowEntries(
   assignments: OrderAssignments,
   start: number,
-  ahead: number,
-): number[] {
+  missingTarget: number,
+): { n: number; found: boolean }[] {
   const set = new Set(collectFoundNumbers(assignments));
-  const out: number[] = [];
-  let n = Math.max(1, Math.floor(start));
-  const limit = Math.max(1, Math.floor(ahead));
-  // Evita loop infinito: max ~ start + ahead + gap buffer
-  const hardStop = n + limit + 5000;
-  while (out.length < limit && n < hardStop) {
-    if (!set.has(n)) out.push(n);
+  const { next } = summarizeBuoni(assignments, start);
+  const out: { n: number; found: boolean }[] = [];
+  let n = next;
+  let missing = 0;
+  const limit = Math.max(1, Math.floor(missingTarget));
+  const hardStop = n + limit + 3000;
+  while (missing < limit && n < hardStop) {
+    const found = set.has(n);
+    out.push({ n, found });
+    if (!found) missing += 1;
     n += 1;
   }
   return out;
+}
+
+/** Extras vicini al prossimo da cercare (distanza &lt; near). */
+export function nearbyExtras(
+  summary: BuoniSummary,
+  near = 20,
+): number[] {
+  const dist = Math.max(0, Math.floor(near));
+  return summary.extras.filter((n) => n - summary.next < dist);
 }
 
 /** Testo leggibile: "Fatti fino al 48 + 50, 51, 54" */

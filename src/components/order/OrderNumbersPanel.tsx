@@ -1,11 +1,12 @@
 "use client";
 
 import { useMemo } from "react";
+import { X } from "lucide-react";
 import type { OrderAssignments } from "@/lib/order-board";
 import {
-  formatBuoniLabelCompact,
   formatNumberRuns,
-  nextMissingNumbers,
+  nearbyExtras,
+  searchWindowEntries,
   summarizeBuoni,
 } from "@/lib/order-tracking";
 import {
@@ -13,7 +14,7 @@ import {
   type OrderColorRange,
 } from "@/lib/app-settings";
 
-/** Pannello condiviso: cosa cercare + stato buoni / buchi */
+/** Pannello Ordini (cerca) o Buoni (semplice) */
 export function OrderNumbersPanel({
   assignments,
   start,
@@ -25,130 +26,113 @@ export function OrderNumbersPanel({
   assignments: OrderAssignments;
   start: number;
   searchAhead: number;
+  /** Distanza max dal prossimo per mostrare “già trovati” (Buoni) */
   recentExtras: number;
   colorRanges: OrderColorRange[];
-  /** setup = Ordini (cerca); buoni = sola lettura grande */
   variant?: "setup" | "buoni";
 }) {
   const summary = useMemo(
     () => summarizeBuoni(assignments, start),
     [assignments, start],
   );
-  const missing = useMemo(
-    () => nextMissingNumbers(assignments, start, searchAhead),
+  const window = useMemo(
+    () => searchWindowEntries(assignments, start, searchAhead),
     [assignments, start, searchAhead],
   );
-  const extrasShown = summary.extras.slice(
-    Math.max(0, summary.extras.length - recentExtras),
+  const nearFound = useMemo(
+    () => nearbyExtras(summary, recentExtras),
+    [summary, recentExtras],
   );
   const isBuoni = variant === "buoni";
 
-  return (
-    <div
-      className={`flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto ${
-        isBuoni ? "px-4 pb-6 pt-2 md:px-6" : "px-1 pb-2"
-      }`}
-    >
-      <div
-        className={`rounded-3xl border border-white bg-white/95 shadow-sm ${
-          isBuoni ? "p-5 md:p-7" : "p-4"
-        }`}
-      >
-        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--forest-muted)]">
-          Stato buoni
-        </p>
-        <p
-          className={`mt-2 font-black leading-tight text-[var(--forest-ink)] ${
-            isBuoni ? "text-2xl md:text-4xl" : "text-xl md:text-2xl"
-          }`}
-        >
-          {formatBuoniLabelCompact(summary)}
-        </p>
-        <p className="mt-2 text-sm text-[var(--forest-muted)]">
-          {summary.count} numer{summary.count === 1 ? "o" : "i"} sui tavoli
-        </p>
-      </div>
+  if (isBuoni) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col justify-center gap-6 overflow-y-auto px-4 pb-8 pt-4 md:px-8">
+        <div className="rounded-3xl border border-white bg-white/95 p-6 shadow-sm md:p-10">
+          <p className="text-sm font-semibold uppercase tracking-wide text-[var(--forest-muted)]">
+            Fatti fino al
+          </p>
+          <p className="mt-2 font-black tabular-nums leading-none text-[var(--forest-ink)] text-[clamp(3rem,16vw,6rem)]">
+            {summary.through != null ? summary.through : "—"}
+          </p>
+        </div>
 
-      <div
-        className={`rounded-3xl bg-[var(--forest)] text-white shadow-md ${
-          isBuoni ? "p-5 md:p-8" : "p-4"
-        }`}
-      >
+        {nearFound.length > 0 ? (
+          <div className="rounded-3xl border border-amber-200/80 bg-amber-50/90 p-6 shadow-sm md:p-8">
+            <p className="text-sm font-semibold uppercase tracking-wide text-amber-800/80">
+              Già trovati
+            </p>
+            <p className="mt-3 font-black tabular-nums leading-tight text-amber-950 text-[clamp(1.75rem,8vw,3rem)]">
+              {formatNumberRuns(nearFound)}
+            </p>
+            <p className="mt-2 text-sm text-amber-900/70">
+              Entro {recentExtras} dal prossimo ({summary.next})
+            </p>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-1 pb-2">
+      <div className="rounded-3xl bg-[var(--forest)] p-4 text-white shadow-md">
         <p className="text-xs font-semibold uppercase tracking-wide text-white/75">
           Prossimo da cercare
         </p>
-        <p
-          className={`mt-1 font-black tabular-nums leading-none ${
-            isBuoni ? "text-[clamp(3.5rem,18vw,7rem)]" : "text-5xl md:text-6xl"
-          }`}
-        >
+        <p className="mt-1 text-5xl font-black tabular-nums leading-none md:text-6xl">
           {summary.next}
         </p>
         {summary.through != null ? (
           <p className="mt-2 text-sm text-white/80">
             Completi fino al {summary.through}
-            {summary.extras.length > 0
-              ? ` · ${summary.extras.length} oltre il buco`
-              : ""}
           </p>
         ) : (
           <p className="mt-2 text-sm text-white/80">Parti dal numero {start}</p>
         )}
       </div>
 
-      {!isBuoni || missing.length > 0 ? (
-        <div className="rounded-3xl border border-white bg-white/95 p-4 shadow-sm">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--forest-muted)]">
-            Da cercare (prossimi {missing.length})
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {missing.map((n, i) => (
+      <div className="rounded-3xl border border-white bg-white/95 p-4 shadow-sm">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--forest-muted)]">
+          Sequenza · croce = già trovato
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {window.map(({ n, found }) => {
+            const isNext = !found && n === summary.next;
+            return (
               <span
                 key={n}
-                className={`inline-flex min-w-12 items-center justify-center rounded-2xl px-3 py-2.5 font-black tabular-nums ${
-                  i === 0
-                    ? "bg-[var(--forest)] text-lg text-white"
-                    : "bg-[var(--forest)]/10 text-base text-[var(--forest-ink)]"
+                className={`relative inline-flex min-h-12 min-w-12 items-center justify-center rounded-2xl px-3 py-2.5 font-black tabular-nums ${
+                  found
+                    ? "bg-neutral-100 text-neutral-400"
+                    : isNext
+                      ? "bg-[var(--forest)] text-lg text-white"
+                      : "bg-[var(--forest)]/10 text-base"
                 }`}
                 style={
-                  i === 0
+                  found || isNext
                     ? undefined
                     : { color: colorForOrderNumber(n, colorRanges) }
                 }
+                title={found ? `Già trovato: ${n}` : `Da cercare: ${n}`}
               >
-                {n}
+                <span className={found ? "opacity-50" : undefined}>{n}</span>
+                {found ? (
+                  <span
+                    className="pointer-events-none absolute inset-0 flex items-center justify-center"
+                    aria-hidden
+                  >
+                    <X
+                      className="h-[85%] w-[85%] text-red-600"
+                      strokeWidth={3}
+                    />
+                  </span>
+                ) : null}
               </span>
-            ))}
-          </div>
+            );
+          })}
         </div>
-      ) : null}
-
-      {extrasShown.length > 0 ? (
-        <div className="rounded-3xl border border-amber-200/80 bg-amber-50/90 p-4 shadow-sm">
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-amber-800/80">
-            Oltre il buco (già trovati)
-          </p>
-          <p className="text-sm text-amber-900/80">
-            Mancano numeri prima di questi — non sono in sequenza continua
-          </p>
-          <p className="mt-3 text-lg font-black tabular-nums text-amber-950 md:text-xl">
-            {formatNumberRuns(extrasShown)}
-          </p>
-        </div>
-      ) : null}
-
-      {isBuoni && summary.through != null ? (
-        <div className="rounded-3xl border border-emerald-200/80 bg-emerald-50/90 p-4 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800/80">
-            Sequenza completa
-          </p>
-          <p className="mt-2 text-2xl font-black tabular-nums text-emerald-950 md:text-3xl">
-            {start === summary.through
-              ? String(summary.through)
-              : `${start}–${summary.through}`}
-          </p>
-        </div>
-      ) : null}
+      </div>
     </div>
   );
 }
