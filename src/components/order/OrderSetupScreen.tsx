@@ -486,7 +486,7 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                 />
               </button>
               {openMenu === "tavoli" ? (
-                <div className="absolute left-0 top-full z-30 mt-1 min-w-[11rem] rounded-2xl border border-[var(--forest)]/15 bg-white p-1.5 shadow-lg">
+                <div className="absolute left-0 top-full z-50 mt-1 min-w-[11rem] rounded-2xl border border-[var(--forest)]/20 bg-[#ffffff] p-1.5 shadow-xl ring-1 ring-black/10">
                   <button
                     type="button"
                     disabled={busy}
@@ -568,7 +568,7 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                 />
               </button>
               {openMenu === "simmetrie" ? (
-                <div className="absolute left-0 top-full z-30 mt-1 min-w-[14rem] rounded-2xl border border-[var(--forest)]/15 bg-white p-1.5 shadow-lg">
+                <div className="absolute left-0 top-full z-50 mt-1 min-w-[14rem] rounded-2xl border border-[var(--forest)]/20 bg-[#ffffff] p-1.5 shadow-xl ring-1 ring-black/10">
                   <button
                     type="button"
                     disabled={busy}
@@ -646,7 +646,7 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                 />
               </button>
               {openMenu === "numeri" ? (
-                <div className="absolute left-0 top-full z-30 mt-1 min-w-[12rem] rounded-2xl border border-red-100 bg-white p-1.5 shadow-lg">
+                <div className="absolute left-0 top-full z-50 mt-1 min-w-[12rem] rounded-2xl border border-red-200 bg-[#ffffff] p-1.5 shadow-xl ring-1 ring-black/10">
                   <button
                     type="button"
                     disabled={busy}
@@ -704,7 +704,7 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                 />
               </button>
               {openMenu === "numeri" ? (
-                <div className="absolute left-0 top-full z-30 mt-1 min-w-[12rem] rounded-2xl border border-red-100 bg-white p-1.5 shadow-lg">
+                <div className="absolute left-0 top-full z-50 mt-1 min-w-[12rem] rounded-2xl border border-red-200 bg-[#ffffff] p-1.5 shadow-xl ring-1 ring-black/10">
                   <button
                     type="button"
                     disabled={busy}

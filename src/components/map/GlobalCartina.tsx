@@ -1247,7 +1247,7 @@ function CartinaArrangeBoard({
           />
         </button>
         {symOpen ? (
-          <div className="absolute left-0 top-full z-30 mt-1 min-w-[14rem] rounded-2xl border border-[var(--forest)]/15 bg-white p-1.5 shadow-lg">
+          <div className="absolute left-0 top-full z-50 mt-1 min-w-[14rem] rounded-2xl border border-[var(--forest)]/20 bg-[#ffffff] p-1.5 shadow-xl ring-1 ring-black/10">
             <button
               type="button"
               disabled={publishing}
