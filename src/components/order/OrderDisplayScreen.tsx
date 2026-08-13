@@ -15,6 +15,7 @@ import {
 import { A4PortraitContain } from "@/components/order/A4PortraitContain";
 import { loadCartinaPrefs } from "@/lib/cartina";
 import { clearOrderHighlightIf } from "@/lib/order-board";
+import { startSchermoPresence } from "@/lib/order-presence";
 import { OnlineStatusBadge } from "@/components/OnlineStatusBadge";
 
 /**
@@ -48,6 +49,10 @@ export function OrderDisplayScreen({ embedded = false }: { embedded?: boolean })
     if (viewport.portrait) return Math.max(1, base);
     return Math.max(1, base);
   }, [embedded, settings.orderNumberScale, viewport]);
+
+  useEffect(() => {
+    return startSchermoPresence();
+  }, []);
 
   useEffect(() => {
     if (!board.highlight) return;

@@ -12,6 +12,7 @@ import {
 } from "@/components/order/OrderCartinaView";
 import { ZoneTabsBar } from "@/components/ZoneTabsBar";
 import { OnlineStatusBadge } from "@/components/OnlineStatusBadge";
+import { SchermoLinkStatus } from "@/components/order/SchermoLinkStatus";
 import { ZoneMarksLayer } from "@/components/map/ZoneMarksLayer";
 import {
   getZoneByName,
@@ -390,6 +391,9 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
               </p>
               <OnlineStatusBadge />
             </div>
+            <div className="mb-1.5">
+              <SchermoLinkStatus />
+            </div>
             <h1 className="text-lg font-semibold text-[var(--forest-ink)] md:text-xl">
               {orderRoleLabel(role)}
             </h1>
@@ -417,6 +421,9 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
         </header>
       ) : (
         <div className="shrink-0 border-b border-white/40 bg-white/80 px-2 pb-1 pt-6">
+          <div className="mb-0.5">
+            <SchermoLinkStatus compact className="scale-90 origin-left" />
+          </div>
           <p className="text-[10px] font-semibold text-[var(--forest-muted)]">
             Tocca tavolo → numero ordine
           </p>
