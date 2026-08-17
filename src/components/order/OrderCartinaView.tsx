@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { MapMark, VenueLayout, ZoneLayout } from "@/lib/types";
 import type {
   CartinaExtraTable,
@@ -228,11 +228,14 @@ export function OrderCartinaView({
   drawTableMode = false,
   deleteTableMode = false,
   textPlaceMode = false,
+  selectedTextMarkId = null,
   onTableClick,
   onDrawTable,
   onDeleteExtraTable,
   onDeleteZoneOccasional,
   onPlaceText,
+  onSelectTextMark,
+  onMoveTextMark,
   className = "",
 }: {
   layout: VenueLayout;
@@ -251,6 +254,7 @@ export function OrderCartinaView({
   deleteTableMode?: boolean;
   /** Modalità: tap per inserire una scritta */
   textPlaceMode?: boolean;
+  selectedTextMarkId?: string | null;
   onTableClick?: (zone: ZoneLayout, tableNumber: number) => void;
   onDrawTable?: (rect: {
     x: number;
@@ -261,6 +265,8 @@ export function OrderCartinaView({
   onDeleteExtraTable?: (table: CartinaExtraTable) => void;
   onDeleteZoneOccasional?: (zone: ZoneLayout, tableId: string) => void;
   onPlaceText?: (pos: { x: number; y: number }) => void;
+  onSelectTextMark?: (id: string | null) => void;
+  onMoveTextMark?: (id: string, pos: { x: number; y: number }) => void;
   className?: string;
 }) {
   const byId = new Map(layout.zones.map((z) => [z.id, z]));
@@ -281,6 +287,19 @@ export function OrderCartinaView({
   const boardRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState<DrawDraft | null>(null);
   const draftRef = useRef<DrawDraft | null>(null);
+  const [dragMarkPreview, setDragMarkPreview] = useState<{
+    id: string;
+    x: number;
+    y: number;
+  } | null>(null);
+  const dragMarkRef = useRef<{
+    id: string;
+    pointerId: number;
+    ox: number;
+    oy: number;
+    startX: number;
+    startY: number;
+  } | null>(null);
 
   function setDraftBoth(next: DrawDraft | null) {
     draftRef.current = next;
@@ -309,9 +328,30 @@ export function OrderCartinaView({
     });
   }
 
+  function stopMarkDrag(commit: boolean) {
+    const drag = dragMarkRef.current;
+    const preview = dragMarkPreview;
+    dragMarkRef.current = null;
+    setDragMarkPreview(null);
+    if (!commit || !drag || !preview || !onMoveTextMark) return;
+    onMoveTextMark(drag.id, {
+      x: unmirrorCoord(snapGrid(preview.x, CARTINA_GRID_SNAP), flip.flipX),
+      y: unmirrorCoord(snapGrid(preview.y, CARTINA_GRID_SNAP), flip.flipY),
+    });
+  }
+
+  useEffect(() => {
+    setDragMarkPreview(null);
+    dragMarkRef.current = null;
+  }, [prefs.marks, flip.flipX, flip.flipY]);
+
   const draftRect = draft ? normRect(draft) : null;
   const toolActive = drawTableMode || deleteTableMode || textPlaceMode;
-  const displayMarks = marksForDisplay(prefs.marks as MapMark[], flip);
+  const displayMarks = marksForDisplay(prefs.marks as MapMark[], flip).map((mark) =>
+    dragMarkPreview && mark.id === dragMarkPreview.id
+      ? { ...mark, x: dragMarkPreview.x, y: dragMarkPreview.y }
+      : mark,
+  );
 
   return (
     <div
@@ -357,7 +397,13 @@ export function OrderCartinaView({
                   y: unmirrorCoord(snapGrid(p.y, CARTINA_GRID_SNAP), flip.flipY),
                 });
               }
-            : undefined
+            : interactive && !toolActive && onMoveTextMark
+              ? (e) => {
+                  if ((e.target as HTMLElement).closest("[data-extra-ui]")) {
+                    onSelectTextMark?.(null);
+                  }
+                }
+              : undefined
       }
       onPointerMove={
         drawTableMode
@@ -369,7 +415,17 @@ export function OrderCartinaView({
               const p = pointerInEl(e, el);
               setDraftBoth({ ...d, x1: p.x, y1: p.y });
             }
-          : undefined
+          : interactive && !toolActive && onMoveTextMark
+            ? (e) => {
+                const drag = dragMarkRef.current;
+                const el = boardRef.current;
+                if (!drag || !el) return;
+                const p = pointerInEl(e, el);
+                const x = Math.min(100, Math.max(0, snapGrid(drag.startX + (p.x - drag.ox), CARTINA_GRID_SNAP)));
+                const y = Math.min(100, Math.max(0, snapGrid(drag.startY + (p.y - drag.oy), CARTINA_GRID_SNAP)));
+                setDragMarkPreview({ id: drag.id, x, y });
+              }
+            : undefined
       }
       onPointerUp={
         drawTableMode
@@ -380,11 +436,47 @@ export function OrderCartinaView({
               }
               finishDraw();
             }
-          : undefined
+          : interactive && !toolActive && onMoveTextMark
+            ? (e) => {
+                const el = boardRef.current;
+                if (el?.hasPointerCapture(e.pointerId)) {
+                  el.releasePointerCapture(e.pointerId);
+                }
+                stopMarkDrag(true);
+              }
+            : undefined
       }
-      onPointerCancel={drawTableMode ? () => setDraftBoth(null) : undefined}
+      onPointerCancel={
+        drawTableMode
+          ? () => setDraftBoth(null)
+          : interactive && !toolActive && onMoveTextMark
+            ? () => stopMarkDrag(false)
+            : undefined
+      }
     >
-      <ZoneMarksLayer marks={displayMarks} />
+      <ZoneMarksLayer
+        marks={displayMarks}
+        selectedId={selectedTextMarkId}
+        interactive={interactive && !toolActive}
+        interactiveKinds={["text"]}
+        onSelect={onSelectTextMark}
+        onDragStart={(id, mode, e) => {
+          if (mode !== "move" || !boardRef.current) return;
+          const mark = displayMarks.find((m) => m.id === id && m.kind === "text");
+          if (!mark) return;
+          const p = pointerInEl(e, boardRef.current);
+          boardRef.current.setPointerCapture(e.pointerId);
+          dragMarkRef.current = {
+            id,
+            pointerId: e.pointerId,
+            ox: p.x,
+            oy: p.y,
+            startX: mark.x,
+            startY: mark.y,
+          };
+          setDragMarkPreview({ id, x: mark.x, y: mark.y });
+        }}
+      />
       {items.map(({ zone, placement }) => {
         const accent = zoneAccentColor(zone);
         const { gapX, gapY } = gapsFromPlacement(placement);

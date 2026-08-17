@@ -72,6 +72,7 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
     "none" | "add" | "delete" | "text"
   >("none");
   const [textColor, setTextColor] = useState<string>(CARTINA_COLORS[0]!.hex);
+  const [selectedTextMarkId, setSelectedTextMarkId] = useState<string | null>(null);
   const [openMenu, setOpenMenu] = useState<null | "tavoli" | "simmetrie" | "numeri">(
     null,
   );
@@ -113,6 +114,9 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
   }, [board.cartina, layout]);
 
   const zone = getZoneByName(layout, zoneName) ?? layout.zones[0] ?? null;
+  const selectedTextMark =
+    prefs.marks?.find((mark) => mark.id === selectedTextMarkId && mark.kind === "text") ??
+    null;
 
   async function persistCartina(next: CartinaPrefs) {
     saveCartinaPrefs(next);
@@ -279,7 +283,52 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
         marks: [...(prefs.marks ?? []), mark],
       };
       await persistCartina(next);
+      setSelectedTextMarkId(mark.id);
       toast.success("Scritta aggiunta");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Errore");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleMoveTextMark(id: string, pos: { x: number; y: number }) {
+    const current = (prefs.marks ?? []).find((mark) => mark.id === id && mark.kind === "text");
+    if (!current) return;
+    const moved =
+      current.x !== pos.x || current.y !== pos.y;
+    if (!moved) return;
+    const next: CartinaPrefs = {
+      ...prefs,
+      marks: (prefs.marks ?? []).map((mark) =>
+        mark.id === id ? { ...mark, x: pos.x, y: pos.y } : mark,
+      ),
+    };
+    setBusy(true);
+    try {
+      await persistCartina(next);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Errore");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDeleteTextMark() {
+    if (!selectedTextMark) {
+      toast.error("Seleziona prima una scritta");
+      return;
+    }
+    if (!window.confirm(`Eliminare la scritta "${selectedTextMark.text ?? ""}"?`)) {
+      return;
+    }
+    const nextMarks = (prefs.marks ?? []).filter((mark) => mark.id !== selectedTextMark.id);
+    const next: CartinaPrefs = { ...prefs, marks: nextMarks };
+    setBusy(true);
+    try {
+      await persistCartina(next);
+      setSelectedTextMarkId(null);
+      toast.success("Scritta eliminata");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Errore");
     } finally {
@@ -404,6 +453,8 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                   ? "Tocca un tavolo extra per eliminarlo"
                   : tableTool === "text"
                     ? "Tocca la cartina per inserire una scritta colorata"
+                    : selectedTextMark
+                      ? "Trascina la scritta selezionata o rimuovila dal menu Tavoli"
                     : "Tocca un tavolo e digita il numero d’ordine"}
             </p>
           </div>
@@ -449,6 +500,7 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
               onClick={() => {
                 setMode(id);
                 if (id !== "global") setTableTool("none");
+                if (id !== "global") setSelectedTextMarkId(null);
                 setOpenMenu(null);
               }}
               className={`flex-1 font-semibold touch-manipulation ${
@@ -517,6 +569,7 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                     onClick={() => {
                       setTableTool((t) => (t === "text" ? "none" : "text"));
                       setPending(null);
+                      setSelectedTextMarkId(null);
                       setOpenMenu(null);
                     }}
                     className={`flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs font-semibold touch-manipulation ${
@@ -544,6 +597,24 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                     Elimina tavolo
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy || !selectedTextMark}
+                    onClick={() => {
+                      setTableTool("none");
+                      setPending(null);
+                      setOpenMenu(null);
+                      void handleDeleteTextMark();
+                    }}
+                    className={`flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs font-semibold touch-manipulation disabled:opacity-50 ${
+                      selectedTextMark
+                        ? "text-red-700 hover:bg-red-50"
+                        : "text-slate-400"
+                    }`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Elimina scritta
                   </button>
                 </div>
               ) : null}
@@ -748,7 +819,7 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
           </div>
         ) : null}
 
-        {tableTool !== "none" && mode === "global" ? (
+        {(tableTool !== "none" || selectedTextMark) && mode === "global" ? (
           <div
             className={`pb-1 ${embedded ? "px-1.5" : "px-4 md:px-6"}`}
           >
@@ -763,7 +834,11 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                 ? `Trascina un rettangolo ovunque · griglia ${CARTINA_GRID_SNAP}% · tap di nuovo per uscire`
                 : tableTool === "text"
                   ? "Scegli il colore, poi tocca dove vuoi la scritta · tap di nuovo su Scritta per uscire"
-                  : "Tocca un tavolo extra (bordo rosso) per eliminarlo · tap di nuovo per uscire"}
+                  : tableTool === "delete"
+                    ? "Tocca un tavolo extra (bordo rosso) per eliminarlo · tap di nuovo per uscire"
+                    : selectedTextMark
+                      ? `Scritta selezionata: "${selectedTextMark.text ?? ""}" · trascina per spostarla`
+                      : "Tocca un tavolo e digita il numero d’ordine"}
             </p>
             {tableTool === "text" ? (
               <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -832,6 +907,11 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                 }}
                 onPlaceText={(pos) => {
                   void handlePlaceText(pos);
+                }}
+                selectedTextMarkId={selectedTextMarkId}
+                onSelectTextMark={setSelectedTextMarkId}
+                onMoveTextMark={(id, pos) => {
+                  void handleMoveTextMark(id, pos);
                 }}
               />
             </div>

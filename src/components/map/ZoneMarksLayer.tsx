@@ -9,12 +9,14 @@ export function ZoneMarksLayer({
   marks,
   selectedId,
   interactive = false,
+  interactiveKinds,
   onSelect,
   onDragStart,
 }: {
   marks: MapMark[];
   selectedId?: string | null;
   interactive?: boolean;
+  interactiveKinds?: MapMark["kind"][];
   onSelect?: (id: string) => void;
   onDragStart?: (
     id: string,
@@ -33,6 +35,9 @@ export function ZoneMarksLayer({
     >
       {marks.map((mark) => {
         const selected = mark.id === selectedId;
+        const canInteract =
+          interactive &&
+          (interactiveKinds == null || interactiveKinds.includes(mark.kind));
         const base = mark.color || "#2d5a27";
         const stroke = selected ? "#d97706" : base;
         const fill = selected
@@ -42,7 +47,7 @@ export function ZoneMarksLayer({
         if (mark.kind === "line") {
           return (
             <g key={mark.id}>
-              {interactive ? (
+              {canInteract ? (
                 <line
                   x1={mark.x}
                   y1={mark.y}
@@ -90,11 +95,9 @@ export function ZoneMarksLayer({
                 strokeDasharray={selected ? undefined : "2 1.2"}
                 rx={1.2}
                 vectorEffect="non-scaling-stroke"
-                className={
-                  interactive ? "pointer-events-auto cursor-grab" : undefined
-                }
+                className={canInteract ? "pointer-events-auto cursor-grab" : undefined}
                 onPointerDown={
-                  interactive
+                  canInteract
                     ? (e) => {
                         e.stopPropagation();
                         onSelect?.(mark.id);
@@ -103,7 +106,7 @@ export function ZoneMarksLayer({
                     : undefined
                 }
               />
-              {interactive && selected ? (
+              {canInteract && selected ? (
                 <circle
                   cx={mark.x + w}
                   cy={mark.y + h}
@@ -137,11 +140,11 @@ export function ZoneMarksLayer({
               textAnchor="middle"
               dominantBaseline="middle"
               className={
-                interactive ? "pointer-events-auto cursor-grab" : undefined
+                canInteract ? "pointer-events-auto cursor-grab" : undefined
               }
               style={{ userSelect: "none" }}
               onPointerDown={
-                interactive
+                canInteract
                   ? (e) => {
                       e.stopPropagation();
                       onSelect?.(mark.id);
@@ -152,7 +155,7 @@ export function ZoneMarksLayer({
             >
               {mark.text || "Etichetta"}
             </text>
-            {interactive && selected ? (
+            {canInteract && selected ? (
               <circle
                 cx={handleX}
                 cy={handleY}
