@@ -23,6 +23,7 @@ import { saveLayout } from "@/lib/layout";
 import { createId } from "@/lib/constants";
 import {
   clearAllAssignments,
+  clearAssignmentsInRange,
   clearAssignmentsUpTo,
   ordersForTable,
   saveOrderCartina,
@@ -393,6 +394,45 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
           : view === "ordini"
             ? "Simmetria centro Ordini disattivata"
             : "Simmetria centro Schermo disattivata",
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Errore");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleClearRange() {
+    const rawFrom = window.prompt("Elimina numeri da (incluso):", "");
+    if (rawFrom == null) return;
+    const from = Math.floor(Number(rawFrom));
+    if (!Number.isFinite(from) || from <= 0) {
+      toast.error("Numero iniziale non valido");
+      return;
+    }
+    const rawTo = window.prompt("Elimina numeri fino a (incluso):", String(from));
+    if (rawTo == null) return;
+    const to = Math.floor(Number(rawTo));
+    if (!Number.isFinite(to) || to <= 0) {
+      toast.error("Numero finale non valido");
+      return;
+    }
+    const lo = Math.min(from, to);
+    const hi = Math.max(from, to);
+    if (
+      !window.confirm(
+        `Cancellare tutti i numeri d’ordine da ${lo} a ${hi} (inclusi)?`,
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const result = await clearAssignmentsInRange(lo, hi);
+      toast.success(
+        result.removed
+          ? `Rimossi ${result.removed} numeri tra ${lo} e ${hi}`
+          : `Nessun numero tra ${lo} e ${hi} da rimuovere`,
       );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Errore");
@@ -792,6 +832,18 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                     <RotateCcw className="h-3.5 w-3.5" />
                     Azzera fino a…
                   </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      setOpenMenu(null);
+                      void handleClearRange();
+                    }}
+                    className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs font-semibold text-red-700 touch-manipulation hover:bg-red-50"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Elimina da… a…
+                  </button>
                 </div>
               ) : null}
             </div>
@@ -849,6 +901,18 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                   >
                     <RotateCcw className="h-3.5 w-3.5" />
                     Azzera fino a…
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      setOpenMenu(null);
+                      void handleClearRange();
+                    }}
+                    className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs font-semibold text-red-700 touch-manipulation hover:bg-red-50"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Elimina da… a…
                   </button>
                 </div>
               ) : null}

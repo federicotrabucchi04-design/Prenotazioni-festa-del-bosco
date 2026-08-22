@@ -519,6 +519,60 @@ export async function clearAssignmentsUpTo(maxInclusive: number) {
   return { ...next, removed };
 }
 
+/** Rimuove dai tavoli i numeri d’ordine nell’intervallo [minInclusive, maxInclusive]. */
+export async function clearAssignmentsInRange(
+  minInclusive: number,
+  maxInclusive: number,
+) {
+  let min = Math.floor(Number(minInclusive));
+  let max = Math.floor(Number(maxInclusive));
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min <= 0 || max <= 0) {
+    throw new Error("Indica un intervallo valido");
+  }
+  if (min > max) [min, max] = [max, min];
+
+  const current = await loadBoardForWrite();
+  const assignments: OrderAssignments = { ...current.assignments };
+  const patch: Record<string, unknown> = {};
+  let removed = 0;
+
+  for (const [k, list] of Object.entries(assignments)) {
+    const kept = list.filter((n) => n < min || n > max);
+    removed += list.length - kept.length;
+    if (kept.length === list.length) continue;
+    if (kept.length === 0) {
+      delete assignments[k];
+      patch[`assignments/${k}`] = null;
+    } else {
+      assignments[k] = kept;
+      patch[`assignments/${k}`] = kept;
+    }
+  }
+
+  if (removed === 0) {
+    return { ...current, removed: 0 };
+  }
+
+  const updatedAt = Date.now();
+  patch.updatedAt = updatedAt;
+  const highlightN = current.highlight?.orderNumber;
+  const clearHighlight =
+    highlightN != null && highlightN >= min && highlightN <= max;
+  if (clearHighlight) {
+    patch.highlight = null;
+  }
+  const next: OrderBoardState = {
+    ...current,
+    assignments,
+    highlight: clearHighlight ? null : current.highlight,
+    updatedAt,
+  };
+  writeDemo(next);
+  if (dataMode() === "demo") return { ...next, removed };
+  await offlineUpdate(ORDER_BOARD_PATH, patch);
+  return { ...next, removed };
+}
+
 async function fetchBoardOnce(): Promise<OrderBoardState> {
   const db = getFirebaseDb();
   if (!db) return readDemo();
