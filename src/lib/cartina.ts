@@ -674,19 +674,26 @@ export function markTextTransformStyle(
   };
 }
 
-/** Unisce scritte: `preferred` vince su `fallback` per lo stesso id. */
+/** Unisce scritte: `preferred` è la lista autoritativa; da `fallback` si aggiungono solo id nuovi. */
 export function mergeCartinaMarks(
   fallback: MapMark[] = [],
   preferred: MapMark[] = [],
 ): MapMark[] {
+  const preferredMarks = preferred
+    .map(normalizeCartinaMark)
+    .filter(Boolean) as MapMark[];
+  const fallbackMarks = fallback
+    .map(normalizeCartinaMark)
+    .filter(Boolean) as MapMark[];
+
   const byId = new Map<string, MapMark>();
-  for (const raw of fallback) {
-    const mark = normalizeCartinaMark(raw);
-    if (mark) byId.set(mark.id, mark);
+  for (const mark of preferredMarks) {
+    byId.set(mark.id, mark);
   }
-  for (const raw of preferred) {
-    const mark = normalizeCartinaMark(raw);
-    if (mark) byId.set(mark.id, { ...byId.get(mark.id), ...mark });
+  for (const mark of fallbackMarks) {
+    if (!byId.has(mark.id)) {
+      byId.set(mark.id, mark);
+    }
   }
   return Array.from(byId.values());
 }

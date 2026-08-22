@@ -461,7 +461,6 @@ export function OrderCartinaView({
         marks={displayMarks}
         selectedId={selectedTextMarkId}
         interactive={interactive && !toolActive}
-        interactiveKinds={["text"]}
         onSelect={onSelectTextMark}
         onDragStart={(id, mode, e) => {
           if (mode !== "move" || !boardRef.current) return;

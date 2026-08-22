@@ -124,12 +124,7 @@ export function GlobalCartina() {
   if (!open) return null;
 
   const activePrefs = prefs ?? loadCartinaPrefs(layout);
-  const syncedMarks = mergeCartinaMarks(
-    board.cartina?.marks ?? [],
-    activePrefs.marks,
-  );
-  const displayPrefs: CartinaPrefs = { ...activePrefs, marks: syncedMarks };
-  const placed = resolvePlacedZones(layout, displayPrefs);
+  const placed = resolvePlacedZones(layout, activePrefs);
 
   function updatePrefs(next: CartinaPrefs) {
     setPrefs(next);
@@ -175,7 +170,7 @@ export function GlobalCartina() {
       }
       const payload: CartinaPrefs = {
         placements: merged.placements,
-        marks: mergeCartinaMarks(board.cartina?.marks ?? [], activePrefs.marks),
+        marks: activePrefs.marks ?? [],
       };
       if (merged.extraTables?.length) payload.extraTables = merged.extraTables;
       if (isCartinaMirrored(merged, "ordini")) payload.mirrorOrdini = true;
@@ -384,7 +379,7 @@ export function GlobalCartina() {
           {step === "arrange" ? (
             <CartinaArrangeBoard
               layoutZones={layout.zones}
-              prefs={displayPrefs}
+              prefs={activePrefs}
               onChange={updatePrefs}
               onPreview={() => void publishAndPreview()}
               publishing={publishing}
@@ -432,7 +427,7 @@ export function GlobalCartina() {
               <div className="cartina-print-root mx-auto w-full">
                 <CartinaSheet
                   items={placed}
-                  marks={syncedMarks}
+                  marks={activePrefs.marks}
                   reservations={items}
                   title={title}
                   subtitle={subtitle}
@@ -1022,11 +1017,13 @@ function CartinaArrangeBoard({
                   selected || !p.hideBorder ? (selected ? undefined : accent) : undefined,
               }}
               className={`absolute z-10 flex flex-col overflow-hidden bg-white/95 ${
+                selected ? "pointer-events-auto" : "pointer-events-none"
+              } ${
                 p.hideBorder && !selected
                   ? ""
                   : `border-2 ${selected ? "border-amber-500 shadow-lg" : ""}`
               }`}
-              onPointerDown={(e) => startZoneDrag(e, p, "move")}
+              onPointerDown={selected ? (e) => startZoneDrag(e, p, "move") : undefined}
             >
               <div
                 className="flex h-full w-full flex-col"
@@ -1034,8 +1031,9 @@ function CartinaArrangeBoard({
               >
                 {!p.hideTitle ? (
                   <div
-                    className="shrink-0 px-0.5 py-0.5 text-center text-[9px] font-bold leading-none text-white sm:text-[10px]"
+                    className="pointer-events-auto shrink-0 px-0.5 py-0.5 text-center text-[9px] font-bold leading-none text-white sm:text-[10px]"
                     style={{ backgroundColor: accent }}
+                    onPointerDown={(e) => startZoneDrag(e, p, "move")}
                   >
                     <span
                       className="inline-block w-full"
@@ -1056,8 +1054,15 @@ function CartinaArrangeBoard({
                     />
                   ) : null}
                   <span
-                    className="relative z-[1] inline-block"
+                    className={`relative z-[1] inline-block ${
+                      !selected && p.hideTitle ? "pointer-events-auto" : ""
+                    }`}
                     style={zoneTextCounterStyleIfUpright(p)}
+                    onPointerDown={
+                      !selected && p.hideTitle
+                        ? (e) => startZoneDrag(e, p, "move")
+                        : undefined
+                    }
                   >
                     {zone.tables.length} tavoli
                     {p.hideTitle ? (
