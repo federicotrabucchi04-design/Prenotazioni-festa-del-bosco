@@ -13,6 +13,7 @@ import {
   Type,
   MousePointer2,
   Copy,
+  RotateCw,
 } from "lucide-react";
 import { useVenueLayout } from "@/hooks/use-venue-layout";
 import { saveLayout } from "@/lib/layout";
@@ -23,7 +24,7 @@ import {
   snapGrid,
   TABLE_GRID_SNAP,
 } from "@/lib/layout-utils";
-import { CARTINA_COLORS, zoneAccentColor } from "@/lib/cartina";
+import { CARTINA_COLORS, markRotationDeg, zoneAccentColor, type ZoneRotation } from "@/lib/cartina";
 import { createId } from "@/lib/constants";
 import type {
   MapMark,
@@ -686,14 +687,33 @@ export function ZoneEditor() {
                 : "Scritta"}
           </p>
           {selectedMark.kind === "text" ? (
-            <label className="block text-sm">
-              <span className="mb-1 block text-[var(--forest-muted)]">Testo</span>
-              <input
-                value={selectedMark.text ?? ""}
-                onChange={(e) => updateSelectedMark({ text: e.target.value })}
-                className="field-input"
-              />
-            </label>
+            <>
+              <label className="block text-sm">
+                <span className="mb-1 block text-[var(--forest-muted)]">Testo</span>
+                <input
+                  value={selectedMark.text ?? ""}
+                  onChange={(e) => updateSelectedMark({ text: e.target.value })}
+                  className="field-input"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  const cur = markRotationDeg(selectedMark);
+                  const next = ((cur + 90) % 360) as ZoneRotation;
+                  updateSelectedMark({
+                    rotation: next === 0 ? undefined : next,
+                  });
+                }}
+                className="inline-flex items-center gap-2 rounded-xl bg-[var(--forest)]/10 px-3 py-2 text-sm font-semibold text-[var(--forest)]"
+              >
+                <RotateCw className="h-4 w-4" />
+                Ruota 90°
+                <span className="text-xs tabular-nums opacity-70">
+                  ({markRotationDeg(selectedMark)}°)
+                </span>
+              </button>
+            </>
           ) : (
             <p className="text-xs text-[var(--forest-muted)]">
               Questo elemento è solo un riferimento visivo: non si assegna alle

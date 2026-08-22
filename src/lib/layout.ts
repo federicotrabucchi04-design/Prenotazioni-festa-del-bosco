@@ -62,6 +62,10 @@ function normalizeMark(m: Partial<MapMark>, mi: number): MapMark | null {
   if (Number.isFinite(fontSize) && fontSize > 0) {
     mark.fontSize = Math.min(16, Math.max(1.2, fontSize));
   }
+  const rotation = Number(m.rotation);
+  if (rotation === 90 || rotation === 180 || rotation === 270) {
+    mark.rotation = rotation;
+  }
   return mark;
 }
 

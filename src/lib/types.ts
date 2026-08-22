@@ -49,6 +49,8 @@ export interface MapMark {
   text?: string;
   /** Dimensione testo in unità viewBox (default ~3.2) */
   fontSize?: number;
+  /** Rotazione scritta (gradi, multipli di 90) */
+  rotation?: 0 | 90 | 180 | 270;
   /** Colore opzionale (hex), default tema bosco */
   color?: string;
 }

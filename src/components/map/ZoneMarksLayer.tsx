@@ -1,7 +1,7 @@
 "use client";
 
 import type { MapMark } from "@/lib/types";
-import { zoneMarkTextSvgTransform } from "@/lib/cartina";
+import { markTextSvgTransform } from "@/lib/cartina";
 import type { ZoneOnBoard } from "@/lib/cartina";
 
 export const DEFAULT_MARK_FONT_SIZE = 3.2;
@@ -134,9 +134,7 @@ export function ZoneMarksLayer({
         const fontSize = mark.fontSize ?? DEFAULT_MARK_FONT_SIZE;
         const handleX = mark.x + fontSize * 1.6;
         const handleY = mark.y + fontSize * 0.85;
-        const textTransform = uprightPlacement
-          ? zoneMarkTextSvgTransform(mark.x, mark.y, uprightPlacement)
-          : undefined;
+        const textTransform = markTextSvgTransform(mark, uprightPlacement);
         return (
           <g key={mark.id}>
             <text

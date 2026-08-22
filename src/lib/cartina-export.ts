@@ -8,6 +8,7 @@ import {
   zoneAccentColor,
   zoneFlipForPlacement,
   zoneKeepsTextUpright,
+  markRotationDeg,
   zoneRotationDeg,
 } from "@/lib/cartina";
 
@@ -234,11 +235,16 @@ function drawMarks(
     );
     const tx = px(mark.x);
     const ty = py(mark.y);
+    const markDeg = markRotationDeg(mark);
     drawUprightInZone(ctx, tx, ty, placement, () => {
+      ctx.save();
+      ctx.translate(tx, ty);
+      if (markDeg) ctx.rotate((markDeg * Math.PI) / 180);
       ctx.font = `bold ${fontPx}px system-ui, sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(mark.text || "Etichetta", tx, ty);
+      ctx.fillText(mark.text || "Etichetta", 0, 0);
+      ctx.restore();
       ctx.textAlign = "left";
       ctx.textBaseline = "alphabetic";
     });

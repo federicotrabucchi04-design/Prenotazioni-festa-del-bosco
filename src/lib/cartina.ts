@@ -631,6 +631,31 @@ export function normalizeZoneRotation(raw: unknown): ZoneRotation | undefined {
   return undefined;
 }
 
+export function normalizeMarkRotation(raw: unknown): ZoneRotation | undefined {
+  return normalizeZoneRotation(raw);
+}
+
+export function markRotationDeg(
+  mark?: Pick<MapMark, "rotation">,
+): ZoneRotation {
+  return mark?.rotation ?? 0;
+}
+
+/** Trasformata SVG per scritta (rotazione propria + eventuale contro-rotazione zona). */
+export function markTextSvgTransform(
+  mark: Pick<MapMark, "x" | "y" | "rotation">,
+  uprightPlacement?: Pick<ZoneOnBoard, "rotation" | "mirror" | "center">,
+): string | undefined {
+  const parts: string[] = [];
+  const zonePart = uprightPlacement
+    ? zoneMarkTextSvgTransform(mark.x, mark.y, uprightPlacement)
+    : undefined;
+  if (zonePart) parts.push(zonePart);
+  const deg = markRotationDeg(mark);
+  if (deg) parts.push(`rotate(${deg} ${mark.x} ${mark.y})`);
+  return parts.length ? parts.join(" ") : undefined;
+}
+
 export function zoneRotationDeg(
   placement?: Pick<ZoneOnBoard, "rotation">,
 ): ZoneRotation {
@@ -801,6 +826,8 @@ export function normalizeCartinaMark(m: Partial<MapMark>): MapMark | null {
   if (Number.isFinite(fontSize) && fontSize > 0) {
     mark.fontSize = Math.min(16, Math.max(1.2, fontSize));
   }
+  const rotation = normalizeMarkRotation(m.rotation);
+  if (rotation) mark.rotation = rotation;
   return mark;
 }
 

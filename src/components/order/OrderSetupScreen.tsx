@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, FlipHorizontal2, LogOut, PlusSquare, RotateCcw, Trash2, Type } from "lucide-react";
+import { ChevronDown, FlipHorizontal2, LogOut, PlusSquare, RotateCw, RotateCcw, Trash2, Type } from "lucide-react";
 import toast from "react-hot-toast";
 import { useAuthStore, orderRoleLabel } from "@/store/auth-store";
 import { useVenueLayout } from "@/hooks/use-venue-layout";
@@ -41,9 +41,11 @@ import {
   withCenterSymmetry,
   zoneAccentColor,
   EXTRA_TABLES_ZONE_ID,
+  markRotationDeg,
   type CartinaExtraTable,
   type CartinaMirrorView,
   type CartinaPrefs,
+  type ZoneRotation,
 } from "@/lib/cartina";
 import {
   colorForOrderNumber,
@@ -285,6 +287,25 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
       await persistCartina(next);
       setSelectedTextMarkId(mark.id);
       toast.success("Scritta aggiunta");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Errore");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRotateTextMark() {
+    if (!selectedTextMark) return;
+    const cur = markRotationDeg(selectedTextMark);
+    const next = ((cur + 90) % 360) as ZoneRotation;
+    const nextMarks = (prefs.marks ?? []).map((mark) =>
+      mark.id === selectedTextMark.id
+        ? { ...mark, rotation: next === 0 ? undefined : next }
+        : mark,
+    );
+    setBusy(true);
+    try {
+      await persistCartina({ ...prefs, marks: nextMarks });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Errore");
     } finally {
@@ -603,7 +624,23 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                     disabled={busy || !selectedTextMark}
                     onClick={() => {
                       setTableTool("none");
-                      setPending(null);
+                      setOpenMenu(null);
+                      void handleRotateTextMark();
+                    }}
+                    className={`flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs font-semibold touch-manipulation disabled:opacity-50 ${
+                      selectedTextMark
+                        ? "text-[var(--forest)] hover:bg-[var(--forest)]/5"
+                        : "text-slate-400"
+                    }`}
+                  >
+                    <RotateCw className="h-3.5 w-3.5" />
+                    Ruota scritta 90°
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy || !selectedTextMark}
+                    onClick={() => {
+                      setTableTool("none");
                       setOpenMenu(null);
                       void handleDeleteTextMark();
                     }}
@@ -837,9 +874,29 @@ export function OrderSetupScreen({ embedded = false }: { embedded?: boolean }) {
                   : tableTool === "delete"
                     ? "Tocca un tavolo extra (bordo rosso) per eliminarlo · tap di nuovo per uscire"
                     : selectedTextMark
-                      ? `Scritta selezionata: "${selectedTextMark.text ?? ""}" · trascina per spostarla`
+                      ? `Scritta selezionata: "${selectedTextMark.text ?? ""}" · trascina per spostarla${
+                          markRotationDeg(selectedTextMark)
+                            ? ` · ${markRotationDeg(selectedTextMark)}°`
+                            : ""
+                        }`
                       : "Tocca un tavolo e digita il numero d’ordine"}
             </p>
+            {selectedTextMark ? (
+              <div className="mt-1.5">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void handleRotateTextMark()}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-[var(--forest)]/10 px-3 py-2 text-xs font-semibold text-[var(--forest)] touch-manipulation disabled:opacity-50"
+                >
+                  <RotateCw className="h-3.5 w-3.5" />
+                  Ruota 90°
+                  <span className="tabular-nums opacity-70">
+                    ({markRotationDeg(selectedTextMark)}°)
+                  </span>
+                </button>
+              </div>
+            ) : null}
             {tableTool === "text" ? (
               <div className="mt-1.5 flex flex-wrap gap-1.5">
                 {CARTINA_COLORS.map((c) => (

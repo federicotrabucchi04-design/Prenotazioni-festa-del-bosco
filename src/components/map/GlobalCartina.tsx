@@ -60,6 +60,7 @@ import {
   zoneTextCounterStyleIfUpright,
   zoneTransformStyle,
   zoneUprightPlacement,
+  markRotationDeg,
   type CartinaMirrorView,
   type ZoneRotation,
 } from "@/lib/cartina";
@@ -1270,6 +1271,25 @@ function CartinaArrangeBoard({
               >
                 Modifica testo: “{selectedMark.text}”
               </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cur = markRotationDeg(selectedMark);
+                    const next = ((cur + 90) % 360) as ZoneRotation;
+                    updateMark(selectedMark.id, {
+                      rotation: next === 0 ? undefined : next,
+                    });
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-[var(--forest)]/10 px-3 py-2 text-xs font-semibold text-[var(--forest)]"
+                >
+                  <RotateCw className="h-3.5 w-3.5" />
+                  Ruota 90°
+                </button>
+                <span className="text-xs font-bold tabular-nums text-[var(--forest-muted)]">
+                  {markRotationDeg(selectedMark)}°
+                </span>
+              </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold text-[var(--forest-muted)]">
                   Dimensione
