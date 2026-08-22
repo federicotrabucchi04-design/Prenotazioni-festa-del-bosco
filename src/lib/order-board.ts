@@ -5,6 +5,7 @@ import {
   type ZoneOnBoard,
   normalizePlacement,
   normalizeExtraTable,
+  normalizeCartinaMark,
 } from "@/lib/cartina";
 import type { MapMark } from "@/lib/types";
 import {
@@ -139,7 +140,9 @@ function normalizeCartina(raw: unknown): CartinaPrefs | null {
       }),
     );
   const marks: MapMark[] = Array.isArray(c.marks)
-    ? (c.marks as MapMark[]).filter((m) => m && m.kind)
+    ? (c.marks as Partial<MapMark>[])
+        .map((m) => normalizeCartinaMark(m))
+        .filter((m): m is MapMark => Boolean(m))
     : [];
   const extraTables = Array.isArray(c.extraTables)
     ? (c.extraTables as Partial<CartinaExtraTable>[])

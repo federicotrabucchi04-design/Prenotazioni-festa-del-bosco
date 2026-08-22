@@ -656,6 +656,41 @@ export function markTextSvgTransform(
   return parts.length ? parts.join(" ") : undefined;
 }
 
+/** Trasformata CSS per scritte HTML (rotazione uniforme, non distorta dal viewBox SVG). */
+export function markTextTransformStyle(
+  mark: Pick<MapMark, "rotation">,
+  uprightPlacement?: Pick<ZoneOnBoard, "rotation" | "mirror" | "center">,
+): { transform?: string; transformOrigin?: string } {
+  const parts = ["translate(-50%, -50%)"];
+  const zoneCounter = uprightPlacement
+    ? zoneTextCounterStyle(uprightPlacement)
+    : {};
+  if (zoneCounter.transform) parts.push(zoneCounter.transform);
+  const deg = markRotationDeg(mark);
+  if (deg) parts.push(`rotate(${deg}deg)`);
+  return {
+    transform: parts.join(" "),
+    transformOrigin: "center center",
+  };
+}
+
+/** Unisce scritte: `preferred` vince su `fallback` per lo stesso id. */
+export function mergeCartinaMarks(
+  fallback: MapMark[] = [],
+  preferred: MapMark[] = [],
+): MapMark[] {
+  const byId = new Map<string, MapMark>();
+  for (const raw of fallback) {
+    const mark = normalizeCartinaMark(raw);
+    if (mark) byId.set(mark.id, mark);
+  }
+  for (const raw of preferred) {
+    const mark = normalizeCartinaMark(raw);
+    if (mark) byId.set(mark.id, { ...byId.get(mark.id), ...mark });
+  }
+  return Array.from(byId.values());
+}
+
 export function zoneRotationDeg(
   placement?: Pick<ZoneOnBoard, "rotation">,
 ): ZoneRotation {

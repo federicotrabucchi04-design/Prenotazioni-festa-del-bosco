@@ -46,6 +46,7 @@ import {
   isCartinaMirrored,
   isCenterSymmetry,
   loadCartinaPrefs,
+  mergeCartinaMarks,
   normalizePlacement,
   placeZonesLikeCartina,
   placedZoneIds,
@@ -94,15 +95,25 @@ export function GlobalCartina() {
   useEffect(() => {
     if (!open || prefs !== null || boardLoading) return;
     const remote = board.cartina;
+    const local = loadCartinaPrefs(layout);
     if (remote && remote.placements.length > 0) {
-      setPrefs(remote);
+      setPrefs({
+        ...remote,
+        marks: mergeCartinaMarks(local.marks, remote.marks ?? []),
+      });
       return;
     }
-    const local = loadCartinaPrefs(layout);
     if (remote?.extraTables?.length && !local.extraTables?.length) {
-      setPrefs({ ...local, extraTables: remote.extraTables });
+      setPrefs({
+        ...local,
+        extraTables: remote.extraTables,
+        marks: mergeCartinaMarks(local.marks, remote.marks ?? []),
+      });
     } else {
-      setPrefs(local);
+      setPrefs({
+        ...local,
+        marks: mergeCartinaMarks(local.marks, remote?.marks ?? []),
+      });
     }
   }, [open, boardLoading, board.cartina, layout, prefs]);
 
@@ -113,7 +124,12 @@ export function GlobalCartina() {
   if (!open) return null;
 
   const activePrefs = prefs ?? loadCartinaPrefs(layout);
-  const placed = resolvePlacedZones(layout, activePrefs);
+  const syncedMarks = mergeCartinaMarks(
+    board.cartina?.marks ?? [],
+    activePrefs.marks,
+  );
+  const displayPrefs: CartinaPrefs = { ...activePrefs, marks: syncedMarks };
+  const placed = resolvePlacedZones(layout, displayPrefs);
 
   function updatePrefs(next: CartinaPrefs) {
     setPrefs(next);
@@ -159,7 +175,7 @@ export function GlobalCartina() {
       }
       const payload: CartinaPrefs = {
         placements: merged.placements,
-        marks: merged.marks ?? [],
+        marks: mergeCartinaMarks(board.cartina?.marks ?? [], activePrefs.marks),
       };
       if (merged.extraTables?.length) payload.extraTables = merged.extraTables;
       if (isCartinaMirrored(merged, "ordini")) payload.mirrorOrdini = true;
@@ -368,7 +384,7 @@ export function GlobalCartina() {
           {step === "arrange" ? (
             <CartinaArrangeBoard
               layoutZones={layout.zones}
-              prefs={activePrefs}
+              prefs={displayPrefs}
               onChange={updatePrefs}
               onPreview={() => void publishAndPreview()}
               publishing={publishing}
@@ -416,7 +432,7 @@ export function GlobalCartina() {
               <div className="cartina-print-root mx-auto w-full">
                 <CartinaSheet
                   items={placed}
-                  marks={activePrefs.marks}
+                  marks={syncedMarks}
                   reservations={items}
                   title={title}
                   subtitle={subtitle}
@@ -971,7 +987,7 @@ function CartinaArrangeBoard({
         onPointerDown={onBoardPointerDown}
         onPointerMove={onBoardPointerMove}
         onPointerUp={onBoardPointerUp}
-        className="relative mx-auto aspect-[210/297] w-full max-h-[min(72dvh,900px)] touch-none overflow-hidden border-2 border-blue-500/40 bg-[linear-gradient(rgba(45,90,39,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(45,90,39,0.1)_1px,transparent_1px)] bg-white shadow-sm"
+        className="relative mx-auto aspect-[210/297] w-full max-h-[min(72dvh,900px)] touch-none overflow-hidden border-2 border-blue-500/40 bg-[linear-gradient(rgba(45,90,39,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(45,90,39,0.1)_1px,transparent_1px)] bg-white shadow-sm @container"
         style={{ backgroundSize: `${CARTINA_GRID_SNAP}% ${CARTINA_GRID_SNAP}%` }}
       >
         {showGuides ? <CartinaViewportGuides /> : null}
@@ -1575,7 +1591,7 @@ function CartinaSheet({
         </h3>
         <p className="text-xs text-[var(--forest-muted)]">{subtitle}</p>
       </div>
-      <div className="relative min-h-0 flex-1 overflow-hidden border border-[var(--forest)]/20 bg-white print:border-0">
+      <div className="relative min-h-0 flex-1 overflow-hidden border border-[var(--forest)]/20 bg-white print:border-0 @container">
         <ZoneMarksLayer marks={marks} />
         {items.map(({ zone, placement }) => {
           const guests = guestsByTable(reservations, zone.name);

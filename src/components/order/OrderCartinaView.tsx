@@ -359,7 +359,7 @@ export function OrderCartinaView({
   return (
     <div
       ref={boardRef}
-      className={`order-cartina-view relative h-full w-full overflow-hidden bg-white ${className} ${
+      className={`order-cartina-view relative h-full w-full overflow-hidden bg-white @container ${className} ${
         drawTableMode
           ? "cursor-crosshair touch-none"
           : textPlaceMode
