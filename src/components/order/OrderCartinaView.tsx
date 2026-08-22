@@ -21,7 +21,8 @@ import {
   unmirrorLeft,
   unmirrorTop,
   zoneAccentColor,
-  zoneRotationStyle,
+  zoneTextCounterStyle,
+  zoneTransformStyle,
 } from "@/lib/cartina";
 import { ZoneMarksLayer } from "@/components/map/ZoneMarksLayer";
 import {
@@ -509,7 +510,7 @@ export function OrderCartinaView({
           >
             <div
               className="flex h-full w-full flex-col"
-              style={zoneRotationStyle(placement)}
+              style={zoneTransformStyle(placement)}
             >
               {!placement.hideTitle ? (
                 <h4
@@ -520,11 +521,19 @@ export function OrderCartinaView({
                   }`}
                   style={{ backgroundColor: accent }}
                 >
-                  {zone.name}
+                  <span
+                    className="inline-block w-full"
+                    style={zoneTextCounterStyle(placement)}
+                  >
+                    {zone.name}
+                  </span>
                 </h4>
               ) : null}
               <div className="relative min-h-0 flex-1 overflow-hidden bg-white">
-                <ZoneMarksLayer marks={zone.marks ?? []} />
+                <ZoneMarksLayer
+                  marks={zone.marks ?? []}
+                  uprightPlacement={placement}
+                />
                 {rects.map(({ table, x, y, w, h }) => {
                 const nums = ordersForTable(
                   assignments,
@@ -577,6 +586,10 @@ export function OrderCartinaView({
                     }}
                     title={`Tavolo ${table.number}`}
                   >
+                    <span
+                      className="flex h-full w-full items-center justify-center"
+                      style={zoneTextCounterStyle(placement)}
+                    >
                     {nums.length > 0 ? (
                       <TableOrderNums
                         nums={nums}
@@ -595,6 +608,7 @@ export function OrderCartinaView({
                         ·
                       </span>
                     )}
+                    </span>
                   </Tag>
                 );
               })}

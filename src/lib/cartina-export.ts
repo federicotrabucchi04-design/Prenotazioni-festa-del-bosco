@@ -6,6 +6,7 @@ import {
   gapsFromPlacement,
   guestsByTable,
   zoneAccentColor,
+  zoneFlipForPlacement,
   zoneRotationDeg,
 } from "@/lib/cartina";
 
@@ -37,6 +38,47 @@ function wrapText(
   return lines;
 }
 
+function applyZoneContentTransform(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  placement?: ZoneOnBoard,
+) {
+  const deg = zoneRotationDeg(placement);
+  const { flipX, flipY } = zoneFlipForPlacement(placement);
+  if (!deg && !flipX && !flipY) return;
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  ctx.translate(cx, cy);
+  if (deg) ctx.rotate((deg * Math.PI) / 180);
+  if (flipX || flipY) ctx.scale(flipX ? -1 : 1, flipY ? -1 : 1);
+  ctx.translate(-cx, -cy);
+}
+
+function drawUprightInZone(
+  ctx: CanvasRenderingContext2D,
+  px: number,
+  py: number,
+  placement: ZoneOnBoard | undefined,
+  draw: () => void,
+) {
+  const deg = zoneRotationDeg(placement);
+  const { flipX, flipY } = zoneFlipForPlacement(placement);
+  if (!deg && !flipX && !flipY) {
+    draw();
+    return;
+  }
+  ctx.save();
+  ctx.translate(px, py);
+  if (deg) ctx.rotate((-deg * Math.PI) / 180);
+  if (flipX || flipY) ctx.scale(flipX ? -1 : 1, flipY ? -1 : 1);
+  ctx.translate(-px, -py);
+  draw();
+  ctx.restore();
+}
+
 function drawZoneBlock(
   ctx: CanvasRenderingContext2D,
   zone: ZoneLayout,
@@ -48,31 +90,30 @@ function drawZoneBlock(
   placement?: ZoneOnBoard,
 ) {
   const accent = zoneAccentColor(zone);
-  const rotation = zoneRotationDeg(placement);
-  if (rotation) {
-    ctx.save();
-    const cx = x + w / 2;
-    const cy = y + h / 2;
-    ctx.translate(cx, cy);
-    ctx.rotate((rotation * Math.PI) / 180);
-    ctx.translate(-cx, -cy);
-  }
+  const hideTitle = placement?.hideTitle === true;
+  const headerH = hideTitle ? 0 : Math.min(48, h * 0.14);
 
   ctx.strokeStyle = accent;
   ctx.lineWidth = 3;
   ctx.strokeRect(x, y, w, h);
 
-  const hideTitle = placement?.hideTitle === true;
-  const headerH = hideTitle ? 0 : Math.min(48, h * 0.14);
+  ctx.save();
+  applyZoneContentTransform(ctx, x, y, w, h, placement);
+
   if (!hideTitle) {
     ctx.fillStyle = accent;
     ctx.fillRect(x, y, w, headerH);
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 26px system-ui, sans-serif";
-    ctx.fillText(zone.name, x + 12, y + Math.min(32, headerH * 0.72));
+    drawUprightInZone(ctx, x + w / 2, y + Math.min(32, headerH * 0.72), placement, () => {
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 26px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(zone.name, x + w / 2, y + Math.min(32, headerH * 0.72));
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+    });
   }
 
-  const guests = guestsByTable(reservations, zone.name);
   const contentX = x;
   const contentY = y + headerH;
   const contentW = w;
@@ -81,8 +122,9 @@ function drawZoneBlock(
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(contentX, contentY, contentW, contentH);
 
-  drawMarks(ctx, zone.marks ?? [], contentX, contentY, contentW, contentH);
+  drawMarks(ctx, zone.marks ?? [], contentX, contentY, contentW, contentH, placement);
 
+  const guests = guestsByTable(reservations, zone.name);
   const { gapX, gapY } = gapsFromPlacement(placement);
   const rects = computeTableFillRects(zone.tables, gapX, gapY);
   for (const { table, x: rx, y: ry, w: rw, h: rh } of rects) {
@@ -100,22 +142,20 @@ function drawZoneBlock(
     ctx.strokeRect(tx, ty, tw, th);
 
     if (!occupied) {
-      ctx.fillStyle = `${accent}55`;
-      ctx.font = "bold 14px system-ui, sans-serif";
-      ctx.textAlign = "right";
-      ctx.textBaseline = "top";
-      ctx.fillText(String(table.number), tx + tw - 6, ty + 4);
-      ctx.textAlign = "left";
-      ctx.textBaseline = "alphabetic";
+      drawUprightInZone(ctx, tx + tw - 6, ty + 4, placement, () => {
+        ctx.fillStyle = `${accent}55`;
+        ctx.font = "bold 14px system-ui, sans-serif";
+        ctx.textAlign = "right";
+        ctx.textBaseline = "top";
+        ctx.fillText(String(table.number), tx + tw - 6, ty + 4);
+        ctx.textAlign = "left";
+        ctx.textBaseline = "alphabetic";
+      });
       continue;
     }
 
     const label = formatTableGuests(tableGuests);
     const fontSize = Math.max(11, Math.min(24, Math.floor(Math.min(tw, th) / 4.5)));
-    ctx.fillStyle = "#142418";
-    ctx.font = `bold ${fontSize}px system-ui, sans-serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
     const lines = wrapText(
       ctx,
       label,
@@ -124,14 +164,20 @@ function drawZoneBlock(
     );
     const blockH = lines.length * fontSize * 1.15;
     const startY = ty + th / 2 - blockH / 2 + fontSize / 2;
-    lines.forEach((line, li) => {
-      ctx.fillText(line, tx + tw / 2, startY + li * fontSize * 1.15);
+    drawUprightInZone(ctx, tx + tw / 2, ty + th / 2, placement, () => {
+      ctx.fillStyle = "#142418";
+      ctx.font = `bold ${fontSize}px system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      lines.forEach((line, li) => {
+        ctx.fillText(line, tx + tw / 2, startY + li * fontSize * 1.15);
+      });
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
     });
-    ctx.textAlign = "left";
-    ctx.textBaseline = "alphabetic";
   }
 
-  if (rotation) ctx.restore();
+  ctx.restore();
 }
 
 function drawMarks(
@@ -141,6 +187,7 @@ function drawMarks(
   areaY: number,
   areaW: number,
   areaH: number,
+  placement?: ZoneOnBoard,
 ) {
   for (const mark of marks) {
     const color = mark.color || "#2d5a27";
@@ -177,12 +224,16 @@ function drawMarks(
       14,
       Math.round(((mark.fontSize ?? 3.2) / 100) * areaH * 1.15),
     );
-    ctx.font = `bold ${fontPx}px system-ui, sans-serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(mark.text || "Etichetta", px(mark.x), py(mark.y));
-    ctx.textAlign = "left";
-    ctx.textBaseline = "alphabetic";
+    const tx = px(mark.x);
+    const ty = py(mark.y);
+    drawUprightInZone(ctx, tx, ty, placement, () => {
+      ctx.font = `bold ${fontPx}px system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(mark.text || "Etichetta", tx, ty);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+    });
   }
 }
 

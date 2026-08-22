@@ -56,7 +56,8 @@ import {
   withCenterSymmetry,
   zoneAccentColor,
   zoneRotationDeg,
-  zoneRotationStyle,
+  zoneTextCounterStyle,
+  zoneTransformStyle,
   type CartinaMirrorView,
   type ZoneRotation,
 } from "@/lib/cartina";
@@ -1007,14 +1008,19 @@ function CartinaArrangeBoard({
             >
               <div
                 className="flex h-full w-full flex-col"
-                style={zoneRotationStyle(p)}
+                style={zoneTransformStyle(p)}
               >
                 {!p.hideTitle ? (
                   <div
                     className="shrink-0 px-0.5 py-0.5 text-center text-[9px] font-bold leading-none text-white sm:text-[10px]"
                     style={{ backgroundColor: accent }}
                   >
-                    {zone.name}
+                    <span
+                      className="inline-block w-full"
+                      style={zoneTextCounterStyle(p)}
+                    >
+                      {zone.name}
+                    </span>
                   </div>
                 ) : null}
                 <div
@@ -1022,15 +1028,27 @@ function CartinaArrangeBoard({
                   style={{ backgroundColor: `${accent}14`, color: accent }}
                 >
                   {(zone.marks?.length ?? 0) > 0 ? (
-                    <ZoneMarksLayer marks={zone.marks ?? []} />
+                    <ZoneMarksLayer
+                      marks={zone.marks ?? []}
+                      uprightPlacement={p}
+                    />
                   ) : null}
-                  <span className="relative z-[1]">
+                  <span
+                    className="relative z-[1] inline-block"
+                    style={zoneTextCounterStyle(p)}
+                  >
                     {zone.tables.length} tavoli
                     {p.hideTitle ? (
                       <span className="ml-1 opacity-70">· {zone.name}</span>
                     ) : null}
                     {zoneRotationDeg(p) ? (
                       <span className="ml-1 opacity-70">· {zoneRotationDeg(p)}°</span>
+                    ) : null}
+                    {p.mirror ? (
+                      <span className="ml-1 opacity-70">· ↔</span>
+                    ) : null}
+                    {p.center ? (
+                      <span className="ml-1 opacity-70">· 180°</span>
                     ) : null}
                   </span>
                 </div>
@@ -1102,28 +1120,71 @@ function CartinaArrangeBoard({
             />
           </label>
 
-          <div className="flex flex-wrap items-center gap-2 rounded-xl bg-[var(--forest)]/5 px-3 py-2.5">
+          <div className="space-y-2 rounded-xl bg-[var(--forest)]/5 px-3 py-2.5">
             <span className="text-xs font-semibold text-[var(--forest-ink)]">
               Orientamento zona
             </span>
-            <button
-              type="button"
-              onClick={() => {
-                const cur = zoneRotationDeg(selectedPlacement);
-                const next = ((cur + 90) % 360) as ZoneRotation;
-                upsertPlacement({
-                  ...selectedPlacement,
-                  rotation: next === 0 ? undefined : next,
-                });
-              }}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-[var(--forest)]/10 px-3 py-2 text-xs font-semibold text-[var(--forest)]"
-            >
-              <RotateCw className="h-3.5 w-3.5" />
-              Ruota 90°
-            </button>
-            <span className="text-xs font-bold tabular-nums text-[var(--forest-muted)]">
-              {zoneRotationDeg(selectedPlacement)}°
-            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const cur = zoneRotationDeg(selectedPlacement);
+                  const next = ((cur + 90) % 360) as ZoneRotation;
+                  upsertPlacement({
+                    ...selectedPlacement,
+                    rotation: next === 0 ? undefined : next,
+                  });
+                }}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-[var(--forest)]/10 px-3 py-2 text-xs font-semibold text-[var(--forest)]"
+              >
+                <RotateCw className="h-3.5 w-3.5" />
+                Ruota 90°
+              </button>
+              <span className="text-xs font-bold tabular-nums text-[var(--forest-muted)]">
+                {zoneRotationDeg(selectedPlacement)}°
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  upsertPlacement({
+                    ...selectedPlacement,
+                    mirror: selectedPlacement.mirror ? undefined : true,
+                  })
+                }
+                className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold ${
+                  selectedPlacement.mirror
+                    ? "bg-[var(--forest)] text-white"
+                    : "bg-[var(--forest)]/10 text-[var(--forest)]"
+                }`}
+              >
+                <FlipHorizontal2 className="h-3.5 w-3.5" />
+                Specchia ↔
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  upsertPlacement({
+                    ...selectedPlacement,
+                    center: selectedPlacement.center ? undefined : true,
+                  })
+                }
+                className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold ${
+                  selectedPlacement.center
+                    ? "bg-violet-600 text-white"
+                    : "bg-violet-50 text-violet-950"
+                }`}
+              >
+                Centro 180°
+              </button>
+            </div>
+            {(selectedPlacement.mirror || selectedPlacement.center) && (
+              <p className="text-[10px] leading-snug text-[var(--forest-muted)]">
+                Specchia + Centro si combinano (↔ + 180° = ↕). Le scritte restano
+                leggibili.
+              </p>
+            )}
           </div>
         </div>
       ) : null}
@@ -1475,21 +1536,30 @@ function CartinaSheet({
             >
               <div
                 className="flex h-full w-full flex-col"
-                style={zoneRotationStyle(placement)}
+                style={zoneTransformStyle(placement)}
               >
                 {!placement.hideTitle ? (
                   <h4
                     className="shrink-0 px-0.5 py-px text-center text-[8px] font-bold leading-tight text-white print:text-[7pt]"
                     style={{ backgroundColor: accent }}
                   >
-                    {zone.name}
+                    <span
+                      className="inline-block w-full"
+                      style={zoneTextCounterStyle(placement)}
+                    >
+                      {zone.name}
+                    </span>
                   </h4>
                 ) : null}
                 <div className="relative min-h-0 flex-1 bg-white">
-                  <ZoneMarksLayer marks={zone.marks ?? []} />
+                  <ZoneMarksLayer
+                    marks={zone.marks ?? []}
+                    uprightPlacement={placement}
+                  />
                   {rects.map(({ table, x, y, w, h }) => {
                   const tableGuests = guests.get(table.number) ?? [];
                   const occupied = tableGuests.length > 0;
+                  const upright = zoneTextCounterStyle(placement);
                   return (
                     <div
                       key={table.id}
@@ -1506,13 +1576,16 @@ function CartinaSheet({
                       {!occupied ? (
                         <span
                           className="pointer-events-none absolute inset-0 flex items-start justify-end p-0.5 text-[6px] font-semibold print:text-[5pt]"
-                          style={{ color: `${accent}66` }}
+                          style={{ color: `${accent}66`, ...upright }}
                         >
                           {table.number}
                         </span>
                       ) : null}
                       {occupied ? (
-                        <span className="line-clamp-5 w-full px-0.5 text-[7px] font-bold leading-[1.05] text-[var(--forest-ink)] sm:text-[9px] print:text-[6.5pt]">
+                        <span
+                          className="line-clamp-5 w-full px-0.5 text-[7px] font-bold leading-[1.05] text-[var(--forest-ink)] sm:text-[9px] print:text-[6.5pt]"
+                          style={upright}
+                        >
                           {formatTableGuests(tableGuests)}
                         </span>
                       ) : null}

@@ -24,6 +24,10 @@ export interface ZoneOnBoard {
   hideTitle?: boolean;
   /** Rotazione contenuto zona (gradi) */
   rotation?: ZoneRotation;
+  /** Specchio orizzontale contenuto zona (↔) */
+  mirror?: boolean;
+  /** Simmetria rispetto al centro contenuto zona (180°) */
+  center?: boolean;
 }
 
 export interface CartinaPrefs {
@@ -610,6 +614,8 @@ export function normalizePlacement(p: ZoneOnBoard): ZoneOnBoard {
   if (p.hideTitle === true) out.hideTitle = true;
   const rotation = normalizeZoneRotation(p.rotation);
   if (rotation) out.rotation = rotation;
+  if (p.mirror === true) out.mirror = true;
+  if (p.center === true) out.center = true;
   return out;
 }
 
@@ -625,13 +631,76 @@ export function zoneRotationDeg(
   return placement?.rotation ?? 0;
 }
 
-export function zoneRotationStyle(placement?: Pick<ZoneOnBoard, "rotation">): {
-  transform?: string;
-  transformOrigin?: string;
-} {
+/** Flip contenuto zona (stessa logica XOR di cartinaFlipForView). */
+export function zoneFlipForPlacement(
+  placement?: Pick<ZoneOnBoard, "mirror" | "center">,
+): CartinaFlip {
+  const mirror = placement?.mirror === true;
+  const center = placement?.center === true;
+  return { flipX: mirror !== center, flipY: center };
+}
+
+export function zoneHasTransform(
+  placement?: Pick<ZoneOnBoard, "rotation" | "mirror" | "center">,
+): boolean {
+  return (
+    zoneRotationDeg(placement) !== 0 ||
+    zoneFlipForPlacement(placement).flipX ||
+    zoneFlipForPlacement(placement).flipY
+  );
+}
+
+function zoneTransformParts(
+  placement?: Pick<ZoneOnBoard, "rotation" | "mirror" | "center">,
+  invert = false,
+): string[] {
+  const sign = invert ? -1 : 1;
+  const deg = zoneRotationDeg(placement) * sign;
+  const { flipX, flipY } = zoneFlipForPlacement(placement);
+  const parts: string[] = [];
+  if (deg) parts.push(`rotate(${deg}deg)`);
+  if (flipX) parts.push(invert ? "scaleX(-1)" : "scaleX(-1)");
+  if (flipY) parts.push(invert ? "scaleY(-1)" : "scaleY(-1)");
+  return parts;
+}
+
+/** Trasforma layout zona (tavoli, linee, rettangoli). */
+export function zoneTransformStyle(
+  placement?: Pick<ZoneOnBoard, "rotation" | "mirror" | "center">,
+): { transform?: string; transformOrigin?: string } {
+  const parts = zoneTransformParts(placement, false);
+  if (!parts.length) return {};
+  return { transform: parts.join(" "), transformOrigin: "50% 50%" };
+}
+
+/** Contro-trasforma testi/numeri così restano leggibili. */
+export function zoneTextCounterStyle(
+  placement?: Pick<ZoneOnBoard, "rotation" | "mirror" | "center">,
+): { transform?: string; transformOrigin?: string } {
+  const parts = zoneTransformParts(placement, true);
+  if (!parts.length) return {};
+  return { transform: parts.join(" "), transformOrigin: "50% 50%" };
+}
+
+/** @deprecated usa zoneTransformStyle */
+export function zoneRotationStyle(
+  placement?: Pick<ZoneOnBoard, "rotation" | "mirror" | "center">,
+): { transform?: string; transformOrigin?: string } {
+  return zoneTransformStyle(placement);
+}
+
+/** Contro-trasforma SVG per scritte zona in viewBox 0–100. */
+export function zoneMarkTextSvgTransform(
+  x: number,
+  y: number,
+  placement?: Pick<ZoneOnBoard, "rotation" | "mirror" | "center">,
+): string | undefined {
   const deg = zoneRotationDeg(placement);
-  if (!deg) return {};
-  return { transform: `rotate(${deg}deg)`, transformOrigin: "50% 50%" };
+  const { flipX, flipY } = zoneFlipForPlacement(placement);
+  if (!deg && !flipX && !flipY) return undefined;
+  const sx = flipX ? -1 : 1;
+  const sy = flipY ? -1 : 1;
+  return `translate(${x} ${y}) rotate(${-deg}) scale(${sx} ${sy}) translate(${-x} ${-y})`;
 }
 
 function clusterAxis(values: number[], tol: number): number[] {

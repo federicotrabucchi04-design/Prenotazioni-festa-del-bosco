@@ -1,6 +1,8 @@
 "use client";
 
 import type { MapMark } from "@/lib/types";
+import { zoneMarkTextSvgTransform } from "@/lib/cartina";
+import type { ZoneOnBoard } from "@/lib/cartina";
 
 export const DEFAULT_MARK_FONT_SIZE = 3.2;
 
@@ -12,6 +14,7 @@ export function ZoneMarksLayer({
   interactiveKinds,
   onSelect,
   onDragStart,
+  uprightPlacement,
 }: {
   marks: MapMark[];
   selectedId?: string | null;
@@ -23,6 +26,8 @@ export function ZoneMarksLayer({
     mode: "move" | "resize",
     e: React.PointerEvent,
   ) => void;
+  /** Scritte sempre leggibili nonostante rotazione/specchio zona */
+  uprightPlacement?: Pick<ZoneOnBoard, "rotation" | "mirror" | "center">;
 }) {
   if (!marks.length) return null;
 
@@ -129,6 +134,9 @@ export function ZoneMarksLayer({
         const fontSize = mark.fontSize ?? DEFAULT_MARK_FONT_SIZE;
         const handleX = mark.x + fontSize * 1.6;
         const handleY = mark.y + fontSize * 0.85;
+        const textTransform = uprightPlacement
+          ? zoneMarkTextSvgTransform(mark.x, mark.y, uprightPlacement)
+          : undefined;
         return (
           <g key={mark.id}>
             <text
@@ -139,6 +147,7 @@ export function ZoneMarksLayer({
               fontWeight={700}
               textAnchor="middle"
               dominantBaseline="middle"
+              transform={textTransform}
               className={
                 canInteract ? "pointer-events-auto cursor-grab" : undefined
               }
