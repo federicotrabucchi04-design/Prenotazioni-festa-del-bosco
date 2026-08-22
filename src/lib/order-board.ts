@@ -131,6 +131,8 @@ function normalizeCartina(raw: unknown): CartinaPrefs | null {
         tableGapX: p.tableGapX,
         tableGapY: p.tableGapY,
         hideTitle: p.hideTitle === true ? true : undefined,
+        hideBorder: p.hideBorder === true ? true : undefined,
+        rotateText: p.rotateText === true ? true : undefined,
         rotation: p.rotation,
         mirror: p.mirror === true ? true : undefined,
         center: p.center === true ? true : undefined,

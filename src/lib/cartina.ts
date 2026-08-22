@@ -22,6 +22,10 @@ export interface ZoneOnBoard {
   tableGapY?: TableGapMode;
   /** Se true: niente fascia titolo, solo bordo zona */
   hideTitle?: boolean;
+  /** Se true: niente rettangolo di confine attorno alla zona */
+  hideBorder?: boolean;
+  /** Se true: scritte e titolo ruotano/specchiano con la zona (non restano dritti) */
+  rotateText?: boolean;
   /** Rotazione contenuto zona (gradi) */
   rotation?: ZoneRotation;
   /** Specchio orizzontale contenuto zona (↔) */
@@ -612,6 +616,8 @@ export function normalizePlacement(p: ZoneOnBoard): ZoneOnBoard {
     out.tableGapY = p.tableGapY;
   }
   if (p.hideTitle === true) out.hideTitle = true;
+  if (p.hideBorder === true) out.hideBorder = true;
+  if (p.rotateText === true) out.rotateText = true;
   const rotation = normalizeZoneRotation(p.rotation);
   if (rotation) out.rotation = rotation;
   if (p.mirror === true) out.mirror = true;
@@ -629,6 +635,33 @@ export function zoneRotationDeg(
   placement?: Pick<ZoneOnBoard, "rotation">,
 ): ZoneRotation {
   return placement?.rotation ?? 0;
+}
+
+/** Di default le scritte restano leggibili; con rotateText seguono orientamento zona. */
+export function zoneKeepsTextUpright(
+  placement?: Pick<ZoneOnBoard, "rotateText">,
+): boolean {
+  return placement?.rotateText !== true;
+}
+
+export function zoneTextCounterStyleIfUpright(
+  placement?: Pick<
+    ZoneOnBoard,
+    "rotation" | "mirror" | "center" | "rotateText"
+  >,
+): { transform?: string; transformOrigin?: string } {
+  if (!zoneKeepsTextUpright(placement)) return {};
+  return zoneTextCounterStyle(placement);
+}
+
+export function zoneUprightPlacement(
+  placement?: Pick<
+    ZoneOnBoard,
+    "rotation" | "mirror" | "center" | "rotateText"
+  >,
+): Pick<ZoneOnBoard, "rotation" | "mirror" | "center"> | undefined {
+  if (!zoneKeepsTextUpright(placement)) return undefined;
+  return placement;
 }
 
 /** Flip contenuto zona (stessa logica XOR di cartinaFlipForView). */

@@ -7,6 +7,7 @@ import {
   guestsByTable,
   zoneAccentColor,
   zoneFlipForPlacement,
+  zoneKeepsTextUpright,
   zoneRotationDeg,
 } from "@/lib/cartina";
 
@@ -70,6 +71,10 @@ function drawUprightInZone(
     draw();
     return;
   }
+  if (!zoneKeepsTextUpright(placement)) {
+    draw();
+    return;
+  }
   ctx.save();
   ctx.translate(px, py);
   if (deg) ctx.rotate((-deg * Math.PI) / 180);
@@ -91,11 +96,14 @@ function drawZoneBlock(
 ) {
   const accent = zoneAccentColor(zone);
   const hideTitle = placement?.hideTitle === true;
+  const hideBorder = placement?.hideBorder === true;
   const headerH = hideTitle ? 0 : Math.min(48, h * 0.14);
 
-  ctx.strokeStyle = accent;
-  ctx.lineWidth = 3;
-  ctx.strokeRect(x, y, w, h);
+  if (!hideBorder) {
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 3;
+    ctx.strokeRect(x, y, w, h);
+  }
 
   ctx.save();
   applyZoneContentTransform(ctx, x, y, w, h, placement);

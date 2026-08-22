@@ -55,9 +55,11 @@ import {
   withCartinaMirror,
   withCenterSymmetry,
   zoneAccentColor,
+  zoneKeepsTextUpright,
   zoneRotationDeg,
-  zoneTextCounterStyle,
+  zoneTextCounterStyleIfUpright,
   zoneTransformStyle,
+  zoneUprightPlacement,
   type CartinaMirrorView,
   type ZoneRotation,
 } from "@/lib/cartina";
@@ -999,10 +1001,13 @@ function CartinaArrangeBoard({
                 top: `${p.y}%`,
                 width: `${p.w}%`,
                 height: `${p.h}%`,
-                borderColor: selected ? undefined : accent,
+                borderColor:
+                  selected || !p.hideBorder ? (selected ? undefined : accent) : undefined,
               }}
-              className={`absolute z-10 flex flex-col overflow-hidden border-2 bg-white/95 ${
-                selected ? "border-amber-500 shadow-lg" : ""
+              className={`absolute z-10 flex flex-col overflow-hidden bg-white/95 ${
+                p.hideBorder && !selected
+                  ? ""
+                  : `border-2 ${selected ? "border-amber-500 shadow-lg" : ""}`
               }`}
               onPointerDown={(e) => startZoneDrag(e, p, "move")}
             >
@@ -1017,7 +1022,7 @@ function CartinaArrangeBoard({
                   >
                     <span
                       className="inline-block w-full"
-                      style={zoneTextCounterStyle(p)}
+                      style={zoneTextCounterStyleIfUpright(p)}
                     >
                       {zone.name}
                     </span>
@@ -1030,12 +1035,12 @@ function CartinaArrangeBoard({
                   {(zone.marks?.length ?? 0) > 0 ? (
                     <ZoneMarksLayer
                       marks={zone.marks ?? []}
-                      uprightPlacement={p}
+                      uprightPlacement={zoneUprightPlacement(p)}
                     />
                   ) : null}
                   <span
                     className="relative z-[1] inline-block"
-                    style={zoneTextCounterStyle(p)}
+                    style={zoneTextCounterStyleIfUpright(p)}
                   >
                     {zone.tables.length} tavoli
                     {p.hideTitle ? (
@@ -1105,7 +1110,24 @@ function CartinaArrangeBoard({
 
           <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl bg-[var(--forest)]/5 px-3 py-2.5">
             <span className="text-xs font-semibold text-[var(--forest-ink)]">
-              Nascondi titolo (solo bordo)
+              Rettangolo di confine
+            </span>
+            <input
+              type="checkbox"
+              checked={selectedPlacement.hideBorder !== true}
+              onChange={(e) =>
+                upsertPlacement({
+                  ...selectedPlacement,
+                  hideBorder: e.target.checked ? undefined : true,
+                })
+              }
+              className="h-5 w-5 accent-[var(--forest)]"
+            />
+          </label>
+
+          <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl bg-[var(--forest)]/5 px-3 py-2.5">
+            <span className="text-xs font-semibold text-[var(--forest-ink)]">
+              Nascondi titolo
             </span>
             <input
               type="checkbox"
@@ -1114,6 +1136,23 @@ function CartinaArrangeBoard({
                 upsertPlacement({
                   ...selectedPlacement,
                   hideTitle: e.target.checked ? true : undefined,
+                })
+              }
+              className="h-5 w-5 accent-[var(--forest)]"
+            />
+          </label>
+
+          <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl bg-[var(--forest)]/5 px-3 py-2.5">
+            <span className="text-xs font-semibold text-[var(--forest-ink)]">
+              Ruota anche le scritte
+            </span>
+            <input
+              type="checkbox"
+              checked={selectedPlacement.rotateText === true}
+              onChange={(e) =>
+                upsertPlacement({
+                  ...selectedPlacement,
+                  rotateText: e.target.checked ? true : undefined,
                 })
               }
               className="h-5 w-5 accent-[var(--forest)]"
@@ -1179,10 +1218,11 @@ function CartinaArrangeBoard({
                 Centro 180°
               </button>
             </div>
-            {(selectedPlacement.mirror || selectedPlacement.center) && (
+            {(selectedPlacement.mirror || selectedPlacement.center) &&
+              zoneKeepsTextUpright(selectedPlacement) && (
               <p className="text-[10px] leading-snug text-[var(--forest-muted)]">
                 Specchia + Centro si combinano (↔ + 180° = ↕). Le scritte restano
-                leggibili.
+                leggibili se non attivi «Ruota anche le scritte».
               </p>
             )}
           </div>
@@ -1525,13 +1565,15 @@ function CartinaSheet({
           return (
             <section
               key={zone.id}
-              className="absolute flex flex-col overflow-hidden border bg-white"
+              className={`absolute flex flex-col overflow-hidden bg-white ${
+                placement.hideBorder ? "" : "border"
+              }`}
               style={{
                 left: `${placement.x}%`,
                 top: `${placement.y}%`,
                 width: `${placement.w}%`,
                 height: `${placement.h}%`,
-                borderColor: accent,
+                borderColor: placement.hideBorder ? undefined : accent,
               }}
             >
               <div
@@ -1545,7 +1587,7 @@ function CartinaSheet({
                   >
                     <span
                       className="inline-block w-full"
-                      style={zoneTextCounterStyle(placement)}
+                      style={zoneTextCounterStyleIfUpright(placement)}
                     >
                       {zone.name}
                     </span>
@@ -1554,12 +1596,12 @@ function CartinaSheet({
                 <div className="relative min-h-0 flex-1 bg-white">
                   <ZoneMarksLayer
                     marks={zone.marks ?? []}
-                    uprightPlacement={placement}
+                    uprightPlacement={zoneUprightPlacement(placement)}
                   />
                   {rects.map(({ table, x, y, w, h }) => {
                   const tableGuests = guests.get(table.number) ?? [];
                   const occupied = tableGuests.length > 0;
-                  const upright = zoneTextCounterStyle(placement);
+                  const upright = zoneTextCounterStyleIfUpright(placement);
                   return (
                     <div
                       key={table.id}

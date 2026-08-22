@@ -21,8 +21,9 @@ import {
   unmirrorLeft,
   unmirrorTop,
   zoneAccentColor,
-  zoneTextCounterStyle,
+  zoneTextCounterStyleIfUpright,
   zoneTransformStyle,
+  zoneUprightPlacement,
 } from "@/lib/cartina";
 import { ZoneMarksLayer } from "@/components/map/ZoneMarksLayer";
 import {
@@ -496,16 +497,18 @@ export function OrderCartinaView({
           <section
             key={zone.id}
             className={`absolute flex flex-col overflow-hidden bg-white ${
-              isDisplay
-                ? "rounded-none border"
-                : "rounded-md border-2 shadow-sm"
+              placement.hideBorder
+                ? ""
+                : isDisplay
+                  ? "rounded-none border"
+                  : "rounded-md border-2 shadow-sm"
             } ${drawTableMode || textPlaceMode ? "pointer-events-none" : ""}`}
             style={{
               left: `${left}%`,
               top: `${top}%`,
               width: `${placement.w}%`,
               height: `${placement.h}%`,
-              borderColor: accent,
+              borderColor: placement.hideBorder ? undefined : accent,
             }}
           >
             <div
@@ -523,7 +526,7 @@ export function OrderCartinaView({
                 >
                   <span
                     className="inline-block w-full"
-                    style={zoneTextCounterStyle(placement)}
+                    style={zoneTextCounterStyleIfUpright(placement)}
                   >
                     {zone.name}
                   </span>
@@ -532,7 +535,7 @@ export function OrderCartinaView({
               <div className="relative min-h-0 flex-1 overflow-hidden bg-white">
                 <ZoneMarksLayer
                   marks={zone.marks ?? []}
-                  uprightPlacement={placement}
+                  uprightPlacement={zoneUprightPlacement(placement)}
                 />
                 {rects.map(({ table, x, y, w, h }) => {
                 const nums = ordersForTable(
@@ -588,7 +591,7 @@ export function OrderCartinaView({
                   >
                     <span
                       className="flex h-full w-full items-center justify-center"
-                      style={zoneTextCounterStyle(placement)}
+                      style={zoneTextCounterStyleIfUpright(placement)}
                     >
                     {nums.length > 0 ? (
                       <TableOrderNums
