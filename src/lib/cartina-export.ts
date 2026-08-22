@@ -11,6 +11,7 @@ import {
   markRotationDeg,
   zoneRotationDeg,
 } from "@/lib/cartina";
+import { withoutIngressoMarks } from "@/lib/layout-utils";
 
 function wrapText(
   ctx: CanvasRenderingContext2D,
@@ -131,7 +132,7 @@ function drawZoneBlock(
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(contentX, contentY, contentW, contentH);
 
-  drawMarks(ctx, zone.marks ?? [], contentX, contentY, contentW, contentH, placement);
+  drawMarks(ctx, withoutIngressoMarks(zone.marks), contentX, contentY, contentW, contentH, placement);
 
   const guests = guestsByTable(reservations, zone.name);
   const { gapX, gapY } = gapsFromPlacement(placement);

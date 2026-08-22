@@ -1,4 +1,4 @@
-import type { Reservation, TableSpot, VenueLayout, ZoneLayout } from "@/lib/types";
+import type { MapMark, Reservation, TableSpot, VenueLayout, ZoneLayout } from "@/lib/types";
 import { createId } from "@/lib/constants";
 import { getAppSettings } from "@/lib/app-settings";
 
@@ -32,6 +32,15 @@ function defaultTablesForZone(count = 12, capacity = 8): TableSpot[] {
     });
   }
   return tables;
+}
+
+/** Scritta placeholder dell'editor zone (default del prompt) — va rimossa dal layout. */
+export function isIngressoPlaceholderMark(m: Pick<MapMark, "kind" | "text">): boolean {
+  return m.kind === "text" && /^ingresso$/i.test(String(m.text ?? "").trim());
+}
+
+export function withoutIngressoMarks(marks: MapMark[] | undefined): MapMark[] {
+  return (marks ?? []).filter((m) => !isIngressoPlaceholderMark(m));
 }
 
 export function createDefaultLayout(): VenueLayout {

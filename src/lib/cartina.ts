@@ -1,6 +1,6 @@
 import type { MapMark, Reservation, TableSpot, VenueLayout, ZoneLayout } from "@/lib/types";
 import { createId } from "@/lib/constants";
-import { clampCartinaCoord, snapGrid, CARTINA_GRID_SNAP } from "@/lib/layout-utils";
+import { clampCartinaCoord, snapGrid, CARTINA_GRID_SNAP, isIngressoPlaceholderMark } from "@/lib/layout-utils";
 
 export const CARTINA_PREFS_KEY = "fdb-cartina-prefs-v3";
 
@@ -849,12 +849,14 @@ export function normalizeCartinaMark(m: Partial<MapMark>): MapMark | null {
     if (color) mark.color = color;
     return mark;
   }
+  const text = String(m.text ?? "Etichetta");
+  if (isIngressoPlaceholderMark({ kind: "text", text })) return null;
   const mark: MapMark = {
     id,
     kind: "text",
     x,
     y,
-    text: String(m.text ?? "Etichetta"),
+    text,
   };
   if (color) mark.color = color;
   const fontSize = Number(m.fontSize);

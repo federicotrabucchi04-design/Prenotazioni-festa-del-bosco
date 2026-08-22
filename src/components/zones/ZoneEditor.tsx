@@ -130,7 +130,7 @@ export function ZoneEditor() {
     }
 
     if (tool === "text") {
-      const label = window.prompt("Testo di riferimento", "Ingresso");
+      const label = window.prompt("Testo di riferimento", "");
       if (!label?.trim()) return;
       const id = createId();
       updateZone((z) => ({

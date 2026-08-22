@@ -66,7 +66,7 @@ import {
   type ZoneRotation,
 } from "@/lib/cartina";
 import { saveOrderCartina } from "@/lib/order-board";
-import { snapGrid, CARTINA_GRID_SNAP } from "@/lib/layout-utils";
+import { snapGrid, CARTINA_GRID_SNAP, withoutIngressoMarks } from "@/lib/layout-utils";
 import { CartinaViewportGuides } from "@/components/map/CartinaViewportGuides";
 
 type Step = "arrange" | "preview";
@@ -1049,9 +1049,9 @@ function CartinaArrangeBoard({
                   className="relative flex min-h-0 flex-1 flex-col items-center justify-center px-0.5 text-[8px]"
                   style={{ backgroundColor: `${accent}14`, color: accent }}
                 >
-                  {(zone.marks?.length ?? 0) > 0 ? (
+                  {withoutIngressoMarks(zone.marks).length > 0 ? (
                     <ZoneMarksLayer
-                      marks={zone.marks ?? []}
+                      marks={withoutIngressoMarks(zone.marks)}
                       uprightPlacement={zoneUprightPlacement(p)}
                     />
                   ) : null}
@@ -1631,7 +1631,7 @@ function CartinaSheet({
                 ) : null}
                 <div className="relative min-h-0 flex-1 bg-white">
                   <ZoneMarksLayer
-                    marks={zone.marks ?? []}
+                    marks={withoutIngressoMarks(zone.marks)}
                     uprightPlacement={zoneUprightPlacement(placement)}
                   />
                   {rects.map(({ table, x, y, w, h }) => {

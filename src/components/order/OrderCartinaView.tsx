@@ -35,7 +35,7 @@ import {
   colorForOrderNumber,
   type OrderColorRange,
 } from "@/lib/app-settings";
-import { CARTINA_GRID_SNAP, snapGrid } from "@/lib/layout-utils";
+import { CARTINA_GRID_SNAP, snapGrid, withoutIngressoMarks } from "@/lib/layout-utils";
 
 export function resolveOrderCartina(
   layout: VenueLayout,
@@ -534,7 +534,7 @@ export function OrderCartinaView({
               ) : null}
               <div className="relative min-h-0 flex-1 overflow-hidden bg-white">
                 <ZoneMarksLayer
-                  marks={zone.marks ?? []}
+                  marks={withoutIngressoMarks(zone.marks)}
                   uprightPlacement={zoneUprightPlacement(placement)}
                 />
                 {rects.map(({ table, x, y, w, h }) => {

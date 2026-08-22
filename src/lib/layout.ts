@@ -1,4 +1,9 @@
-import { createDefaultLayout, LAYOUT_STORAGE_KEY } from "@/lib/layout-utils";
+import {
+  createDefaultLayout,
+  isIngressoPlaceholderMark,
+  LAYOUT_STORAGE_KEY,
+  withoutIngressoMarks,
+} from "@/lib/layout-utils";
 import { getFirebaseDb, isFirebaseConfigured } from "@/lib/firebase";
 import type { VenueLayout, ZoneLayout, TableSpot, MapMark } from "@/lib/types";
 import { offlineSet, hasPendingWriteForPath } from "@/lib/offline-sync";
@@ -83,6 +88,17 @@ function stripUndefined<T>(value: T): T {
   return out as T;
 }
 
+function layoutRawHasIngressoMarks(raw: Partial<VenueLayout> | null): boolean {
+  if (!raw || !Array.isArray(raw.zones)) return false;
+  for (const z of raw.zones) {
+    if (!Array.isArray(z.marks)) continue;
+    for (const m of z.marks) {
+      if (isIngressoPlaceholderMark(m as MapMark)) return true;
+    }
+  }
+  return false;
+}
+
 function normalizeLayout(raw: Partial<VenueLayout> | null): VenueLayout {
   if (!raw || !Array.isArray(raw.zones) || raw.zones.length === 0) {
     return createDefaultLayout();
@@ -113,11 +129,13 @@ function normalizeLayout(raw: Partial<VenueLayout> | null): VenueLayout {
             return table;
           })
         : [],
-      marks: Array.isArray(z.marks)
-        ? z.marks
-            .map((m: Partial<MapMark>, mi: number) => normalizeMark(m, mi))
-            .filter((m): m is MapMark => Boolean(m))
-        : [],
+      marks: withoutIngressoMarks(
+        Array.isArray(z.marks)
+          ? z.marks
+              .map((m: Partial<MapMark>, mi: number) => normalizeMark(m, mi))
+              .filter((m): m is MapMark => Boolean(m))
+          : [],
+      ),
     };
     if (color) zone.color = color;
     return zone;
@@ -204,7 +222,14 @@ export function subscribeLayout(listener: Listener): () => void {
         listener(readDemoLayout());
         return;
       }
-      const next = normalizeLayout(snap.val() as Partial<VenueLayout>);
+      const raw = snap.val() as Partial<VenueLayout>;
+      const next = normalizeLayout(raw);
+      if (
+        layoutRawHasIngressoMarks(raw) &&
+        !hasPendingWriteForPath("venueLayout")
+      ) {
+        void offlineSet("venueLayout", serializeLayout(next));
+      }
       try {
         localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(next));
       } catch {
