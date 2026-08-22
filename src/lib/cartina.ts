@@ -1,6 +1,6 @@
 import type { MapMark, Reservation, TableSpot, VenueLayout, ZoneLayout } from "@/lib/types";
 import { createId } from "@/lib/constants";
-import { clampPercent, snapGrid, CARTINA_GRID_SNAP } from "@/lib/layout-utils";
+import { clampCartinaCoord, snapGrid, CARTINA_GRID_SNAP } from "@/lib/layout-utils";
 
 export const CARTINA_PREFS_KEY = "fdb-cartina-prefs-v3";
 
@@ -822,8 +822,8 @@ function nearestClusterIndex(value: number, centers: number[]): number {
 export function normalizeCartinaMark(m: Partial<MapMark>): MapMark | null {
   if (!m || !m.kind) return null;
   const id = m.id || createId();
-  const x = clampPercent(Number(m.x) || 0);
-  const y = clampPercent(Number(m.y) || 0);
+  const x = clampCartinaCoord(Number(m.x) || 0);
+  const y = clampCartinaCoord(Number(m.y) || 0);
   const color = typeof m.color === "string" ? m.color : undefined;
   if (m.kind === "line") {
     const mark: MapMark = {
@@ -831,8 +831,8 @@ export function normalizeCartinaMark(m: Partial<MapMark>): MapMark | null {
       kind: "line",
       x,
       y,
-      x2: clampPercent(Number(m.x2) || x),
-      y2: clampPercent(Number(m.y2) || y),
+      x2: clampCartinaCoord(Number(m.x2) || x),
+      y2: clampCartinaCoord(Number(m.y2) || y),
     };
     if (color) mark.color = color;
     return mark;

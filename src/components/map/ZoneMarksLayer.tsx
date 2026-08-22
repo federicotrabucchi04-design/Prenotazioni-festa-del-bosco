@@ -84,6 +84,7 @@ export function ZoneMarksLayer({
                     strokeLinecap="round"
                     strokeDasharray={selected ? undefined : "2 1.2"}
                     vectorEffect="non-scaling-stroke"
+                    pointerEvents={canInteract ? "auto" : "none"}
                   />
                 </g>
               );
@@ -104,9 +105,8 @@ export function ZoneMarksLayer({
                   strokeDasharray={selected ? undefined : "2 1.2"}
                   rx={1.2}
                   vectorEffect="non-scaling-stroke"
-                  className={
-                    canInteract ? "pointer-events-auto cursor-grab" : undefined
-                  }
+                  pointerEvents={canInteract ? "auto" : "none"}
+                  className={canInteract ? "cursor-grab" : undefined}
                   onPointerDown={
                     canInteract
                       ? (e) => {
@@ -158,7 +158,9 @@ export function ZoneMarksLayer({
               <div
                 key={mark.id}
                 className={`absolute whitespace-nowrap font-bold leading-none ${
-                  canInteract ? "pointer-events-auto cursor-grab" : ""
+                  canInteract
+                    ? "pointer-events-auto cursor-grab"
+                    : "pointer-events-none"
                 }`}
                 style={{
                   left: `${mark.x}%`,

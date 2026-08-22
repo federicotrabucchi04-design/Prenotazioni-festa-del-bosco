@@ -110,6 +110,12 @@ export function clampPercent(value: number) {
   return Math.min(92, Math.max(8, value));
 }
 
+/** Coordinate % sulla lavagna cartina A4 (bordo a bordo, 0–100). */
+export function clampCartinaCoord(value: number) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(100, Math.max(0, value));
+}
+
 /** Passo griglia % per agganciare i tavoli (editor zone) */
 export const TABLE_GRID_SNAP = 5;
 
