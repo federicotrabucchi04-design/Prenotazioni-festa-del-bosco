@@ -7,6 +7,8 @@ export const CARTINA_PREFS_KEY = "fdb-cartina-prefs-v3";
 /** Vicini = gap attuale; lontani = doppio */
 export type TableGapMode = "near" | "far";
 
+export type ZoneRotation = 0 | 90 | 180 | 270;
+
 /** Zona posizionata sulla lavagna (coordinate % 0–100) */
 export interface ZoneOnBoard {
   zoneId: string;
@@ -20,6 +22,8 @@ export interface ZoneOnBoard {
   tableGapY?: TableGapMode;
   /** Se true: niente fascia titolo, solo bordo zona */
   hideTitle?: boolean;
+  /** Rotazione contenuto zona (gradi) */
+  rotation?: ZoneRotation;
 }
 
 export interface CartinaPrefs {
@@ -604,7 +608,53 @@ export function normalizePlacement(p: ZoneOnBoard): ZoneOnBoard {
     out.tableGapY = p.tableGapY;
   }
   if (p.hideTitle === true) out.hideTitle = true;
+  const rotation = normalizeZoneRotation(p.rotation);
+  if (rotation) out.rotation = rotation;
   return out;
+}
+
+export function normalizeZoneRotation(raw: unknown): ZoneRotation | undefined {
+  const n = Number(raw);
+  if (n === 90 || n === 180 || n === 270) return n;
+  return undefined;
+}
+
+export function zoneRotationDeg(
+  placement?: Pick<ZoneOnBoard, "rotation">,
+): ZoneRotation {
+  return placement?.rotation ?? 0;
+}
+
+export function zoneRotationStyle(placement?: Pick<ZoneOnBoard, "rotation">): {
+  transform?: string;
+  transformOrigin?: string;
+} {
+  const deg = zoneRotationDeg(placement);
+  if (!deg) return {};
+  return { transform: `rotate(${deg}deg)`, transformOrigin: "50% 50%" };
+}
+
+function clusterAxis(values: number[], tol: number): number[] {
+  const sorted = [...values].sort((a, b) => a - b);
+  const centers: number[] = [];
+  for (const value of sorted) {
+    const match = centers.find((c) => Math.abs(c - value) <= tol);
+    if (!match) centers.push(value);
+  }
+  return centers;
+}
+
+function nearestClusterIndex(value: number, centers: number[]): number {
+  let best = 0;
+  let bestDist = Infinity;
+  centers.forEach((center, index) => {
+    const dist = Math.abs(center - value);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = index;
+    }
+  });
+  return best;
 }
 
 export function normalizeCartinaMark(m: Partial<MapMark>): MapMark | null {
@@ -762,6 +812,7 @@ export function computeTableFillRects(
   } else if (gridTables.length > 1) {
     const sorted = [...gridTables].sort((a, b) => a.y - b.y || a.x - b.x);
     const rowTol = 7;
+    const colTol = 7;
     const rows: TableSpot[][] = [];
     for (const t of sorted) {
       const last = rows[rows.length - 1];
@@ -773,19 +824,22 @@ export function computeTableFillRects(
     }
     rows.forEach((row) => row.sort((a, b) => a.x - b.x));
 
+    const colCenters = clusterAxis(
+      gridTables.map((t) => t.x),
+      colTol,
+    );
     const nRows = rows.length;
-    const nCols = Math.max(...rows.map((r) => r.length));
+    const nCols = Math.max(colCenters.length, 1);
     const cellW = (100 - gapX * (nCols + 1)) / nCols;
     const cellH = (100 - gapY * (nRows + 1)) / nRows;
 
     rows.forEach((row, ri) => {
       const y = gapY + ri * (cellH + gapY);
-      const usedW = row.length * cellW + Math.max(0, row.length - 1) * gapX;
-      const startX = (100 - usedW) / 2;
-      row.forEach((t, ti) => {
+      row.forEach((t) => {
+        const ci = nearestClusterIndex(t.x, colCenters);
         out.push({
           table: t,
-          x: startX + ti * (cellW + gapX),
+          x: gapX + ci * (cellW + gapX),
           y,
           w: cellW,
           h: cellH,

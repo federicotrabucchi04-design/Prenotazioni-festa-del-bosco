@@ -6,6 +6,7 @@ import {
   gapsFromPlacement,
   guestsByTable,
   zoneAccentColor,
+  zoneRotationDeg,
 } from "@/lib/cartina";
 
 function wrapText(
@@ -47,6 +48,16 @@ function drawZoneBlock(
   placement?: ZoneOnBoard,
 ) {
   const accent = zoneAccentColor(zone);
+  const rotation = zoneRotationDeg(placement);
+  if (rotation) {
+    ctx.save();
+    const cx = x + w / 2;
+    const cy = y + h / 2;
+    ctx.translate(cx, cy);
+    ctx.rotate((rotation * Math.PI) / 180);
+    ctx.translate(-cx, -cy);
+  }
+
   ctx.strokeStyle = accent;
   ctx.lineWidth = 3;
   ctx.strokeRect(x, y, w, h);
@@ -69,6 +80,8 @@ function drawZoneBlock(
 
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(contentX, contentY, contentW, contentH);
+
+  drawMarks(ctx, zone.marks ?? [], contentX, contentY, contentW, contentH);
 
   const { gapX, gapY } = gapsFromPlacement(placement);
   const rects = computeTableFillRects(zone.tables, gapX, gapY);
@@ -117,6 +130,8 @@ function drawZoneBlock(
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
   }
+
+  if (rotation) ctx.restore();
 }
 
 function drawMarks(

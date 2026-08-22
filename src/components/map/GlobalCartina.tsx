@@ -10,6 +10,7 @@ import {
   MousePointer2,
   Plus,
   Printer,
+  RotateCw,
   Settings2,
   Square,
   Trash2,
@@ -54,7 +55,10 @@ import {
   withCartinaMirror,
   withCenterSymmetry,
   zoneAccentColor,
+  zoneRotationDeg,
+  zoneRotationStyle,
   type CartinaMirrorView,
+  type ZoneRotation,
 } from "@/lib/cartina";
 import { saveOrderCartina } from "@/lib/order-board";
 import { snapGrid, CARTINA_GRID_SNAP } from "@/lib/layout-utils";
@@ -1001,22 +1005,35 @@ function CartinaArrangeBoard({
               }`}
               onPointerDown={(e) => startZoneDrag(e, p, "move")}
             >
-              {!p.hideTitle ? (
-                <div
-                  className="shrink-0 px-0.5 py-0.5 text-center text-[9px] font-bold leading-none text-white sm:text-[10px]"
-                  style={{ backgroundColor: accent }}
-                >
-                  {zone.name}
-                </div>
-              ) : null}
               <div
-                className="flex min-h-0 flex-1 items-center justify-center px-0.5 text-[8px]"
-                style={{ backgroundColor: `${accent}14`, color: accent }}
+                className="flex h-full w-full flex-col"
+                style={zoneRotationStyle(p)}
               >
-                {zone.tables.length} tavoli
-                {p.hideTitle ? (
-                  <span className="ml-1 opacity-70">· {zone.name}</span>
+                {!p.hideTitle ? (
+                  <div
+                    className="shrink-0 px-0.5 py-0.5 text-center text-[9px] font-bold leading-none text-white sm:text-[10px]"
+                    style={{ backgroundColor: accent }}
+                  >
+                    {zone.name}
+                  </div>
                 ) : null}
+                <div
+                  className="relative flex min-h-0 flex-1 flex-col items-center justify-center px-0.5 text-[8px]"
+                  style={{ backgroundColor: `${accent}14`, color: accent }}
+                >
+                  {(zone.marks?.length ?? 0) > 0 ? (
+                    <ZoneMarksLayer marks={zone.marks ?? []} />
+                  ) : null}
+                  <span className="relative z-[1]">
+                    {zone.tables.length} tavoli
+                    {p.hideTitle ? (
+                      <span className="ml-1 opacity-70">· {zone.name}</span>
+                    ) : null}
+                    {zoneRotationDeg(p) ? (
+                      <span className="ml-1 opacity-70">· {zoneRotationDeg(p)}°</span>
+                    ) : null}
+                  </span>
+                </div>
               </div>
               {selected && tool === "move" ? (
                 <button
@@ -1084,6 +1101,30 @@ function CartinaArrangeBoard({
               className="h-5 w-5 accent-[var(--forest)]"
             />
           </label>
+
+          <div className="flex flex-wrap items-center gap-2 rounded-xl bg-[var(--forest)]/5 px-3 py-2.5">
+            <span className="text-xs font-semibold text-[var(--forest-ink)]">
+              Orientamento zona
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                const cur = zoneRotationDeg(selectedPlacement);
+                const next = ((cur + 90) % 360) as ZoneRotation;
+                upsertPlacement({
+                  ...selectedPlacement,
+                  rotation: next === 0 ? undefined : next,
+                });
+              }}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-[var(--forest)]/10 px-3 py-2 text-xs font-semibold text-[var(--forest)]"
+            >
+              <RotateCw className="h-3.5 w-3.5" />
+              Ruota 90°
+            </button>
+            <span className="text-xs font-bold tabular-nums text-[var(--forest-muted)]">
+              {zoneRotationDeg(selectedPlacement)}°
+            </span>
+          </div>
         </div>
       ) : null}
 
@@ -1432,16 +1473,21 @@ function CartinaSheet({
                 borderColor: accent,
               }}
             >
-              {!placement.hideTitle ? (
-                <h4
-                  className="shrink-0 px-0.5 py-px text-center text-[8px] font-bold leading-tight text-white print:text-[7pt]"
-                  style={{ backgroundColor: accent }}
-                >
-                  {zone.name}
-                </h4>
-              ) : null}
-              <div className="relative min-h-0 flex-1 bg-white">
-                {rects.map(({ table, x, y, w, h }) => {
+              <div
+                className="flex h-full w-full flex-col"
+                style={zoneRotationStyle(placement)}
+              >
+                {!placement.hideTitle ? (
+                  <h4
+                    className="shrink-0 px-0.5 py-px text-center text-[8px] font-bold leading-tight text-white print:text-[7pt]"
+                    style={{ backgroundColor: accent }}
+                  >
+                    {zone.name}
+                  </h4>
+                ) : null}
+                <div className="relative min-h-0 flex-1 bg-white">
+                  <ZoneMarksLayer marks={zone.marks ?? []} />
+                  {rects.map(({ table, x, y, w, h }) => {
                   const tableGuests = guests.get(table.number) ?? [];
                   const occupied = tableGuests.length > 0;
                   return (
@@ -1473,6 +1519,7 @@ function CartinaSheet({
                     </div>
                   );
                 })}
+                </div>
               </div>
             </section>
           );

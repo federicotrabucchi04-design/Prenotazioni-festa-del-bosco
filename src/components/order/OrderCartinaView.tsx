@@ -21,6 +21,7 @@ import {
   unmirrorLeft,
   unmirrorTop,
   zoneAccentColor,
+  zoneRotationStyle,
 } from "@/lib/cartina";
 import { ZoneMarksLayer } from "@/components/map/ZoneMarksLayer";
 import {
@@ -506,20 +507,25 @@ export function OrderCartinaView({
               borderColor: accent,
             }}
           >
-            {!placement.hideTitle ? (
-              <h4
-                className={`shrink-0 text-center font-bold leading-tight text-white ${
-                  isDisplay
-                    ? "px-0.5 py-[0.15cqmin] text-[clamp(8px,1.6cqmin,18px)]"
-                    : "px-1 py-0.5 text-[10px] sm:text-xs"
-                }`}
-                style={{ backgroundColor: accent }}
-              >
-                {zone.name}
-              </h4>
-            ) : null}
-            <div className="relative min-h-0 flex-1 overflow-hidden bg-white">
-              {rects.map(({ table, x, y, w, h }) => {
+            <div
+              className="flex h-full w-full flex-col"
+              style={zoneRotationStyle(placement)}
+            >
+              {!placement.hideTitle ? (
+                <h4
+                  className={`shrink-0 text-center font-bold leading-tight text-white ${
+                    isDisplay
+                      ? "px-0.5 py-[0.15cqmin] text-[clamp(8px,1.6cqmin,18px)]"
+                      : "px-1 py-0.5 text-[10px] sm:text-xs"
+                  }`}
+                  style={{ backgroundColor: accent }}
+                >
+                  {zone.name}
+                </h4>
+              ) : null}
+              <div className="relative min-h-0 flex-1 overflow-hidden bg-white">
+                <ZoneMarksLayer marks={zone.marks ?? []} />
+                {rects.map(({ table, x, y, w, h }) => {
                 const nums = ordersForTable(
                   assignments,
                   zone.id,
@@ -592,6 +598,7 @@ export function OrderCartinaView({
                   </Tag>
                 );
               })}
+              </div>
             </div>
           </section>
         );

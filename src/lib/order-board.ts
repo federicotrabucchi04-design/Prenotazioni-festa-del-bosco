@@ -131,6 +131,7 @@ function normalizeCartina(raw: unknown): CartinaPrefs | null {
         tableGapX: p.tableGapX,
         tableGapY: p.tableGapY,
         hideTitle: p.hideTitle === true ? true : undefined,
+        rotation: p.rotation,
       }),
     );
   const marks: MapMark[] = Array.isArray(c.marks)
